@@ -257,7 +257,7 @@ impl NativeApp {
 
         ui.add_space(8.0);
 
-        if let Some(error) = &self.browser.error {
+        if let Some(error) = self.browser.error.clone() {
             egui::Frame::new()
                 .fill(PANEL)
                 .stroke(egui::Stroke::new(1.0, BAD))
@@ -361,23 +361,27 @@ impl NativeApp {
         }
 
         ui.add_space(8.0);
+
+        let selected_path = self.browser.selected.clone();
+        let selected_entry = selected_path.as_ref().and_then(|selected| {
+            self.browser
+                .entries
+                .iter()
+                .find(|entry| &entry.relative_path == selected)
+                .cloned()
+        });
+        let mut open_selected: Option<PathBuf> = None;
+
         panel(ui, |ui| {
-            if let Some(selected) = &self.browser.selected {
+            if let Some(selected) = &selected_path {
                 key_value(ui, "SELECTED", &file_browser::display_path(selected));
 
-                let selected_entry = self
-                    .browser
-                    .entries
-                    .iter()
-                    .find(|entry| &entry.relative_path == selected);
-
-                if let Some(entry) = selected_entry {
+                if let Some(entry) = &selected_entry {
                     key_value(ui, "TYPE", entry.kind.label());
 
                     if entry.kind == EntryKind::Directory {
                         if ui.button("OPEN DIRECTORY").clicked() {
-                            self.browser
-                                .navigate(&self.workspace_root, entry.relative_path.clone());
+                            open_selected = Some(entry.relative_path.clone());
                         }
                     } else if entry.kind == EntryKind::Symlink {
                         ui.label(
@@ -399,6 +403,10 @@ impl NativeApp {
                 ui.label(egui::RichText::new("No item selected.").color(MUTED));
             }
         });
+
+        if let Some(destination) = open_selected {
+            self.browser.navigate(&self.workspace_root, destination);
+        }
     }
 
     fn workspace(&mut self, ui: &mut egui::Ui) {
