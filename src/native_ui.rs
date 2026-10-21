@@ -49,7 +49,7 @@ impl NativeApp {
         visuals.override_text_color = Some(TEXT);
         creation_context.egui_ctx.set_visuals(visuals);
 
-        creation_context.egui_ctx.style_mut(|style| {
+        creation_context.egui_ctx.all_styles_mut(|style| {
             style.spacing.item_spacing = egui::vec2(8.0, 8.0);
             style.spacing.button_padding = egui::vec2(10.0, 6.0);
         });
