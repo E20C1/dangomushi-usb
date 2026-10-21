@@ -1,6 +1,4 @@
-mod server;
-mod workspace;
-
+use dangomushi::{server, workspace};
 use std::env;
 use std::path::PathBuf;
 use std::process;
@@ -26,7 +24,11 @@ fn run() -> Result<(), String> {
     let command = args.next();
 
     match command.as_deref() {
-        None | Some("serve") => {
+        None | Some("help") | Some("--help") | Some("-h") => {
+            print_help();
+            Ok(())
+        }
+        Some("serve") => {
             let options = parse_serve_options(args.collect())?;
             server::serve(options.port, options.workspace)
                 .map_err(|error| format!("server failed: {error}"))
@@ -52,15 +54,11 @@ fn run() -> Result<(), String> {
                 println!("result: OK");
                 Ok(())
             } else {
-                Err("workspace is incomplete; run `dangomushi init`".to_string())
+                Err("workspace is incomplete; run dangomushi init".to_string())
             }
         }
         Some("version") | Some("--version") | Some("-V") => {
             println!("dangomushi {}", env!("CARGO_PKG_VERSION"));
-            Ok(())
-        }
-        Some("help") | Some("--help") | Some("-h") => {
-            print_help();
             Ok(())
         }
         Some(other) => Err(format!("unknown command: {other}\n\n{}", help_text())),
@@ -120,8 +118,9 @@ Usage:\n  dangomushi serve [--port PORT] [--workspace PATH]\n  \
 dangomushi init [PATH]\n  \
 dangomushi doctor [PATH]\n  \
 dangomushi version\n\n\
+Desktop:\n  run the dangomushi-desktop binary built with --features desktop\n\n\
 Defaults:\n  port: {DEFAULT_PORT}\n  workspace: ./{DEFAULT_WORKSPACE}\n\n\
-Security:\n  v0.1 binds the web gateway to 127.0.0.1 only. LAN access is intentionally not implemented yet.",
+Security:\n  the web gateway binds to 127.0.0.1 only. LAN access is intentionally not implemented yet.",
         env!("CARGO_PKG_VERSION")
     )
 }

@@ -6,7 +6,7 @@ This roadmap records implementation order, not release dates.
 
 - [x] Rust project foundation
 - [x] Cross-platform workspace layout
-- [x] `init` and `doctor` commands
+- [x] init and doctor commands
 - [x] Embedded local status UI
 - [x] Loopback-only HTTP boundary
 - [x] Windows double-click build/update path
@@ -14,7 +14,8 @@ This roadmap records implementation order, not release dates.
 
 ## M1 — Native desktop shell
 
-- [ ] Select the native Rust UI layer after a small prototype comparison
+- [x] Select the native Rust UI layer after a small prototype comparison
+- [x] Bootstrap the native desktop shell
 - [ ] File browser rooted in the configured workspace
 - [ ] Text editor with explicit save and autosave recovery
 - [ ] Tool launcher

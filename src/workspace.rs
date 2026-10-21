@@ -91,6 +91,31 @@ pub fn summary(root: &Path) -> WorkspaceSummary {
     }
 }
 
+pub fn default_workspace_root() -> PathBuf {
+    if let Some(configured) = std::env::var_os("DANGOMUSHI_WORKSPACE") {
+        return PathBuf::from(configured);
+    }
+
+    if let Ok(executable) = std::env::current_exe() {
+        if let Some(parent) = executable.parent() {
+            let is_app_dir = parent
+                .file_name()
+                .map(|name| name.to_string_lossy().eq_ignore_ascii_case("app"))
+                .unwrap_or(false);
+
+            if is_app_dir {
+                if let Some(portable_root) = parent.parent() {
+                    return portable_root.join("workspace");
+                }
+            }
+        }
+    }
+
+    std::env::current_dir()
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .join("workspace")
+}
+
 pub fn canonical_or_original(root: &Path) -> PathBuf {
     fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf())
 }

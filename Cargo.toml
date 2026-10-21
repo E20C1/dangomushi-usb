@@ -1,9 +1,23 @@
 [package]
 name = "dangomushi"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-rust-version = "1.80"
+rust-version = "1.95"
 description = "Portable, local-first workspace core"
 repository = "https://github.com/E20C1/dangomushi-usb"
 
+[features]
+default = []
+desktop = ["dep:eframe"]
+
 [dependencies]
+eframe = { version = "0.37.0", optional = true, default-features = false, features = ["default_fonts", "glow", "wayland", "x11"] }
+
+[[bin]]
+name = "dangomushi"
+path = "src/main.rs"
+
+[[bin]]
+name = "dangomushi-desktop"
+path = "src/bin/dangomushi-desktop.rs"
+required-features = ["desktop"]

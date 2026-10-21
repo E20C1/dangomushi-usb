@@ -14,26 +14,36 @@ if errorlevel 1 (
   goto :fail
 )
 
-echo [1/4] Running tests...
+echo [1/5] Running core tests...
 cargo test
 if errorlevel 1 goto :fail
 
-echo [2/4] Building release...
-cargo build --release
+echo [2/5] Building core CLI...
+cargo build --release --bin dangomushi
 if errorlevel 1 goto :fail
 
-echo [3/4] Staging application...
+echo [3/5] Building native desktop shell...
+cargo build --release --features desktop --bin dangomushi-desktop
+if errorlevel 1 goto :fail
+
+echo [4/5] Staging application...
 if exist "build\staging" rmdir /s /q "build\staging"
 mkdir "build\staging" >nul 2>nul
 mkdir "app" >nul 2>nul
 mkdir "build\backup" >nul 2>nul
 
-copy /y "target\release\dangomushi.exe" "build\staging\Dangomushi.exe" >nul
+copy /y "target\release\dangomushi-desktop.exe" "build\staging\Dangomushi.exe" >nul
+if errorlevel 1 goto :fail
+copy /y "target\release\dangomushi.exe" "build\staging\dangomushi-cli.exe" >nul
 if errorlevel 1 goto :fail
 
-echo [4/4] Installing...
+echo [5/5] Installing...
 if exist "app\Dangomushi.exe" (
   copy /y "app\Dangomushi.exe" "build\backup\Dangomushi.previous.exe" >nul
+  if errorlevel 1 goto :fail
+)
+if exist "app\dangomushi-cli.exe" (
+  copy /y "app\dangomushi-cli.exe" "build\backup\dangomushi-cli.previous.exe" >nul
   if errorlevel 1 goto :fail
 )
 
@@ -44,9 +54,13 @@ if errorlevel 1 (
   goto :fail
 )
 
+move /y "build\staging\dangomushi-cli.exe" "app\dangomushi-cli.exe" >nul
+if errorlevel 1 goto :fail
+
 echo.
 echo [OK] Update complete.
 echo      app\Dangomushi.exe
+echo      app\dangomushi-cli.exe
 echo      workspace\ was not modified.
 echo.
 pause

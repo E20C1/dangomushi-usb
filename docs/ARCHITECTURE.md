@@ -10,33 +10,35 @@ The application is not intended to become a general-purpose web browser.
 
 The Rust core is the authority for privileged operations.
 
-Browser-delivered UI is a client surface. It must not become the source of truth for files, identity, repository state, backups or permissions.
+Desktop and browser-delivered UI are client surfaces. Neither is the source of truth for files, identity, repository state, backups or permissions.
 
 The intended durable layout is:
 
-```text
+~~~text
 DANGOMUSHI/
 ├─ app/          replaceable program output
 ├─ workspace/    durable user data
 ├─ build/        temporary staging and rollback material
 └─ source tree   development source
-```
+~~~
 
-Build and update operations may replace `app/`. They must not erase `workspace/`.
+Build and update operations may replace app/. They must not erase workspace/.
+
+The installed desktop executable resolves a sibling workspace/ from the portable root. Development runs fall back to ./workspace. DANGOMUSHI_WORKSPACE can explicitly override the path.
 
 ## Network boundary
 
-v0.1 intentionally supports only:
+The current implementation intentionally supports only:
 
-```text
+~~~text
 127.0.0.1:<port>
-```
+~~~
 
 The listener is not bound to a LAN interface. There is no public listener and no automatic port opening.
 
 The project must not silently add:
 
-- `0.0.0.0` listening,
+- 0.0.0.0 listening,
 - UPnP or NAT-PMP port mapping,
 - reverse tunnels,
 - public relay dependencies,
@@ -48,7 +50,7 @@ LAN/mobile mode is a future capability and requires an explicit security design 
 
 The embedded gateway currently serves only fixed assets and a read-only status endpoint.
 
-Security properties in v0.1:
+Security properties:
 
 - loopback peer check,
 - Host header restriction,
@@ -70,14 +72,18 @@ Executable files are platform-specific. Workspace data should remain platform-ne
 
 The first target is Windows because the USB workflow is being developed there. Cross-platform behavior remains an architectural requirement rather than an assumption that one binary can run on every OS.
 
-## UI direction
+## UI boundary
 
-The native desktop UI is expected to use a compact, square-edged, pixel-oriented visual system rather than a browser-like SaaS dashboard.
+The native desktop UI uses eframe/egui behind the Cargo desktop feature. The choice is recorded in UI_LAYER_DECISION.md.
 
-The embedded web UI follows the same visual language for status and future mobile access.
+The UI uses a compact, square-edged, pixel-oriented visual system rather than a browser-like SaaS dashboard.
+
+The embedded web UI remains a separate client surface for local status and future authenticated mobile access. It is not used to grant the desktop application filesystem authority.
 
 ## Dependency policy
 
-The bootstrap core currently uses only the Rust standard library. This is intentional: a freshly built DANGOMUSHI binary should not need a separate web runtime or package manager at run time.
+The core CLI, workspace model and loopback server use the Rust standard library only.
+
+The native desktop shell introduces eframe/egui as an optional feature-gated dependency. Building without the desktop feature does not require the desktop stack.
 
 Third-party crates may be introduced when they provide clear value, but offline rebuildability and vendoring must be considered before they become foundational dependencies.

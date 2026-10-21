@@ -8,19 +8,27 @@ echo "DANGOMUSHI UPDATE"
 echo "================="
 
 cargo test
-cargo build --release
+cargo build --release --bin dangomushi
+cargo build --release --features desktop --bin dangomushi-desktop
 
 rm -rf build/staging
 mkdir -p build/staging build/backup app
 
-cp target/release/dangomushi build/staging/dangomushi
+cp target/release/dangomushi-desktop build/staging/Dangomushi
+cp target/release/dangomushi build/staging/dangomushi-cli
 
-if [ -f app/dangomushi ]; then
-  cp app/dangomushi build/backup/dangomushi.previous
+if [ -f app/Dangomushi ]; then
+  cp app/Dangomushi build/backup/Dangomushi.previous
 fi
 
-mv build/staging/dangomushi app/dangomushi
-chmod +x app/dangomushi
+if [ -f app/dangomushi-cli ]; then
+  cp app/dangomushi-cli build/backup/dangomushi-cli.previous
+fi
 
-echo "[OK] app/dangomushi updated"
+mv build/staging/Dangomushi app/Dangomushi
+mv build/staging/dangomushi-cli app/dangomushi-cli
+chmod +x app/Dangomushi app/dangomushi-cli
+
+echo "[OK] app/Dangomushi updated"
+echo "[OK] app/dangomushi-cli updated"
 echo "[OK] workspace/ was not modified"

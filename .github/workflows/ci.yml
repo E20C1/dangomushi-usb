@@ -19,8 +19,17 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Tests
+      - name: Install Linux desktop build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y             libegl1-mesa-dev             libgl1-mesa-dev             libwayland-dev             libx11-dev             libx11-xcb-dev             libxcb1-dev             libxcb-render0-dev             libxcb-shape0-dev             libxcb-xfixes0-dev             libxkbcommon-dev             pkg-config
+
+      - name: Core tests
         run: cargo test
 
-      - name: Release build
-        run: cargo build --release
+      - name: Core release build
+        run: cargo build --release --bin dangomushi
+
+      - name: Native desktop release build
+        run: cargo build --release --features desktop --bin dangomushi-desktop
