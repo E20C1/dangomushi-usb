@@ -1,0 +1,9 @@
+[package]
+name = "dangomushi"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+description = "Portable, local-first workspace core"
+repository = "https://github.com/E20C1/dangomushi-usb"
+
+[dependencies]

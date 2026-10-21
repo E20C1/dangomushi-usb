@@ -1,0 +1,9 @@
+target/
+build/staging/
+build/backup/
+app/*
+!app/.gitkeep
+workspace/*
+!workspace/.gitkeep
+.DS_Store
+Thumbs.db
