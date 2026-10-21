@@ -471,14 +471,14 @@ impl NativeApp {
 }
 
 impl eframe::App for NativeApp {
-    fn update(&mut self, context: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default()
             .frame(
                 egui::Frame::new()
                     .fill(BG)
                     .inner_margin(egui::Margin::same(14)),
             )
-            .show(context, |ui| {
+            .show(ui, |ui| {
                 self.top_bar(ui);
                 ui.add_space(12.0);
 
