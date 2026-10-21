@@ -11,13 +11,26 @@ The current implementation includes:
 - Rust core with a standard-library-only headless path.
 - Cross-platform CLI commands for workspace initialization and health checks.
 - A native desktop shell using feature-gated eframe/egui.
+- A read-only native file browser constrained to the configured workspace root.
 - A portable workspace path that remains separate from replaceable application binaries.
 - Embedded loopback-only status UI served from the Rust core.
 - No public bind, LAN bind, UPnP, NAT-PMP, reverse tunnel, CDN or external web request.
 - Windows double-click build/update entry point.
 - CI builds for Windows, macOS and Linux.
 
-The file browser, editor and authenticated mobile/LAN mode are later M1/M3 work. They are not faked as completed features.
+The editor and authenticated mobile/LAN mode are later M1/M3 work. They are not faked as completed features.
+
+## File browser boundary
+
+The FILES view can navigate directories only below the DANGOMUSHI workspace root.
+
+- Absolute paths and parent traversal are rejected.
+- Directory paths are canonicalized before traversal.
+- A resolved directory must stay inside the canonical workspace root.
+- Symlinks are shown but are not traversed.
+- The current browser is read-only.
+
+This deliberately prevents the first desktop filesystem UI from becoming an unrestricted host filesystem browser.
 
 ## Windows quick start
 
@@ -81,6 +94,7 @@ dangomushi-usb/
 │  ├─ main.rs
 │  ├─ lib.rs
 │  ├─ workspace.rs
+│  ├─ file_browser.rs
 │  ├─ server.rs
 │  ├─ native_ui.rs
 │  └─ bin/dangomushi-desktop.rs
@@ -91,7 +105,7 @@ dangomushi-usb/
 └─ workspace/           durable local user data
 ~~~
 
-See docs/ARCHITECTURE.md for the authority, network and data boundaries.
+See docs/ARCHITECTURE.md for the authority, filesystem, network and data boundaries.
 
 ## Security boundary
 

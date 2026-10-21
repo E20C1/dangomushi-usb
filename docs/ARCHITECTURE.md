@@ -26,6 +26,16 @@ Build and update operations may replace app/. They must not erase workspace/.
 
 The installed desktop executable resolves a sibling workspace/ from the portable root. Development runs fall back to ./workspace. DANGOMUSHI_WORKSPACE can explicitly override the path.
 
+## Filesystem boundary
+
+The native file browser accepts only relative paths composed of normal path components.
+
+Before a directory is traversed, both the workspace root and requested directory are canonicalized and the resolved directory must remain below the canonical workspace root.
+
+Symlinks are listed as links but are not treated as traversable directories. This keeps the first browser milestone read-only and prevents a link inside the workspace from becoming an implicit path outside the workspace.
+
+The file browser does not yet open, edit, rename, delete or create user files. Those mutations belong to later milestones with separate save and recovery semantics.
+
 ## Network boundary
 
 The current implementation intentionally supports only:
@@ -82,7 +92,7 @@ The embedded web UI remains a separate client surface for local status and futur
 
 ## Dependency policy
 
-The core CLI, workspace model and loopback server use the Rust standard library only.
+The core CLI, workspace model, filesystem browser and loopback server use the Rust standard library only.
 
 The native desktop shell introduces eframe/egui as an optional feature-gated dependency. Building without the desktop feature does not require the desktop stack.
 

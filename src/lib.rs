@@ -1,3 +1,4 @@
+pub mod file_browser;
 pub mod server;
 pub mod workspace;
 
