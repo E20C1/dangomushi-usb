@@ -18,6 +18,7 @@ pub mod tool_registry;
 pub mod vault_storage;
 pub mod vault_unlock;
 pub mod workspace;
+pub mod workspace_backup;
 
 #[cfg(feature = "desktop")]
 pub mod native_ui;

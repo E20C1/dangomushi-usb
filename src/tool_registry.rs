@@ -120,8 +120,8 @@ const TOOLS: &[ToolDefinition] = &[
         key: "backup",
         label: "BACKUP",
         category: ToolCategory::Recovery,
-        description: "Create and verify local workspace recovery snapshots.",
-        status: ToolStatus::Planned,
+        description: "Create, verify and explicitly restore local Workspace snapshots.",
+        status: ToolStatus::Ready,
     },
 ];
 
@@ -182,6 +182,10 @@ mod tests {
             by_key("repositories").map(|tool| tool.status),
             Some(ToolStatus::Ready)
         );
+        assert_eq!(
+            by_key("backup").map(|tool| tool.status),
+            Some(ToolStatus::Ready)
+        );
     }
 
     #[test]
@@ -205,6 +209,10 @@ mod tests {
         assert_eq!(
             by_key("repositories").map(|tool| tool.id),
             Some(ToolId::Repositories)
+        );
+        assert_eq!(
+            by_key("backup").map(|tool| tool.id),
+            Some(ToolId::Backup)
         );
         assert!(by_key("missing-tool").is_none());
     }

@@ -123,6 +123,32 @@ The native REPOSITORIES view can enumerate up to 512 supported repositories, ren
 
 REPOSITORIES is a generic non-secret utility and must not be used as a route for decrypted Vault data or other secret-subsystem plaintext.
 
+## Generic Workspace backup / restore boundary
+
+The M2 BACKUP core is implemented in src/workspace_backup.rs and is separate from the M2-S encrypted Secret Backup / Restore path.
+
+Generic snapshots cover data/, repositories/, identity/, config/, and state/autosave/. The backups/ directory itself and state/session.v1 are excluded so snapshots do not recursively contain snapshots and restore does not replace the current session record.
+
+The versioned DGMWBK01 archive stores bounded relative UTF-8 path components, directory records, regular-file lengths, raw file bytes, a SHA-256 for each file, and a final SHA-256 over the complete hashed archive region. DGMEND01 marks the footer. These hashes detect corruption; they do not authenticate the producer of a backup.
+
+Backup creation rejects symlinks, special files, and non-UTF-8 path components instead of silently omitting them. File content is streamed with 64 KiB buffers. The first format bounds the archive to 250,000 records, 512 GiB per file and 2 TiB total regular-file payload.
+
+CREATE writes a hidden create-new pending archive, syncs it, fully verifies it, copies it into a create-new final .dgmwbk file, syncs and fully verifies the final file, then removes the pending file and syncs the backups directory. A dirty Editor buffer is first written through the existing generic recovery-draft boundary so that state/autosave can capture it.
+
+VERIFY is read-only and checks format, managed-root membership, component bounds, duplicate paths, parent ordering, payload bounds, every per-file SHA-256, every required managed-root record, the archive SHA-256 and absence of trailing bytes.
+
+RESTORE requires a direct final backup file below workspace/backups. The selected archive is fully extracted into hidden staging and verified before any managed Workspace root is replaced. Existing data/, repositories/, identity/, config/, and state/autosave/ roots are moved to hidden rollback staging; verified staged roots are then renamed into place. If an in-process replacement step fails, previously replaced roots are processed in reverse order and the core attempts to restore the original roots from rollback staging.
+
+The multi-root replacement is not one OS-atomic transaction. A crash, OS failure, power loss or removable-device interruption can leave .restore-staging-* / .restore-rollback-* artifacts and a partially replaced Workspace. A later restore refuses to proceed while such artifacts exist rather than guessing which side is authoritative. This M2 boundary provides verified staging and in-process rollback, not crash-atomic multi-root restore.
+
+Generic backup creation is also not a filesystem-wide frozen snapshot. The core detects common source-file changes during a file read by checking length and modification metadata, but concurrent external changes across multiple files can still produce a cross-file state that was not present at one single instant.
+
+The native BACKUP view requires exact RESTORE confirmation and refuses restore while the currently open Editor has dirty content or an unresolved recovery choice. After successful restore, filesystem-derived native UI state is reset before the user continues.
+
+Backup selection, verification summary and restore confirmation remain ephemeral. Generic session restoration stores only the active BACKUP navigation view.
+
+BACKUP is a generic non-secret utility. Decrypted Vault payloads, passwords, Master Passphrases, Recovery Codes and other secret-subsystem plaintext must not be routed into ordinary Workspace files for this snapshot path. The existing M2-S Secret Backup / Restore remains the dedicated Vault-ciphertext backup boundary.
+
 ## Save and recovery model
 
 Typing never automatically overwrites the source file.

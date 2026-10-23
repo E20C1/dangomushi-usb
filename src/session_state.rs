@@ -18,6 +18,7 @@ pub enum SessionView {
     Compare,
     Search,
     Repositories,
+    Backup,
     Workspace,
     Mobile,
     System,
@@ -35,6 +36,7 @@ impl SessionView {
             Self::Compare => "compare",
             Self::Search => "search",
             Self::Repositories => "repositories",
+            Self::Backup => "backup",
             Self::Workspace => "workspace",
             Self::Mobile => "mobile",
             Self::System => "system",
@@ -52,6 +54,7 @@ impl SessionView {
             "compare" => Ok(Self::Compare),
             "search" => Ok(Self::Search),
             "repositories" => Ok(Self::Repositories),
+            "backup" => Ok(Self::Backup),
             "workspace" => Ok(Self::Workspace),
             "mobile" => Ok(Self::Mobile),
             "system" => Ok(Self::System),
@@ -512,6 +515,33 @@ mod tests {
             "git_log",
             "branch_name",
             "commit_subject",
+        ] {
+            assert!(!payload.contains(forbidden));
+        }
+
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn backup_view_round_trips_without_persisting_selection_or_restore_confirmation() {
+        let root = temporary_workspace("backup-view");
+        let expected = SessionState {
+            view: SessionView::Backup,
+            ..SessionState::default()
+        };
+
+        save(&root, &expected).expect("save");
+        let actual = load(&root).expect("load").expect("session");
+        assert_eq!(actual, expected);
+
+        let payload = serialize(&actual).expect("serialize");
+        assert!(payload.contains("view=backup"));
+        for forbidden in [
+            "backup_selected",
+            "backup_summary",
+            "restore_confirmation",
+            "restore_result",
+            "backup_path",
         ] {
             assert!(!payload.contains(forbidden));
         }

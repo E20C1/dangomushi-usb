@@ -197,12 +197,14 @@ SEARCH remains an ordinary generic document utility. Passwords, Master Passphras
 
 REPOSITORIES remains an ordinary generic version-control utility. Passwords, Master Passphrases, Recovery Codes, decrypted Vault data, and similar secret values MUST NOT be intentionally routed through repository files, commit messages, Git output, or the generic REPOSITORIES UI.
 
+BACKUP remains an ordinary generic Workspace snapshot utility. Passwords, Master Passphrases, Recovery Codes, decrypted Vault payloads, and similar secret values MUST NOT be intentionally written into ordinary Workspace files merely so they are captured by generic Workspace snapshots. Generic BACKUP does not replace or wrap the M2-S Secret Backup / Restore flow.
+
 ## Exactly One Next Task
 
-M2-S core work remains complete. HASH / VERIFY, TEXT / JSON, COMPARE, SEARCH, and REPOSITORIES are now complete without crossing the secret-data boundary.
+M2-S core work remains complete. Normal M2 Local Tools are now complete through generic BACKUP / RESTORE without crossing the secret-data boundary.
 
 The repository-wide Exactly One Next Task is:
 
-**Backup and restore workflow**
+**Explicit LAN enable control**
 
-That task is the normal M2 generic Workspace backup path and must remain separate from the already-complete M2-S Secret Backup / Restore subsystem. It must not advance PASSWORDS UI or M3 LAN work.
+That M3 task must remain non-listening by itself. The existing rule remains: no LAN listener may be merged before device pairing, persistent trusted-device identity, revocation, and permission boundaries are implemented.

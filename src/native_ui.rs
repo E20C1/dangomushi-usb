@@ -9,6 +9,7 @@ use crate::text_editor;
 use crate::text_json;
 use crate::tool_registry::{self, ToolId, ToolStatus};
 use crate::workspace;
+use crate::workspace_backup;
 use eframe::egui;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -43,6 +44,7 @@ enum View {
     Compare,
     Search,
     Repositories,
+    Backup,
     Workspace,
     Mobile,
     System,
@@ -60,6 +62,7 @@ impl View {
             Self::Compare => SessionView::Compare,
             Self::Search => SessionView::Search,
             Self::Repositories => SessionView::Repositories,
+            Self::Backup => SessionView::Backup,
             Self::Workspace => SessionView::Workspace,
             Self::Mobile => SessionView::Mobile,
             Self::System => SessionView::System,
@@ -77,6 +80,7 @@ impl View {
             SessionView::Compare => Self::Compare,
             SessionView::Search => Self::Search,
             SessionView::Repositories => Self::Repositories,
+            SessionView::Backup => Self::Backup,
             SessionView::Workspace => Self::Workspace,
             SessionView::Mobile => Self::Mobile,
             SessionView::System => Self::System,
@@ -704,6 +708,114 @@ impl RepositoryUiState {
     }
 }
 
+struct BackupUiState {
+    backups: Vec<workspace_backup::WorkspaceBackupEntry>,
+    selected: Option<PathBuf>,
+    summary: Option<workspace_backup::WorkspaceBackupSummary>,
+    error: Option<String>,
+    restore_confirmation: String,
+}
+
+impl BackupUiState {
+    fn new(root: &Path) -> Self {
+        let mut state = Self {
+            backups: Vec::new(),
+            selected: None,
+            summary: None,
+            error: None,
+            restore_confirmation: String::new(),
+        };
+        let _ = state.refresh_list(root);
+        state
+    }
+
+    fn refresh_list(
+        &mut self,
+        root: &Path,
+    ) -> Result<usize, workspace_backup::WorkspaceBackupError> {
+        match workspace_backup::list_backups(root) {
+            Ok(backups) => {
+                if self
+                    .selected
+                    .as_ref()
+                    .is_some_and(|selected| {
+                        !backups
+                            .iter()
+                            .any(|backup| &backup.relative_path == selected)
+                    })
+                {
+                    self.selected = None;
+                    self.summary = None;
+                    self.restore_confirmation.clear();
+                }
+
+                let count = backups.len();
+                self.backups = backups;
+                self.error = None;
+                Ok(count)
+            }
+            Err(error) => {
+                self.backups.clear();
+                self.selected = None;
+                self.summary = None;
+                self.restore_confirmation.clear();
+                self.error = Some(error.to_string());
+                Err(error)
+            }
+        }
+    }
+
+    fn select(&mut self, path: PathBuf) {
+        self.selected = Some(path);
+        self.summary = None;
+        self.error = None;
+        self.restore_confirmation.clear();
+    }
+
+    fn create(
+        &mut self,
+        root: &Path,
+    ) -> Result<workspace_backup::WorkspaceBackupEntry, workspace_backup::WorkspaceBackupError> {
+        self.error = None;
+        match workspace_backup::create_backup(root) {
+            Ok(created) => {
+                let _ = self.refresh_list(root);
+                self.selected = Some(created.relative_path.clone());
+                self.summary = None;
+                self.restore_confirmation.clear();
+                Ok(created)
+            }
+            Err(error) => {
+                self.error = Some(error.to_string());
+                Err(error)
+            }
+        }
+    }
+
+    fn verify(
+        &mut self,
+        root: &Path,
+    ) -> Result<workspace_backup::WorkspaceBackupSummary, workspace_backup::WorkspaceBackupError> {
+        let selected = self
+            .selected
+            .as_deref()
+            .ok_or(workspace_backup::WorkspaceBackupError::InvalidBackupPath)?;
+
+        match workspace_backup::verify_backup(root, selected) {
+            Ok(summary) => {
+                self.summary = Some(summary);
+                self.error = None;
+                Ok(summary)
+            }
+            Err(error) => {
+                self.summary = None;
+                self.error = Some(error.to_string());
+                Err(error)
+            }
+        }
+    }
+}
+
 struct NativeApp {
     view: View,
     workspace_root: PathBuf,
@@ -714,6 +826,7 @@ struct NativeApp {
     file_compare: FileCompareState,
     document_search: DocumentSearchState,
     repository_git: RepositoryUiState,
+    workspace_backup: BackupUiState,
     notice: String,
     session_saved: SessionState,
     session_failed: Option<SessionState>,
@@ -726,6 +839,7 @@ impl NativeApp {
         let workspace_root = workspace::default_workspace_root();
         let browser = FileBrowserState::new(&workspace_root);
         let repository_git = RepositoryUiState::new(&workspace_root);
+        let workspace_backup = BackupUiState::new(&workspace_root);
 
         let mut app = Self {
             view: View::Home,
@@ -737,6 +851,7 @@ impl NativeApp {
             file_compare: FileCompareState::new(),
             document_search: DocumentSearchState::new(),
             repository_git,
+            workspace_backup,
             notice: "READY".to_string(),
             session_saved: SessionState::default(),
             session_failed: None,
@@ -1072,9 +1187,49 @@ impl NativeApp {
                 self.view = View::Repositories;
             }
             ToolId::Backup => {
-                self.notice = "TOOL NOT IMPLEMENTED".to_string();
+                match self.workspace_backup.refresh_list(&self.workspace_root) {
+                    Ok(count) => {
+                        self.notice = format!("BACKUP READY / {count} SNAPSHOT(S)");
+                    }
+                    Err(error) => {
+                        self.notice = format!("BACKUP FAILED: {error}");
+                    }
+                }
+                self.view = View::Backup;
             }
         }
+    }
+
+    fn persist_dirty_editor_recovery_for_backup(&mut self) -> io::Result<()> {
+        if !self.editor.dirty {
+            return Ok(());
+        }
+
+        let path = self.editor.path.as_ref().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::NotFound, "no editor file is open")
+        })?;
+        text_editor::write_recovery(&self.workspace_root, path, &self.editor.buffer)?;
+        self.editor.last_change = None;
+        self.editor.recovery_status = "RECOVERY STORED FOR BACKUP".to_string();
+        Ok(())
+    }
+
+    fn reset_after_workspace_restore(
+        &mut self,
+        restored_backup: PathBuf,
+        summary: workspace_backup::WorkspaceBackupSummary,
+    ) {
+        self.browser = FileBrowserState::new(&self.workspace_root);
+        self.editor = EditorState::new();
+        self.hash_verify = HashVerifyState::new();
+        self.text_json = TextJsonState::new();
+        self.file_compare = FileCompareState::new();
+        self.document_search = DocumentSearchState::new();
+        self.repository_git = RepositoryUiState::new(&self.workspace_root);
+        self.workspace_backup = BackupUiState::new(&self.workspace_root);
+        self.workspace_backup.select(restored_backup);
+        self.workspace_backup.summary = Some(summary);
+        self.workspace_backup.restore_confirmation.clear();
     }
 
     fn files(&mut self, ui: &mut egui::Ui) {
@@ -2477,6 +2632,254 @@ impl NativeApp {
         );
     }
 
+    fn backup_view(&mut self, ui: &mut egui::Ui) {
+        theme::section_title(ui, PixelIcon::Backup, "BACKUP / RESTORE");
+        ui.label(
+            egui::RichText::new(
+                "Generic local Workspace snapshots. Scope: data, repositories, identity, config and state/autosave. backups itself and state/session.v1 are excluded. This is separate from encrypted Secret Backup / Restore.",
+            )
+            .color(MUTED),
+        );
+        ui.add_space(10.0);
+
+        let mut create_requested = false;
+        let mut refresh_requested = false;
+        let mut select_backup: Option<PathBuf> = None;
+        let mut verify_requested = false;
+        let mut restore_requested = false;
+
+        theme::panel(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                if ui.button("[CREATE BACKUP]").clicked() {
+                    create_requested = true;
+                }
+                if ui.button("[REFRESH LIST]").clicked() {
+                    refresh_requested = true;
+                }
+                theme::key_value(
+                    ui,
+                    "SNAPSHOTS",
+                    &self.workspace_backup.backups.len().to_string(),
+                );
+            });
+
+            ui.add_space(4.0);
+            ui.label(
+                egui::RichText::new(
+                    "CREATE stores a recovery draft first when the currently open Editor buffer is dirty, so that draft is included in state/autosave.",
+                )
+                .color(MUTED)
+                .size(11.0),
+            );
+        });
+
+        if create_requested {
+            match self.persist_dirty_editor_recovery_for_backup() {
+                Ok(()) => match self.workspace_backup.create(&self.workspace_root) {
+                    Ok(created) => {
+                        self.notice = format!("BACKUP CREATED / {}", created.name);
+                    }
+                    Err(error) => {
+                        self.notice = format!("BACKUP CREATE FAILED: {error}");
+                    }
+                },
+                Err(error) => {
+                    self.notice = format!("BACKUP PREPARE FAILED: {error}");
+                }
+            }
+        }
+
+        if refresh_requested {
+            match self.workspace_backup.refresh_list(&self.workspace_root) {
+                Ok(count) => self.notice = format!("BACKUP LIST REFRESHED / {count} FOUND"),
+                Err(error) => self.notice = format!("BACKUP LIST FAILED: {error}"),
+            }
+        }
+
+        ui.add_space(8.0);
+        theme::panel(ui, |ui| {
+            theme::small_label(ui, "LOCAL SNAPSHOTS");
+            egui::ScrollArea::vertical()
+                .max_height(210.0)
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    if self.workspace_backup.backups.is_empty() {
+                        ui.label(
+                            egui::RichText::new("(no workspace backups)")
+                                .color(MUTED)
+                                .monospace(),
+                        );
+                    }
+
+                    for backup in self.workspace_backup.backups.clone() {
+                        let selected =
+                            self.workspace_backup.selected.as_ref() == Some(&backup.relative_path);
+                        ui.horizontal_wrapped(|ui| {
+                            if ui
+                                .selectable_label(selected, format!("[{}]", backup.name))
+                                .clicked()
+                            {
+                                select_backup = Some(backup.relative_path.clone());
+                            }
+                            ui.label(
+                                egui::RichText::new(format_bytes(backup.bytes))
+                                    .color(MUTED)
+                                    .monospace()
+                                    .size(11.0),
+                            );
+                        });
+                    }
+                });
+        });
+
+        if let Some(path) = select_backup {
+            self.workspace_backup.select(path);
+            self.notice = "BACKUP SELECTED".to_string();
+        }
+
+        ui.add_space(8.0);
+        let selected = self.workspace_backup.selected.clone();
+
+        theme::panel(ui, |ui| {
+            theme::small_label(ui, "SELECTED SNAPSHOT");
+            match &selected {
+                Some(path) => ui.label(
+                    egui::RichText::new(file_browser::display_path(path))
+                        .color(TEXT)
+                        .monospace(),
+                ),
+                None => ui.label(egui::RichText::new("(none)").color(MUTED).monospace()),
+            };
+
+            ui.add_space(6.0);
+            if ui
+                .add_enabled(selected.is_some(), egui::Button::new("[VERIFY BACKUP]"))
+                .clicked()
+            {
+                verify_requested = true;
+            }
+
+            if let Some(summary) = self.workspace_backup.summary {
+                ui.add_space(6.0);
+                theme::key_value(ui, "DIRECTORIES", &summary.directories.to_string());
+                theme::key_value(ui, "FILES", &summary.files.to_string());
+                theme::key_value(
+                    ui,
+                    "FILE BYTES",
+                    &format_bytes(summary.total_file_bytes),
+                );
+                theme::key_value(
+                    ui,
+                    "ARCHIVE SIZE",
+                    &format_bytes(summary.archive_bytes),
+                );
+                ui.label(
+                    egui::RichText::new("FORMAT + FILE HASHES + ARCHIVE HASH VERIFIED")
+                        .color(OK)
+                        .strong()
+                        .monospace(),
+                );
+            }
+        });
+
+        if verify_requested {
+            match self.workspace_backup.verify(&self.workspace_root) {
+                Ok(_) => self.notice = "BACKUP VERIFIED".to_string(),
+                Err(error) => self.notice = format!("BACKUP VERIFY FAILED: {error}"),
+            }
+        }
+
+        if let Some(error) = &self.workspace_backup.error {
+            ui.add_space(8.0);
+            theme::panel(ui, |ui| {
+                ui.label(
+                    egui::RichText::new("BACKUP ERROR")
+                        .color(BAD)
+                        .strong()
+                        .monospace(),
+                );
+                ui.label(egui::RichText::new(error).color(MUTED).monospace());
+            });
+        }
+
+        ui.add_space(8.0);
+        theme::panel(ui, |ui| {
+            theme::small_label(ui, "RESTORE / DESTRUCTIVE");
+
+            ui.label(
+                egui::RichText::new(
+                    "Restore replaces data/, repositories/, identity/, config/ and state/autosave/ with the selected verified snapshot. Current backups/ and state/session.v1 remain in place.",
+                )
+                .color(WARN),
+            );
+            ui.label(
+                egui::RichText::new(
+                    "The selected archive is fully extracted and integrity-verified before target replacement. Existing managed roots are held in rollback staging while replacement runs.",
+                )
+                .color(MUTED)
+                .size(11.0),
+            );
+
+            ui.add_space(6.0);
+            theme::small_label(ui, "TYPE RESTORE TO ENABLE");
+            ui.add(
+                egui::TextEdit::singleline(&mut self.workspace_backup.restore_confirmation)
+                    .font(egui::TextStyle::Monospace)
+                    .desired_width(220.0)
+                    .hint_text("RESTORE"),
+            );
+
+            let editor_safe = !self.editor.dirty && self.editor.pending_recovery.is_none();
+            if !editor_safe {
+                ui.label(
+                    egui::RichText::new(
+                        "Resolve the currently open Editor's dirty/pending recovery state before restoring.",
+                    )
+                    .color(WARN)
+                    .strong(),
+                );
+            }
+
+            let can_restore = selected.is_some()
+                && self.workspace_backup.restore_confirmation == "RESTORE"
+                && editor_safe;
+
+            if ui
+                .add_enabled(can_restore, egui::Button::new("[RESTORE SELECTED BACKUP]"))
+                .clicked()
+            {
+                restore_requested = true;
+            }
+        });
+
+        if restore_requested {
+            if let Some(path) = selected {
+                match workspace_backup::restore_backup(&self.workspace_root, &path) {
+                    Ok(summary) => {
+                        self.reset_after_workspace_restore(path, summary);
+                        self.view = View::Backup;
+                        self.notice = "WORKSPACE RESTORED / UI STATE RESET".to_string();
+                    }
+                    Err(error) => {
+                        self.workspace_backup.summary = None;
+                        self.workspace_backup.error = Some(error.to_string());
+                        self.workspace_backup.restore_confirmation.clear();
+                        self.notice = format!("WORKSPACE RESTORE FAILED: {error}");
+                    }
+                }
+            }
+        }
+
+        ui.add_space(8.0);
+        ui.label(
+            egui::RichText::new(
+                "Backup selection, verification summary and RESTORE confirmation are ephemeral. Generic session state stores only the BACKUP navigation view.",
+            )
+            .color(MUTED)
+            .size(11.0),
+        );
+    }
+
     fn workspace(&mut self, ui: &mut egui::Ui) {
         let summary = workspace::summary(&self.workspace_root);
 
@@ -2571,6 +2974,7 @@ impl eframe::App for NativeApp {
                     View::Compare => self.compare_view(ui),
                     View::Search => self.search_view(ui),
                     View::Repositories => self.repositories_view(ui),
+                    View::Backup => self.backup_view(ui),
                     View::Workspace => self.workspace(ui),
                     View::Mobile => self.mobile(ui),
                     View::System => self.system(ui),
@@ -2753,6 +3157,29 @@ mod tests {
         assert_eq!(report.matches.len(), 1);
         assert_eq!(report.matches[0].line, 2);
         assert_eq!(fs::read(&path).expect("after"), before);
+
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn backup_view_maps_to_navigation_only_session_state() {
+        assert_eq!(View::Backup.session_view(), SessionView::Backup);
+        assert_eq!(View::from_session(SessionView::Backup), View::Backup);
+    }
+
+    #[test]
+    fn backup_ui_state_creates_and_verifies_snapshot() {
+        let root = temporary_workspace("backup");
+        workspace::initialize(&root).expect("workspace init");
+        fs::write(root.join("data/documents/note.txt"), "snapshot").expect("document");
+
+        let mut state = BackupUiState::new(&root);
+        let created = state.create(&root).expect("create");
+        assert_eq!(state.selected.as_ref(), Some(&created.relative_path));
+
+        let summary = state.verify(&root).expect("verify");
+        assert_eq!(summary.files, 1);
+        assert!(summary.directories >= 5);
 
         fs::remove_dir_all(root).expect("cleanup");
     }
