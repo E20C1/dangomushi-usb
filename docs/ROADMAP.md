@@ -76,7 +76,19 @@ This roadmap records implementation order, not release dates.
   - retained stdout/stderr is bounded to 1 MiB each and Git runtime to 15 seconds
   - Tool Launcher entry is READY; repository selection and Git output remain ephemeral
   - session restoration stores only the active REPOSITORIES view
-- [ ] **Backup and restore workflow** — Exactly One Next Task
+- [x] **Backup and restore workflow**
+  - versioned DGMWBK01 generic Workspace snapshot container with per-file SHA-256 and whole-archive SHA-256
+  - scope is data/, repositories/, identity/, config/ and state/autosave/
+  - backups/ and state/session.v1 are intentionally excluded
+  - symlinks, special files and non-UTF-8 path components are rejected rather than silently omitted
+  - streaming 64 KiB I/O with bounded path, entry and payload limits
+  - CREATE uses hidden pending -> sync -> full verify -> create-new final copy -> sync -> full verify
+  - VERIFY checks format, path bounds, duplicate/parent structure, each file digest and archive digest without mutation
+  - RESTORE fully verifies/extracts to hidden staging before replacing managed roots
+  - current roots are retained in hidden rollback staging and restored in reverse order on in-process replacement failure
+  - RESTORE requires explicit RESTORE confirmation and refuses dirty/pending Editor state
+  - successful restore resets filesystem-derived native UI state; session stores only the BACKUP navigation view
+  - generic Workspace backup remains separate from M2-S Secret Backup / Restore
 
 ## M2-S — Secret management subsystem
 
@@ -144,7 +156,7 @@ Both `Generate new password` and `Enter existing password` must converge on the 
 
 ## M3 — Authenticated mobile LAN access
 
-- [ ] Explicit LAN enable control
+- [ ] **Explicit LAN enable control** — Exactly One Next Task
 - [ ] Device pairing
 - [ ] Persistent trusted-device public keys
 - [ ] Device revocation
