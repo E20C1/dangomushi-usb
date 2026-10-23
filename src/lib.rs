@@ -2,6 +2,7 @@ pub mod clipboard_hygiene;
 pub mod credential;
 pub mod existing_credential_input;
 pub mod generated_credential_input;
+pub mod hash_verify;
 pub mod file_browser;
 pub mod password_generator;
 pub mod recovery_codes;

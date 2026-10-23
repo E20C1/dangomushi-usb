@@ -24,7 +24,14 @@ This roadmap records implementation order, not release dates.
 
 ## M2 — Local tools
 
-- [ ] **SHA-256 / integrity verification** — Exactly One Next Task
+- [x] **SHA-256 / integrity verification core**
+  - read-only existing regular files below the configured Workspace root
+  - relative normal-component paths only; traversal and symlink paths rejected
+  - streaming SHA-256 calculation with bounded memory
+  - strict 64-hex expected digest parsing with uppercase/lowercase support
+  - mismatch is a normal verification result and never modifies the target
+  - no UI, network, generic Backup, Repository operation, or secret-data integration
+- [ ] **HASH / VERIFY native UI integration** — Exactly One Next Task
 - [ ] Text / JSON utilities
 - [ ] File comparison
 - [ ] Local document search
