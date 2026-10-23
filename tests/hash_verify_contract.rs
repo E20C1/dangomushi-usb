@@ -72,11 +72,12 @@ fn native_ui_dispatches_ready_hash_verify_without_persisting_tool_inputs() {
 }
 
 #[test]
-fn roadmap_keeps_hash_verify_complete_after_text_json_advances() {
+fn roadmap_keeps_hash_verify_complete_after_later_m2_tools_advance() {
     assert!(ROADMAP.contains("- [x] **SHA-256 / integrity verification core**"));
     assert!(ROADMAP.contains("- [x] **HASH / VERIFY native UI integration**"));
     assert!(ROADMAP.contains("- [x] **Text / JSON utilities**"));
+    assert!(ROADMAP.contains("- [x] **File comparison**"));
     assert!(ROADMAP.contains(
-        "- [ ] **File comparison** — Exactly One Next Task"
+        "- [ ] **Local document search** — Exactly One Next Task"
     ));
 }

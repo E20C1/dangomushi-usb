@@ -95,8 +95,8 @@ const TOOLS: &[ToolDefinition] = &[
         key: "compare",
         label: "COMPARE",
         category: ToolCategory::Utility,
-        description: "Compare local files and text without uploading them.",
-        status: ToolStatus::Planned,
+        description: "Compare two Workspace files locally with binary-safe streaming.",
+        status: ToolStatus::Ready,
     },
     ToolDefinition {
         id: ToolId::Repositories,
@@ -161,6 +161,10 @@ mod tests {
             by_key("text-json").map(|tool| tool.status),
             Some(ToolStatus::Ready)
         );
+        assert_eq!(
+            by_key("compare").map(|tool| tool.status),
+            Some(ToolStatus::Ready)
+        );
     }
 
     #[test]
@@ -172,6 +176,10 @@ mod tests {
         assert_eq!(
             by_key("text-json").map(|tool| tool.id),
             Some(ToolId::TextJson)
+        );
+        assert_eq!(
+            by_key("compare").map(|tool| tool.id),
+            Some(ToolId::Compare)
         );
         assert!(by_key("missing-tool").is_none());
     }

@@ -36,8 +36,9 @@ fn roadmap_completes_secret_core_and_keeps_non_secret_m2_sequence_bounded() {
     assert!(ROADMAP.contains("[x] **SHA-256 / integrity verification core**"));
     assert!(ROADMAP.contains("[x] **HASH / VERIFY native UI integration**"));
     assert!(ROADMAP.contains("[x] **Text / JSON utilities**"));
+    assert!(ROADMAP.contains("[x] **File comparison**"));
     assert!(ROADMAP.contains(
-        "[ ] **File comparison** — Exactly One Next Task"
+        "[ ] **Local document search** — Exactly One Next Task"
     ));
 }
 

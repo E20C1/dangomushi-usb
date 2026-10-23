@@ -86,12 +86,13 @@ fn native_ui_dispatches_ready_text_json_without_session_payload_content() {
 }
 
 #[test]
-fn secret_boundary_excludes_text_json_and_roadmap_moves_to_compare() {
+fn secret_boundary_excludes_text_json_and_roadmap_keeps_it_complete() {
     assert!(SECRET_BOUNDARY.contains(
         "MUST NOT be routed through its generic String buffers or formatting transforms"
     ));
     assert!(ROADMAP.contains("- [x] **Text / JSON utilities**"));
+    assert!(ROADMAP.contains("- [x] **File comparison**"));
     assert!(ROADMAP.contains(
-        "- [ ] **File comparison** — Exactly One Next Task"
+        "- [ ] **Local document search** — Exactly One Next Task"
     ));
 }
