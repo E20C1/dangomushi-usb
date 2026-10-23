@@ -109,6 +109,9 @@ Vault unlock/lock is implemented by `src/vault_unlock.rs`. `MasterPassphrase` co
 
 `UnlockedVault` owns the VaultStore, VaultKey, and KDF metadata for a deliberate lifetime. `lock(self)` consumes the unlocked object and drops the VaultKey before returning the non-secret store. Wrong-passphrase and AEAD-authentication failures are intentionally reduced to the same generic unlock failure.
 
+Recovery Codes use a dedicated `RecoveryCode` / `RecoveryCodeSet` model in `src/recovery_codes.rs`. Directly owned code Strings are redacted in Debug and zeroized on Drop as best effort. Recovery Codes are encoded only into a bounded, versioned, length-delimited `RecoveryCodeVaultPayload` plaintext section intended for authenticated Vault data; they are never ordinary Workspace JSON/TOML/CSV/text, generic autosave, or session state. The complete combined Vault document schema remains intentionally undefined so Credential and Recovery Code sections can be composed later without making the Recovery Code task define unrelated Credential serialization.
+
+
 
 
 

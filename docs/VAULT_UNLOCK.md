@@ -98,12 +98,10 @@ Still not implemented:
 - session restoration of secret fields,
 - Credential serialization,
 - Generator -> Credential integration,
-- Recovery Codes,
+- Recovery Code UI/combined Vault-document integration,
 - Clipboard operations,
 - Secret Backup / Restore.
 
-## Exactly One Next Task
+## Current downstream status
 
-**Generator -> Credential integration**
-
-That task should move a generated password into the existing source-agnostic Credential path without using generic Text Editor/autosave/session persistence. It must not yet add Recovery Codes or Clipboard behavior.
+Generated-password Credential integration and the Recovery Code core/payload boundary are implemented as separate modules. Clipboard handling remains a later boundary.

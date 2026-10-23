@@ -1,6 +1,6 @@
 # DANGOMUSHI Secret Data Boundary
 
-Status: **architectural contract established; Password Generator Core, both Credential input paths, encrypted Vault storage, and Vault unlock/lock core implemented; Recovery Codes/UI integration remain unimplemented**
+Status: **architectural contract established; Password Generator Core, both Credential input paths, encrypted Vault storage/unlock, and Recovery Code core/payload boundary implemented; Clipboard/UI integration remain unimplemented**
 
 This document defines the mandatory boundary for future password, credential, recovery-code and vault work.
 
@@ -178,6 +178,6 @@ Normal M2 tools such as HASH / VERIFY continue independently. The secret subsyst
 
 ## Exactly One Next Task
 
-**Recovery Codes**
+**Clipboard hygiene**
 
-That next task must establish a separate secret-aware Recovery Code model and its encrypted-Vault payload boundary without routing recovery values through generic files, Text Editor, autosave, session restoration, logs, or Clipboard.
+That next task must establish explicit secret-copy ownership, configurable delayed clearing, and conditional clearing only when the Clipboard still appears to contain the value DANGOMUSHI placed there. It must preserve the limitation that OS/desktop Clipboard managers or other processes may already have retained copies.

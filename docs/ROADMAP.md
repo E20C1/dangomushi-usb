@@ -70,8 +70,13 @@ This is a security-sensitive subsystem separate from ordinary M2 Local Tools. No
   - GeneratedPassword is consumed into SecretString without a required clone
   - generated and existing password paths converge on the same Credential model
   - integration remains in-memory and outside Text Editor/autosave/session/Vault serialization
-- [ ] **Recovery Codes** — Exactly One Next Task
-- [ ] Clipboard hygiene
+- [x] **Recovery Codes**
+  - dedicated RecoveryCode / RecoveryCodeSet secret-aware model
+  - exact text preservation with bounded count/length
+  - versioned length-delimited binary Vault section payload
+  - redacted Debug and best-effort zeroization of directly owned secret buffers
+  - VaultPlaintext decode boundary; no generic files/autosave/session/Clipboard
+- [ ] **Clipboard hygiene** — Exactly One Next Task
 - [ ] Secret Backup / Restore
 
 Both `Generate new password` and `Enter existing password` must converge on the same Credential persistence flow before encrypted Vault storage.

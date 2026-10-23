@@ -21,7 +21,7 @@ fn secret_boundary_contract_keeps_generic_persistence_out_of_scope() {
 }
 
 #[test]
-fn roadmap_keeps_secret_work_separate_and_recovery_codes_next() {
+fn roadmap_keeps_secret_work_separate_and_clipboard_next() {
     assert!(ROADMAP.contains("## M2 — Local tools"));
     assert!(ROADMAP.contains("## M2-S — Secret management subsystem"));
     assert!(ROADMAP.contains("[x] **Password Generator Core**"));
@@ -30,7 +30,8 @@ fn roadmap_keeps_secret_work_separate_and_recovery_codes_next() {
     assert!(ROADMAP.contains("[x] **Encrypted Vault storage**"));
     assert!(ROADMAP.contains("[x] **Vault unlock / lock**"));
     assert!(ROADMAP.contains("[x] **Generator -> Credential integration**"));
-    assert!(ROADMAP.contains("[ ] **Recovery Codes** — Exactly One Next Task"));
+    assert!(ROADMAP.contains("[x] **Recovery Codes**"));
+    assert!(ROADMAP.contains("[ ] **Clipboard hygiene** — Exactly One Next Task"));
 }
 
 #[test]
