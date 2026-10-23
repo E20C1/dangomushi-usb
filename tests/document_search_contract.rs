@@ -14,7 +14,7 @@ fn document_search_core_is_read_only_bounded_and_documents_scoped() {
 
     for required in [
         "DOCUMENTS_RELATIVE",
-        ""data", "documents"",
+        "[\"data\", \"documents\"]",
         "MAX_SEARCH_QUERY_BYTES",
         "MAX_DOCUMENT_BYTES",
         "MAX_FILES_CONSIDERED",
@@ -68,7 +68,7 @@ fn native_ui_dispatches_ready_search_without_session_payload_content() {
     assert!(UI.contains("workspace:/data/documents"));
 
     assert!(SESSION.contains("Search"));
-    assert!(SESSION.contains(""search""));
+    assert!(SESSION.contains("search"));
 
     for forbidden in [
         "search_query=",
