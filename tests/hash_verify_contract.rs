@@ -78,7 +78,8 @@ fn roadmap_keeps_hash_verify_complete_after_later_m2_tools_advance() {
     assert!(ROADMAP.contains("- [x] **Text / JSON utilities**"));
     assert!(ROADMAP.contains("- [x] **File comparison**"));
     assert!(ROADMAP.contains("- [x] **Local document search**"));
+    assert!(ROADMAP.contains("- [x] **Repository status and safe Git operations**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Repository status and safe Git operations** — Exactly One Next Task"
+        "- [ ] **Backup and restore workflow** — Exactly One Next Task"
     ));
 }
