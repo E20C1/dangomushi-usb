@@ -78,8 +78,8 @@ const TOOLS: &[ToolDefinition] = &[
         key: "hash-verify",
         label: "HASH / VERIFY",
         category: ToolCategory::Utility,
-        description: "Calculate and verify file digests locally.",
-        status: ToolStatus::Planned,
+        description: "Calculate and verify SHA-256 digests for local Workspace files.",
+        status: ToolStatus::Ready,
     },
     ToolDefinition {
         id: ToolId::Compare,
@@ -135,13 +135,17 @@ mod tests {
     }
 
     #[test]
-    fn files_and_editor_are_ready() {
+    fn implemented_tools_are_ready() {
         assert_eq!(
             by_key("files").map(|tool| tool.status),
             Some(ToolStatus::Ready)
         );
         assert_eq!(
             by_key("editor").map(|tool| tool.status),
+            Some(ToolStatus::Ready)
+        );
+        assert_eq!(
+            by_key("hash-verify").map(|tool| tool.status),
             Some(ToolStatus::Ready)
         );
     }
