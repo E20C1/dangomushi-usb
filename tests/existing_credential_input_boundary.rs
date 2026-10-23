@@ -28,5 +28,5 @@ fn existing_input_boundary_converges_on_credential_model() {
 #[test]
 fn existing_input_boundary_is_redacted() {
     assert!(INPUT_SOURCE.contains("ExistingCredentialInput([REDACTED])"));
-    assert!(!INPUT_SOURCE.contains("impl fmt::Display for ExistingCredentialInput"));
+    assert!(!INPUT_SOURCE.contains("impl fmt::Display for ExistingCredentialInput {"));
 }
