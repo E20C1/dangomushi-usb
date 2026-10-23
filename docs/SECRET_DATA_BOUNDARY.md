@@ -1,6 +1,6 @@
 # DANGOMUSHI Secret Data Boundary
 
-Status: **architectural contract established; Password Generator Core, both Credential input paths, encrypted Vault storage/unlock, Recovery Code core/payload boundary, and Clipboard hygiene implemented; PASSWORDS UI and Secret Backup / Restore remain unimplemented**
+Status: **architectural contract established; Password Generator Core, both Credential input paths, encrypted Vault storage/unlock, Recovery Code core/payload boundary, Clipboard hygiene, and Secret Backup / Restore implemented; PASSWORDS UI remains unimplemented**
 
 This document defines the mandatory boundary for future password, credential, recovery-code and vault work.
 
@@ -179,8 +179,18 @@ After this boundary, the intended order is:
 
 Normal M2 tools such as HASH / VERIFY continue independently. The secret subsystem does not replace or block M2.
 
+## Secret backup / restore boundary
+
+Secret backups contain the existing authenticated Vault ciphertext, not a generic plaintext export of Credentials, Recovery Codes, Master Passphrases, clipboard values, or decrypted Vault payloads. `DGMBAK01` is a versioned container around the existing Vault ciphertext; it does not define a second cryptographic scheme.
+
+Backup creation requires the source Vault to be unlocked so its current ciphertext can be authenticated before copying. The destination backup path is create-new and is never silently overwritten.
+
+Restore derives the Vault key from the backup's Vault-format KDF metadata and the supplied Master Passphrase. The backup ciphertext must authenticate before any destination Vault mutation. Restore refuses ambiguous target states containing pending/previous Vault files and uses the existing Vault replacement/rollback mechanism for a stable target.
+
 ## Exactly One Next Task
 
-**Secret Backup / Restore**
+M2-S core work is complete. The repository-wide Exactly One Next Task returns to normal M2 Local Tools:
 
-That next task must define a secret-specific encrypted backup and restore boundary without routing decrypted Credentials, Recovery Codes, Master Passphrases, clipboard values, or Vault plaintext through generic Workspace backup/export helpers.
+**SHA-256 / integrity verification**
+
+This task must implement the local HASH / VERIFY core without advancing Text / JSON utilities, Compare, Repository operations, generic Backup, or M3 LAN work.

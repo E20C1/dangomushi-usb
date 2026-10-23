@@ -113,6 +113,10 @@ Recovery Codes use a dedicated `RecoveryCode` / `RecoveryCodeSet` model in `src/
 
 Clipboard hygiene is implemented in `src/clipboard_hygiene.rs`. `ClipboardSecret` makes each DANGOMUSHI-owned clipboard copy explicit, redacts Debug output, and best-effort zeroizes its directly owned String on Drop. `SecretClipboard` owns both a long-lived clipboard backend and at most one active delayed-clear lease. When the configured deadline is reached, DANGOMUSHI reads the current clipboard text into a temporary zeroized buffer and clears the clipboard only if that observed text still matches the secret DANGOMUSHI placed there. If the clipboard is empty, non-text, or contains different text, the content is preserved and the lease is discarded. Backend failures remain generic and do not include clipboard contents. This compare-before-clear check is not atomic with the OS clear operation, so a narrow external-change race remains possible and is documented rather than hidden.
 
+Secret Backup / Restore is implemented in `src/secret_backup.rs`. Backup creation asks an unlocked Vault to export its already-authenticated `vault.dgmv` ciphertext and wraps that ciphertext in a small versioned `DGMBAK01` container. It does not decrypt Credential or Recovery Code content into the generic Workspace backup/export layer and does not introduce another encryption primitive. Backup creation uses create-new files, a same-directory pending file, file sync, reread verification, and refuses to overwrite an existing backup path.
+
+Restore parses the backup container, reads the inner Vault KDF metadata, derives the Vault key from the supplied Master Passphrase, and authenticates the encrypted Vault payload before mutating the destination. A destination with leftover `vault.pending.dgmv` or `vault.previous.dgmv` is rejected as ambiguous rather than guessed at. For a stable destination, the existing Vault is preserved as the normal rollback file while the authenticated backup ciphertext is promoted and verified; the previous Vault is removed only after the restored current Vault authenticates successfully.
+
 
 
 

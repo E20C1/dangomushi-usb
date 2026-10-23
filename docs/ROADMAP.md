@@ -24,7 +24,7 @@ This roadmap records implementation order, not release dates.
 
 ## M2 — Local tools
 
-- [ ] SHA-256 / integrity verification
+- [ ] **SHA-256 / integrity verification** — Exactly One Next Task
 - [ ] Text / JSON utilities
 - [ ] File comparison
 - [ ] Local document search
@@ -83,7 +83,15 @@ This is a security-sensitive subsystem separate from ordinary M2 Local Tools. No
   - temporary clipboard readback is secret-owned and zeroized on Drop
   - injectable backend for deterministic core tests; desktop OS adapter is feature-gated
   - no PASSWORDS UI, generic autosave/session persistence, or Secret Backup / Restore integration
-- [ ] **Secret Backup / Restore** — Exactly One Next Task
+- [x] **Secret Backup / Restore**
+  - versioned `DGMBAK01` container wraps existing authenticated Vault ciphertext
+  - backup creation requires an authenticated unlocked source Vault
+  - no decrypted Credential / Recovery Code / Vault plaintext passes through generic backup/export helpers
+  - create-new pending/write/sync/reread flow refuses silent overwrite of an existing backup
+  - restore derives the backup Vault key from embedded KDF metadata and Master Passphrase
+  - backup ciphertext is authenticated before destination mutation
+  - stable destination replacement preserves rollback until restored ciphertext re-authenticates
+  - ambiguous pending/previous destination layouts are rejected instead of guessed at
 
 Both `Generate new password` and `Enter existing password` must converge on the same Credential persistence flow before encrypted Vault storage.
 
