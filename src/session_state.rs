@@ -382,6 +382,35 @@ mod tests {
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
     }
 
+    #[test]
+    fn serialized_session_schema_contains_only_navigation_fields() {
+        let payload = serialize(&SessionState::default()).expect("serialize");
+        let keys: Vec<&str> = payload
+            .lines()
+            .skip(1)
+            .filter_map(|line| line.split_once('=').map(|(key, _)| key))
+            .collect();
+
+        assert_eq!(
+            keys,
+            vec!["view", "browser_dir", "browser_selected", "editor_path"]
+        );
+
+        let lower = payload.to_ascii_lowercase();
+        for forbidden in [
+            "password",
+            "credential",
+            "master_passphrase",
+            "recovery_code",
+            "secret",
+        ] {
+            assert!(
+                !lower.contains(forbidden),
+                "generic session payload must not contain secret field: {forbidden}"
+            );
+        }
+    }
+
     #[cfg(unix)]
     #[test]
     fn save_refuses_symlink_state_directory() {

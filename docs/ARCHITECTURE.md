@@ -82,6 +82,19 @@ Session paths are relative-only, reject parent traversal, and are revalidated ag
 
 Session writes use a newly synced temporary file, preserve the previous session while replacing the current file, and restore the previous file if final replacement fails. The state directory itself must be a real in-workspace directory and must not be a symlink.
 
+## Secret data boundary
+
+Password, Credential, Master Passphrase, Recovery Code, decrypted Vault payloads and similar secret values are governed by the stricter contract in [SECRET_DATA_BOUNDARY.md](SECRET_DATA_BOUNDARY.md).
+
+The generic Text Editor, `workspace/state/autosave/`, `workspace/state/session.v1`, ordinary plaintext Workspace files, and diagnostic/logging paths are explicitly **not** secret-storage mechanisms.
+
+Future encrypted Vault persistence must use a dedicated API boundary that is not exposed through the normal File Browser or Text Editor. Its persistence design must support durable temporary ciphertext, sync, verification, replacement and rollback suitable for removable storage.
+
+Cryptographic primitives must come from maintained existing Rust crates selected after an implementation-time review of official documentation and security/maintenance properties. DANGOMUSHI does not claim guaranteed complete memory erasure of secret values, especially across GUI toolkit, allocator, OS clipboard and operating-system boundaries.
+
+
+
+## Network boundary
 
 The current implementation intentionally supports only:
 
@@ -152,6 +165,8 @@ The icon set is generated from source-code bit patterns. No external icon pack, 
 
 The native navigation, Tool Launcher and FILES entry types use the shared icon vocabulary so later tools can extend the same visual language without duplicating screen-specific styling.
 
+
+## Dependency policy
 
 The core CLI, workspace model, filesystem browser, text editor storage layer and loopback server use the Rust standard library only.
 

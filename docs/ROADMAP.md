@@ -31,6 +31,30 @@ This roadmap records implementation order, not release dates.
 - [ ] Repository status and safe Git operations
 - [ ] Backup and restore workflow
 
+## M2-S — Secret management subsystem
+
+This is a security-sensitive subsystem separate from ordinary M2 Local Tools. Normal M2 work continues independently.
+
+- [x] Secret Data Boundary
+- [ ] **Password Generator Core** — Exactly One Next Task
+  - production randomness from the operating system CSPRNG
+  - configurable length / uppercase / lowercase / digits / symbol set
+  - optional minimum one character from every selected group
+  - ambiguous-character exclusion option
+  - sampling that avoids modulo bias
+  - injectable randomness source for deterministic core tests
+  - no UI or Vault dependency
+- [ ] Credential model — Service / Username or Email / URL / Password / Notes
+- [ ] Add Existing Credential input boundary
+- [ ] Encrypted Vault storage
+- [ ] Vault unlock / lock
+- [ ] Generator -> Credential integration
+- [ ] Recovery Codes
+- [ ] Clipboard hygiene
+- [ ] Secret Backup / Restore
+
+Both `Generate new password` and `Enter existing password` must converge on the same Credential persistence flow before encrypted Vault storage.
+
 ## M3 — Authenticated mobile LAN access
 
 - [ ] Explicit LAN enable control
