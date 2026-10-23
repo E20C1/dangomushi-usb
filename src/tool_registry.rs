@@ -3,6 +3,7 @@ pub enum ToolId {
     Files,
     Editor,
     HashVerify,
+    TextJson,
     Compare,
     Repositories,
     Backup,
@@ -82,6 +83,14 @@ const TOOLS: &[ToolDefinition] = &[
         status: ToolStatus::Ready,
     },
     ToolDefinition {
+        id: ToolId::TextJson,
+        key: "text-json",
+        label: "TEXT / JSON",
+        category: ToolCategory::Utility,
+        description: "Normalize text and validate or format JSON entirely in memory.",
+        status: ToolStatus::Ready,
+    },
+    ToolDefinition {
         id: ToolId::Compare,
         key: "compare",
         label: "COMPARE",
@@ -148,6 +157,10 @@ mod tests {
             by_key("hash-verify").map(|tool| tool.status),
             Some(ToolStatus::Ready)
         );
+        assert_eq!(
+            by_key("text-json").map(|tool| tool.status),
+            Some(ToolStatus::Ready)
+        );
     }
 
     #[test]
@@ -155,6 +168,10 @@ mod tests {
         assert_eq!(
             by_key("hash-verify").map(|tool| tool.id),
             Some(ToolId::HashVerify)
+        );
+        assert_eq!(
+            by_key("text-json").map(|tool| tool.id),
+            Some(ToolId::TextJson)
         );
         assert!(by_key("missing-tool").is_none());
     }
