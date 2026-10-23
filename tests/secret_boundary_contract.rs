@@ -21,12 +21,11 @@ fn secret_boundary_contract_keeps_generic_persistence_out_of_scope() {
 }
 
 #[test]
-fn roadmap_keeps_secret_work_separate_and_generator_next() {
+fn roadmap_keeps_secret_work_separate_and_credential_model_next() {
     assert!(ROADMAP.contains("## M2 — Local tools"));
     assert!(ROADMAP.contains("## M2-S — Secret management subsystem"));
-    assert!(ROADMAP.contains("Secret Data Boundary"));
-    assert!(ROADMAP.contains("Password Generator Core"));
-    assert!(ROADMAP.contains("Exactly One Next Task"));
+    assert!(ROADMAP.contains("[x] **Password Generator Core**"));
+    assert!(ROADMAP.contains("[ ] **Credential model** — Exactly One Next Task"));
     assert!(ROADMAP.contains("Add Existing Credential input boundary"));
 }
 

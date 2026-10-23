@@ -8,7 +8,7 @@ Repository: dangomushi-usb
 
 The current implementation includes:
 
-- Rust core with a standard-library-only headless path.
+- Rust core with a small dependency surface; the Password Generator uses the OS random source through `getrandom`.
 - Cross-platform CLI commands for workspace initialization and health checks.
 - A native desktop shell using feature-gated eframe/egui.
 - A read-only native file browser constrained to the configured workspace root.
@@ -16,6 +16,7 @@ The current implementation includes:
 - A central built-in tool registry and native Tool Launcher.
 - Restores the previous native view, FILES location/selection and open editor file from workspace-local session state.
 - A reusable square-edged pixel UI system with original 5x5 vector-drawn icons and no external icon/font assets.
+- An M2-S Password Generator Core with OS CSPRNG input, configurable character groups, rejection-sampled selection, deterministic injected-source tests, and no UI/Vault persistence.
 - A portable workspace path that remains separate from replaceable application binaries.
 - Embedded loopback-only status UI served from the Rust core.
 - No public bind, LAN bind, UPnP, NAT-PMP, reverse tunnel, CDN or external web request.
@@ -47,6 +48,12 @@ DANGOMUSHI stores non-content session state at workspace/state/session.v1. It re
 Unsaved editor text is not stored in the session file. It continues to use the independent recovery-draft mechanism, so a damaged session record cannot become the only copy of unsaved work.
 
 All restored paths are relative and are validated again before use. Missing or invalid locations degrade safely instead of escaping the workspace.
+
+## Secret subsystem
+
+The secret-management roadmap is intentionally separate from ordinary M2 Local Tools. The current implemented step is the Password Generator Core only.
+
+Generated values are not persisted, are not routed through the Text Editor, generic autosave or session restoration, and are not exposed through the native UI yet. See docs/SECRET_DATA_BOUNDARY.md and docs/PASSWORD_GENERATOR_CORE.md.
 
 ## Windows quick start
 
@@ -111,6 +118,7 @@ dangomushi-usb/
 │  ├─ lib.rs
 │  ├─ workspace.rs
 │  ├─ file_browser.rs
+│  ├─ password_generator.rs
 │  ├─ text_editor.rs
 │  ├─ tool_registry.rs
 │  ├─ server.rs

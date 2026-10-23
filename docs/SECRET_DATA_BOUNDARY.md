@@ -1,6 +1,6 @@
 # DANGOMUSHI Secret Data Boundary
 
-Status: **architectural contract established; secret features are not implemented yet**
+Status: **architectural contract established; Password Generator Core implemented; persistence remains unimplemented**
 
 This document defines the mandatory boundary for future password, credential, recovery-code and vault work.
 
@@ -104,7 +104,7 @@ Enter existing password --+
 
 The Vault must never be generator-only. An existing password entered or pasted by the user is a first-class input path and ultimately reaches the same Credential persistence flow as a generated password.
 
-No implementation of either input path exists in this boundary-establishment task.
+The Password Generator Core now implements generation only. Existing-password entry, Credential construction and persistence remain future tasks.
 
 ## Error and diagnostic policy
 
@@ -178,6 +178,6 @@ Normal M2 tools such as HASH / VERIFY continue independently. The secret subsyst
 
 ## Exactly One Next Task
 
-**Password Generator Core**
+**Credential model**
 
-That next task must remain independent of UI and Vault persistence and must not introduce plaintext credential storage.
+That next task must establish secret-aware in-memory ownership and redacted formatting for Service / Username or Email / URL / Password / Notes. It must remain independent of Vault persistence and must not route secret values through generic Text Editor, autosave, session or logging paths.

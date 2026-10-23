@@ -36,7 +36,7 @@ This roadmap records implementation order, not release dates.
 This is a security-sensitive subsystem separate from ordinary M2 Local Tools. Normal M2 work continues independently.
 
 - [x] Secret Data Boundary
-- [ ] **Password Generator Core** — Exactly One Next Task
+- [x] **Password Generator Core**
   - production randomness from the operating system CSPRNG
   - configurable length / uppercase / lowercase / digits / symbol set
   - optional minimum one character from every selected group
@@ -44,7 +44,10 @@ This is a security-sensitive subsystem separate from ordinary M2 Local Tools. No
   - sampling that avoids modulo bias
   - injectable randomness source for deterministic core tests
   - no UI or Vault dependency
-- [ ] Credential model — Service / Username or Email / URL / Password / Notes
+- [ ] **Credential model** — Exactly One Next Task
+  - Service / Username or Email / URL / Password / Notes
+  - secret-aware ownership and redacted formatting
+  - no Vault persistence yet
 - [ ] Add Existing Credential input boundary
 - [ ] Encrypted Vault storage
 - [ ] Vault unlock / lock

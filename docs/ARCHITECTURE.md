@@ -168,8 +168,10 @@ The native navigation, Tool Launcher and FILES entry types use the shared icon v
 
 ## Dependency policy
 
-The core CLI, workspace model, filesystem browser, text editor storage layer and loopback server use the Rust standard library only.
+The core CLI, workspace model, filesystem browser, text editor storage layer and loopback server remain standard-library based.
+
+The Password Generator Core introduces `getrandom` as a small unconditional dependency for production access to the operating system's preferred cryptographically secure random source. Generator logic itself remains independent from UI and storage through an injectable `RandomSource` boundary.
 
 The native desktop shell introduces eframe/egui as an optional feature-gated dependency. Building without the desktop feature does not require the desktop stack.
 
-Third-party crates may be introduced when they provide clear value, but offline rebuildability and vendoring must be considered before they become foundational dependencies.
+Third-party crates may be introduced when they provide clear value, but offline rebuildability, maintenance status, platform support and future vendoring must be considered before they become foundational dependencies. Security-sensitive dependencies require an implementation-time review from official documentation.
