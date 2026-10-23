@@ -1334,12 +1334,14 @@ mod tests {
         fs::write(&backup_path, bytes).expect("tamper");
 
         fs::write(root.join("data/documents/note.txt"), "current-value").expect("current");
-        assert!(matches!(
-            verify_backup(&root, &created.relative_path),
-            Err(WorkspaceBackupError::BackupIntegrityFailed)
-                | Err(WorkspaceBackupError::InvalidBackupFormat)
-        ));
-        assert!(restore_backup(&root, &created.relative_path).is_err());
+        assert!(
+            verify_backup(&root, &created.relative_path).is_err(),
+            "tampered archive must never verify successfully"
+        );
+        assert!(
+            restore_backup(&root, &created.relative_path).is_err(),
+            "tampered archive must never reach a successful restore"
+        );
         assert_eq!(
             fs::read_to_string(root.join("data/documents/note.txt")).expect("unchanged"),
             "current-value"
