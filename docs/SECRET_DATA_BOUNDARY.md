@@ -193,12 +193,14 @@ TEXT / JSON remains an ordinary generic utility. Passwords, Master Passphrases, 
 
 COMPARE remains an ordinary generic file utility. Passwords, Master Passphrases, Recovery Codes, decrypted Vault data, and similar secret values MUST NOT be routed through its generic file-comparison path.
 
+SEARCH remains an ordinary generic document utility. Passwords, Master Passphrases, Recovery Codes, decrypted Vault data, and similar secret values MUST NOT be routed through its generic document-search path or result previews.
+
 ## Exactly One Next Task
 
-M2-S core work remains complete. HASH / VERIFY, TEXT / JSON, and COMPARE are now complete without crossing the secret-data boundary.
+M2-S core work remains complete. HASH / VERIFY, TEXT / JSON, COMPARE, and SEARCH are now complete without crossing the secret-data boundary.
 
 The repository-wide Exactly One Next Task is:
 
-**Local document search**
+**Repository status and safe Git operations**
 
-That task must remain an ordinary non-secret M2 utility and must not advance Repository operations, generic Backup, PASSWORDS UI, or M3 LAN work.
+That task must remain bounded to local repository inspection and explicitly safe Git actions. It must not advance generic Backup, PASSWORDS UI, or M3 LAN work.
