@@ -1002,7 +1002,7 @@ impl NativeApp {
         theme::section_title(ui, PixelIcon::Workspace, "WORKSPACE");
         theme::panel(ui, |ui| {
             theme::key_value(ui, "PATH", &self.workspace_root.display().to_string());
-            key_value(
+            theme::key_value(
                 ui,
                 "STATE",
                 if summary.initialized {
@@ -1011,7 +1011,7 @@ impl NativeApp {
                     "NOT INITIALIZED"
                 },
             );
-            key_value(
+            theme::key_value(
                 ui,
                 "DIRECTORIES",
                 &format!("{}/{}", summary.present_dirs, summary.total_dirs),
