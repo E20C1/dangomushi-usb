@@ -21,7 +21,7 @@ fn secret_boundary_contract_keeps_generic_persistence_out_of_scope() {
 }
 
 #[test]
-fn roadmap_completes_secret_core_and_keeps_hash_verify_sequence_bounded() {
+fn roadmap_completes_secret_core_and_keeps_non_secret_m2_sequence_bounded() {
     assert!(ROADMAP.contains("## M2 — Local tools"));
     assert!(ROADMAP.contains("## M2-S — Secret management subsystem"));
     assert!(ROADMAP.contains("[x] **Password Generator Core**"));
@@ -34,8 +34,9 @@ fn roadmap_completes_secret_core_and_keeps_hash_verify_sequence_bounded() {
     assert!(ROADMAP.contains("[x] **Clipboard hygiene**"));
     assert!(ROADMAP.contains("[x] **Secret Backup / Restore**"));
     assert!(ROADMAP.contains("[x] **SHA-256 / integrity verification core**"));
+    assert!(ROADMAP.contains("[x] **HASH / VERIFY native UI integration**"));
     assert!(ROADMAP.contains(
-        "[ ] **HASH / VERIFY native UI integration** — Exactly One Next Task"
+        "[ ] **Text / JSON utilities** — Exactly One Next Task"
     ));
 }
 

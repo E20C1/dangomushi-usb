@@ -14,7 +14,7 @@ The current implementation includes:
 - A read-only native file browser constrained to the configured workspace root.
 - A workspace-rooted UTF-8 text editor with explicit save, dirty tracking and recovery autosave.
 - A central built-in tool registry and native Tool Launcher.
-- An M2 SHA-256 / integrity verification core that streams existing Workspace-rooted regular files, rejects traversal/symlink escapes, and verifies strict hexadecimal SHA-256 expectations without modifying the target.
+- A READY native HASH / VERIFY tool that streams existing Workspace-rooted regular files through the SHA-256 core, accepts the current FILES selection or a relative target path, and reports calculated / MATCH / MISMATCH state without modifying the target.
 - Restores the previous native view, FILES location/selection and open editor file from workspace-local session state.
 - A reusable square-edged pixel UI system with original 5x5 vector-drawn icons and no external icon/font assets.
 - An M2-S Password Generator Core with OS CSPRNG input, configurable character groups, rejection-sampled selection, deterministic injected-source tests, and no UI/Vault persistence.
@@ -128,6 +128,7 @@ dangomushi-usb/
 │  ├─ credential.rs
 │  ├─ existing_credential_input.rs
 │  ├─ generated_credential_input.rs
+│  ├─ hash_verify.rs
 │  ├─ lib.rs
 │  ├─ workspace.rs
 │  ├─ file_browser.rs

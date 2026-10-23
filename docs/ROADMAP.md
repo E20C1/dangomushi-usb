@@ -31,8 +31,13 @@ This roadmap records implementation order, not release dates.
   - strict 64-hex expected digest parsing with uppercase/lowercase support
   - mismatch is a normal verification result and never modifies the target
   - no UI, network, generic Backup, Repository operation, or secret-data integration
-- [ ] **HASH / VERIFY native UI integration** — Exactly One Next Task
-- [ ] Text / JSON utilities
+- [x] **HASH / VERIFY native UI integration**
+  - Tool Launcher entry is READY and explicitly dispatches to a dedicated native view
+  - accepts a Workspace-relative target path or the current regular FILES selection
+  - calculate-only and expected-digest verification flows both reuse the read-only SHA-256 core
+  - match, mismatch, bytes hashed and calculated digest are shown without persisting result/input content
+  - session restoration stores only the HASH / VERIFY navigation view, not target/digest/result values
+- [ ] **Text / JSON utilities** — Exactly One Next Task
 - [ ] File comparison
 - [ ] Local document search
 - [ ] Repository status and safe Git operations

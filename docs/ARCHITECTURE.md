@@ -55,7 +55,7 @@ SHA-256 comparison provides integrity only relative to a trusted expected digest
 
 The portable path validation does not claim an operating-system-level atomic no-follow guarantee if another process replaces filesystem entries concurrently between validation and open.
 
-Native HASH / VERIFY UI activation remains separate from this core boundary.
+The native HASH / VERIFY view now exposes this core through the Tool Launcher and selected regular files in FILES. Its target, expected digest, calculated digest and verification result remain ephemeral UI state; generic session restoration stores only the active HASH / VERIFY navigation view.
 
 ## Save and recovery model
 
