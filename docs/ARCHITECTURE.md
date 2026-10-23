@@ -61,7 +61,27 @@ If the original file changes outside DANGOMUSHI after opening, SAVE refuses to o
 
 When a file is opened and a recovery differs from disk, the UI requires the user to choose RESTORE RECOVERY or DISCARD RECOVERY before editing continues.
 
-## Network boundary
+## Session restoration
+
+Workspace navigation state is stored separately from editor recovery under:
+
+~~~text
+workspace/state/session.v1
+~~~
+
+The session contains only UI/work position:
+
+- active native view,
+- current FILES directory,
+- selected FILES entry,
+- currently open editor path.
+
+It never stores editor buffer contents. Unsaved text remains the responsibility of the independent recovery-draft mechanism under workspace/state/autosave.
+
+Session paths are relative-only, reject parent traversal, and are revalidated against the live workspace before the UI adopts them. Invalid or missing directories fall back to the workspace root, invalid selections are dropped, and an editor path that can no longer be opened is ignored.
+
+Session writes use a newly synced temporary file, preserve the previous session while replacing the current file, and restore the previous file if final replacement fails. The state directory itself must be a real in-workspace directory and must not be a symlink.
+
 
 The current implementation intentionally supports only:
 

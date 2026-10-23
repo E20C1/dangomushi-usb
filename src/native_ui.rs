@@ -1,4 +1,5 @@
 use crate::file_browser::{self, EntryKind, FileEntry};
+use crate::session_state::{self, SessionState, SessionView};
 use crate::text_editor;
 use crate::tool_registry::{self, ToolId, ToolStatus};
 use crate::workspace;
@@ -43,6 +44,32 @@ enum View {
     Workspace,
     Mobile,
     System,
+}
+
+impl View {
+    fn session_view(self) -> SessionView {
+        match self {
+            Self::Home => SessionView::Home,
+            Self::Tools => SessionView::Tools,
+            Self::Files => SessionView::Files,
+            Self::Editor => SessionView::Editor,
+            Self::Workspace => SessionView::Workspace,
+            Self::Mobile => SessionView::Mobile,
+            Self::System => SessionView::System,
+        }
+    }
+
+    fn from_session(view: SessionView) -> Self {
+        match view {
+            SessionView::Home => Self::Home,
+            SessionView::Tools => Self::Tools,
+            SessionView::Files => Self::Files,
+            SessionView::Editor => Self::Editor,
+            SessionView::Workspace => Self::Workspace,
+            SessionView::Mobile => Self::Mobile,
+            SessionView::System => Self::System,
+        }
+    }
 }
 
 struct FileBrowserState {
@@ -97,6 +124,35 @@ impl FileBrowserState {
         }
 
         self.navigate(root, file_browser::parent(&self.current_dir));
+    }
+
+    fn restore_session_location(
+        &mut self,
+        root: &Path,
+        current_dir: &Path,
+        selected: Option<&Path>,
+    ) -> bool {
+        match file_browser::list_directory(root, current_dir) {
+            Ok(entries) => {
+                self.current_dir = current_dir.to_path_buf();
+                self.selected = selected
+                    .filter(|selected| {
+                        entries
+                            .iter()
+                            .any(|entry| entry.relative_path.as_path() == *selected)
+                    })
+                    .map(Path::to_path_buf);
+                self.entries = entries;
+                self.error = None;
+                true
+            }
+            Err(_) => {
+                self.current_dir.clear();
+                self.selected = None;
+                self.refresh(root);
+                false
+            }
+        }
     }
 }
 
@@ -263,6 +319,8 @@ struct NativeApp {
     browser: FileBrowserState,
     editor: EditorState,
     notice: String,
+    session_saved: SessionState,
+    session_failed: Option<SessionState>,
 }
 
 impl NativeApp {
@@ -281,12 +339,85 @@ impl NativeApp {
         let workspace_root = workspace::default_workspace_root();
         let browser = FileBrowserState::new(&workspace_root);
 
-        Self {
+        let mut app = Self {
             view: View::Home,
             workspace_root,
             browser,
             editor: EditorState::new(),
             notice: "READY".to_string(),
+            session_saved: SessionState::default(),
+            session_failed: None,
+        };
+
+        app.restore_saved_session();
+        app.session_saved = app.session_snapshot();
+        app
+    }
+
+    fn session_snapshot(&self) -> SessionState {
+        SessionState {
+            view: self.view.session_view(),
+            browser_dir: self.browser.current_dir.clone(),
+            browser_selected: self.browser.selected.clone(),
+            editor_path: self.editor.path.clone(),
+        }
+    }
+
+    fn restore_saved_session(&mut self) {
+        let saved = match session_state::load(&self.workspace_root) {
+            Ok(Some(saved)) => saved,
+            Ok(None) => return,
+            Err(_) => {
+                self.notice = "SESSION RESET".to_string();
+                return;
+            }
+        };
+
+        let mut partial = false;
+
+        if !self.browser.restore_session_location(
+            &self.workspace_root,
+            &saved.browser_dir,
+            saved.browser_selected.as_deref(),
+        ) {
+            partial = true;
+        }
+
+        if let Some(path) = saved.editor_path.clone() {
+            if self.editor.open(&self.workspace_root, path).is_err() {
+                partial = true;
+            }
+        }
+
+        self.view = View::from_session(saved.view);
+        self.notice = if partial {
+            "SESSION PARTIALLY RESTORED".to_string()
+        } else {
+            "SESSION RESTORED".to_string()
+        };
+    }
+
+    fn persist_session_if_changed(&mut self) {
+        if !workspace::summary(&self.workspace_root).initialized {
+            return;
+        }
+
+        let current = self.session_snapshot();
+        if current == self.session_saved
+            || self.session_failed.as_ref().is_some_and(|failed| failed == &current)
+        {
+            return;
+        }
+
+        match session_state::save(&self.workspace_root, &current) {
+            Ok(()) => {
+                self.session_saved = current;
+                self.session_failed = None;
+            }
+            Err(error) => {
+                self.session_failed = Some(current);
+                self.notice = format!("SESSION SAVE FAILED: {error}");
+            }
         }
     }
 
@@ -940,6 +1071,8 @@ impl eframe::App for NativeApp {
                     View::System => self.system(ui),
                 }
             });
+
+        self.persist_session_if_changed();
     }
 }
 

@@ -14,6 +14,7 @@ The current implementation includes:
 - A read-only native file browser constrained to the configured workspace root.
 - A workspace-rooted UTF-8 text editor with explicit save, dirty tracking and recovery autosave.
 - A central built-in tool registry and native Tool Launcher.
+- Restores the previous native view, FILES location/selection and open editor file from workspace-local session state.
 - A portable workspace path that remains separate from replaceable application binaries.
 - Embedded loopback-only status UI served from the Rust core.
 - No public bind, LAN bind, UPnP, NAT-PMP, reverse tunnel, CDN or external web request.
@@ -38,7 +39,14 @@ The first editor intentionally supports existing UTF-8 regular files only.
 
 The editor does not yet create, rename or delete files.
 
-## Windows quick start
+## Session restoration
+
+DANGOMUSHI stores non-content session state at workspace/state/session.v1. It remembers the active view, FILES directory and selection, and the editor file path.
+
+Unsaved editor text is not stored in the session file. It continues to use the independent recovery-draft mechanism, so a damaged session record cannot become the only copy of unsaved work.
+
+All restored paths are relative and are validated again before use. Missing or invalid locations degrade safely instead of escaping the workspace.
+
 
 With a Rust toolchain installed, double-click:
 
@@ -104,6 +112,7 @@ dangomushi-usb/
 │  ├─ text_editor.rs
 │  ├─ tool_registry.rs
 │  ├─ server.rs
+│  ├─ session_state.rs
 │  ├─ native_ui.rs
 │  └─ bin/dangomushi-desktop.rs
 ├─ web/                 embedded loopback/mobile UI
