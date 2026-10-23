@@ -46,8 +46,16 @@ This roadmap records implementation order, not release dates.
   - 4 MiB input and 16 MiB output bounds
   - Tool Launcher entry is READY; FILES selection can be loaded through the existing UTF-8 read boundary
   - session restoration stores only the active TEXT / JSON view, not utility input/output
-- [ ] **File comparison** — Exactly One Next Task
-- [ ] Local document search
+- [x] **File comparison**
+  - read-only binary-safe comparison for two existing regular Workspace files
+  - 64 KiB streaming comparison with bounded memory
+  - reports EQUAL / DIFFERENT, both file sizes and first differing byte offset
+  - exact-prefix length differences report the first byte that exists only in the longer file
+  - optional UTF-8 text detail for files up to 4 MiB reports line counts and first differing line
+  - symlink, traversal, absolute-path, directory and out-of-workspace targets are rejected
+  - Tool Launcher entry is READY; FILES can assign the current regular file as Compare A or B
+  - session restoration stores only the active COMPARE view, not paths/results/file contents
+- [ ] **Local document search** — Exactly One Next Task
 - [ ] Repository status and safe Git operations
 - [ ] Backup and restore workflow
 
