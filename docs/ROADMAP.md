@@ -76,8 +76,14 @@ This is a security-sensitive subsystem separate from ordinary M2 Local Tools. No
   - versioned length-delimited binary Vault section payload
   - redacted Debug and best-effort zeroization of directly owned secret buffers
   - VaultPlaintext decode boundary; no generic files/autosave/session/Clipboard
-- [ ] **Clipboard hygiene** — Exactly One Next Task
-- [ ] Secret Backup / Restore
+- [x] **Clipboard hygiene**
+  - explicit `ClipboardSecret` ownership with redacted Debug and best-effort zeroization
+  - configurable delayed clearing with a 30-second default policy
+  - compare-before-clear: changed, empty, or non-text clipboard content is preserved
+  - temporary clipboard readback is secret-owned and zeroized on Drop
+  - injectable backend for deterministic core tests; desktop OS adapter is feature-gated
+  - no PASSWORDS UI, generic autosave/session persistence, or Secret Backup / Restore integration
+- [ ] **Secret Backup / Restore** — Exactly One Next Task
 
 Both `Generate new password` and `Enter existing password` must converge on the same Credential persistence flow before encrypted Vault storage.
 
