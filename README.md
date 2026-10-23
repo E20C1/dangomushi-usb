@@ -4,7 +4,7 @@ DANGOMUSHI is a portable, local-first workspace intended to keep essential tools
 
 Repository: dangomushi-usb
 
-## Current milestone: M1 native desktop shell
+## Current milestone: M3 authenticated mobile LAN access
 
 The current implementation includes:
 
@@ -33,11 +33,12 @@ The current implementation includes:
 - An M2-S Secret Backup / Restore core that packages authenticated Vault ciphertext without decrypting it into generic backup/export flows and restores only after passphrase authentication.
 - A portable workspace path that remains separate from replaceable application binaries.
 - Embedded loopback-only status UI served from the Rust core.
+- An M3 process-local explicit LAN enable control in the native MOBILE view; it defaults OFF every launch, is not persisted, and does not open a LAN listener.
 - No public bind, LAN bind, UPnP, NAT-PMP, reverse tunnel, CDN or external web request.
 - Windows double-click build/update entry point.
 - CI builds for Windows, macOS and Linux.
 
-Authenticated mobile/LAN mode is later M3 work. It is not faked as a completed feature.
+M3 has started with the explicit process-local LAN enable control. Device pairing and all actual LAN listening remain later work and are not faked as completed features.
 
 ## Editor safety model
 
