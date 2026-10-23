@@ -189,10 +189,10 @@ Restore derives the Vault key from the backup's Vault-format KDF metadata and th
 
 ## Exactly One Next Task
 
-M2-S core work remains complete. The normal M2 HASH / VERIFY core is now implemented without crossing the secret-data boundary.
+M2-S core work remains complete. HASH / VERIFY core and native UI integration are now complete without crossing the secret-data boundary.
 
 The repository-wide Exactly One Next Task is:
 
-**HASH / VERIFY native UI integration**
+**Text / JSON utilities**
 
-That task may connect the completed read-only core to the existing Tool Launcher and change HASH / VERIFY from PLANNED to READY only when the native activation path and UI tests are complete. It must not advance Text / JSON utilities, Compare, Repository operations, generic Backup, PASSWORDS UI, or M3 LAN work.
+That task must remain an ordinary non-secret M2 utility and must not route secret values through generic text/JSON transforms, autosave or session persistence. It must not advance Compare, Repository operations, generic Backup, PASSWORDS UI, or M3 LAN work.
