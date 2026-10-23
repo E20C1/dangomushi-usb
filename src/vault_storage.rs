@@ -23,6 +23,7 @@ const PREVIOUS_FILE: &str = "vault.previous.dgmv";
 const PENDING_FILE: &str = "vault.pending.dgmv";
 
 pub const MAX_VAULT_PLAINTEXT_BYTES: usize = 64 * 1024 * 1024;
+pub const MAX_VAULT_ENCODED_BYTES: usize = HEADER_BYTES + MAX_VAULT_PLAINTEXT_BYTES + AEAD_TAG_BYTES;
 pub const MAX_KDF_MEMORY_KIB: u32 = 256 * 1024;
 pub const MAX_KDF_ITERATIONS: u32 = 10;
 pub const MAX_KDF_PARALLELISM: u32 = 8;
@@ -264,6 +265,53 @@ impl VaultStore {
         drop(verification);
 
         self.commit_pending(key, plaintext)
+    }
+
+    pub(crate) fn export_verified_ciphertext(
+        &self,
+        key: &VaultKey,
+    ) -> Result<Vec<u8>, VaultError> {
+        ensure_existing_root(&self.root)?;
+
+        if !self.recover_interrupted_write(key)? {
+            return Err(VaultError::VaultNotFound);
+        }
+
+        let encoded = read_bounded_file(&self.current_path())?;
+        let verification = decrypt_encoded(&encoded, key)?;
+        drop(verification);
+        Ok(encoded)
+    }
+
+    pub(crate) fn restore_verified_ciphertext(
+        &self,
+        key: &VaultKey,
+        encoded: &[u8],
+    ) -> Result<(), VaultError> {
+        let expected = decrypt_encoded(encoded, key)?;
+
+        ensure_storage_root(&self.root)?;
+
+        let _ = fixed_file_state(&self.current_path())?;
+        if fixed_file_state(&self.pending_path())? != FixedFileState::Missing
+            || fixed_file_state(&self.previous_path())? != FixedFileState::Missing
+        {
+            return Err(VaultError::UnsafeStorageLayout);
+        }
+
+        write_pending(&self.pending_path(), encoded)?;
+        sync_directory(&self.root)?;
+
+        let verification = decrypt_file(&self.pending_path(), key)?;
+        let matches = verification.expose_secret() == expected.expose_secret();
+        drop(verification);
+
+        if !matches {
+            remove_fixed_file_if_present(&self.pending_path())?;
+            return Err(VaultError::VerificationFailed);
+        }
+
+        self.commit_pending(key, expected.expose_secret())
     }
 
     fn commit_pending(&self, key: &VaultKey, expected: &[u8]) -> Result<(), VaultError> {
@@ -531,9 +579,7 @@ fn read_bounded_file(path: &Path) -> Result<Vec<u8>, VaultError> {
     }
 
     let metadata = fs::metadata(path).map_err(|_| VaultError::Io)?;
-    let max_file_bytes = HEADER_BYTES as u64
-        + MAX_VAULT_PLAINTEXT_BYTES as u64
-        + AEAD_TAG_BYTES as u64;
+    let max_file_bytes = MAX_VAULT_ENCODED_BYTES as u64;
 
     if metadata.len() < HEADER_BYTES as u64 || metadata.len() > max_file_bytes {
         return Err(VaultError::InvalidFormat);
@@ -591,6 +637,13 @@ fn encrypt_payload(
 fn decrypt_file(path: &Path, key: &VaultKey) -> Result<VaultPlaintext, VaultError> {
     let encoded = read_bounded_file(path)?;
     decrypt_encoded(&encoded, key)
+}
+
+pub(crate) fn kdf_metadata_from_encoded(
+    encoded: &[u8],
+) -> Result<VaultKdfMetadata, VaultError> {
+    let (header, _) = parse_encoded(encoded)?;
+    Ok(header.kdf)
 }
 
 fn decrypt_encoded(encoded: &[u8], key: &VaultKey) -> Result<VaultPlaintext, VaultError> {
