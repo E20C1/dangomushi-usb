@@ -18,6 +18,7 @@ The current implementation includes:
 - A reusable square-edged pixel UI system with original 5x5 vector-drawn icons and no external icon/font assets.
 - An M2-S Password Generator Core with OS CSPRNG input, configurable character groups, rejection-sampled selection, deterministic injected-source tests, and no UI/Vault persistence.
 - An M2-S in-memory Credential model with redacted secret-aware ownership and no persistence/UI integration.
+- An M2-S existing-Credential input boundary that consumes owned input into the same Credential model without persistence or UI integration.
 - A portable workspace path that remains separate from replaceable application binaries.
 - Embedded loopback-only status UI served from the Rust core.
 - No public bind, LAN bind, UPnP, NAT-PMP, reverse tunnel, CDN or external web request.
@@ -52,7 +53,7 @@ All restored paths are relative and are validated again before use. Missing or i
 
 ## Secret subsystem
 
-The secret-management roadmap is intentionally separate from ordinary M2 Local Tools. The current implemented steps are the Password Generator Core and source-agnostic in-memory Credential model.
+The secret-management roadmap is intentionally separate from ordinary M2 Local Tools. The current implemented steps are the Password Generator Core, source-agnostic in-memory Credential model, and existing-Credential input boundary.
 
 Generated values are not persisted, are not routed through the Text Editor, generic autosave or session restoration, and are not exposed through the native UI yet. See docs/SECRET_DATA_BOUNDARY.md and docs/PASSWORD_GENERATOR_CORE.md.
 
@@ -117,6 +118,7 @@ dangomushi-usb/
 ├─ src/
 │  ├─ main.rs
 │  ├─ credential.rs
+│  ├─ existing_credential_input.rs
 │  ├─ lib.rs
 │  ├─ workspace.rs
 │  ├─ file_browser.rs

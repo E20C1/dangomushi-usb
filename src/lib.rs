@@ -1,4 +1,5 @@
 pub mod credential;
+pub mod existing_credential_input;
 pub mod file_browser;
 pub mod password_generator;
 pub mod server;

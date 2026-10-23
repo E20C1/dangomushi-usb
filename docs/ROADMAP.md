@@ -48,8 +48,12 @@ This is a security-sensitive subsystem separate from ordinary M2 Local Tools. No
   - Service / Username or Email / URL / Password / Notes
   - secret-aware ownership and redacted formatting
   - no Vault persistence
-- [ ] **Add Existing Credential input boundary** — Exactly One Next Task
-- [ ] Encrypted Vault storage
+- [x] **Add Existing Credential input boundary**
+  - owned String input is immediately wrapped in SecretString
+  - existing passwords are preserved without Generator policy rewrite
+  - consumes into the same source-agnostic Credential model
+  - no UI, Clipboard, generic autosave/session or persistence
+- [ ] **Encrypted Vault storage** — Exactly One Next Task
 - [ ] Vault unlock / lock
 - [ ] Generator -> Credential integration
 - [ ] Recovery Codes

@@ -1,6 +1,6 @@
 # DANGOMUSHI Secret Data Boundary
 
-Status: **architectural contract established; Password Generator Core and Credential model implemented; persistence remains unimplemented**
+Status: **architectural contract established; Password Generator Core, Credential model and existing-credential input boundary implemented; persistence remains unimplemented**
 
 This document defines the mandatory boundary for future password, credential, recovery-code and vault work.
 
@@ -104,7 +104,7 @@ Enter existing password --+
 
 The Vault must never be generator-only. An existing password entered or pasted by the user is a first-class input path and ultimately reaches the same Credential persistence flow as a generated password.
 
-The Password Generator Core and source-agnostic Credential model now exist. Existing-password entry and persistence remain future tasks.
+The Password Generator Core, source-agnostic Credential model, and in-memory existing-password input boundary now exist. Vault persistence and Generator -> Credential integration remain future tasks.
 
 ## Error and diagnostic policy
 
@@ -178,6 +178,6 @@ Normal M2 tools such as HASH / VERIFY continue independently. The secret subsyst
 
 ## Exactly One Next Task
 
-**Add Existing Credential input boundary**
+**Encrypted Vault storage**
 
-That next task must establish an explicit in-memory entry/paste boundary for an already-existing password and produce the same Credential model used by future generated-password integration. It must not add Vault persistence, generic Text Editor/autosave/session routing, or plaintext serialization.
+That next task must re-evaluate maintained Rust cryptography and secret-management crates from official documentation, define an authenticated encrypted format, and implement a dedicated Vault storage API with durable temp -> sync -> verification -> replace/rollback behavior. It must remain outside generic File Browser/Text Editor persistence.
