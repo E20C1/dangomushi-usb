@@ -117,6 +117,8 @@ Each Git process has a 15-second runtime limit. stdout and stderr are drained co
 
 DANGOMUSHI does not override Git safe.directory ownership checks. A repository that Git itself refuses as unsafe remains unavailable through this surface.
 
+The portable validation-before-launch sequence does not claim an operating-system-level atomic no-follow guarantee against another process replacing a repository directory between validation and Git process launch.
+
 The native REPOSITORIES view can enumerate up to 512 supported repositories, render up to 500 status rows, show up to 20 recent commits, and show bounded worktree/staged diff statistics. Repository selection and Git outputs remain ephemeral; generic session restoration stores only the active REPOSITORIES navigation view.
 
 REPOSITORIES is a generic non-secret utility and must not be used as a route for decrypted Vault data or other secret-subsystem plaintext.
