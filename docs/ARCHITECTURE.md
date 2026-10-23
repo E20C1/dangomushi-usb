@@ -101,6 +101,26 @@ Search query text, previews and result/report state remain ephemeral. Generic se
 
 SEARCH is a generic non-secret utility and must not be used as a route for decrypted Vault data or other secret-subsystem plaintext.
 
+## Repository Git boundary
+
+The M2 REPOSITORIES core is implemented in src/repository_git.rs.
+
+It inspects only direct child working trees under workspace/repositories. The repositories root, selected repository directory, and .git entry must be real directories rather than symlinks; linked worktrees represented by a .git file, bare repositories, nested arbitrary paths, and repositories outside this fixed root are excluded from this first boundary.
+
+Repository operations are intentionally read-only and fixed by the Rust core: STATUS, RECENT COMMITS, WORKTREE DIFF STAT, and STAGED DIFF STAT. The UI cannot provide an arbitrary shell command, Git subcommand, argv list, revision expression, pathspec, remote, or executable.
+
+Git is launched directly with std::process::Command and no shell. Stdin and terminal prompting are disabled. Environment variables that can redirect Git repository/index/object paths, external diff, pagers/editors, askpass/SSH helpers, config parameters, or Windows standard handles are removed before launch.
+
+STATUS uses machine-oriented porcelain output and disables optional locks to avoid Git's optional index-refresh write. Submodule recursion is disabled. Diff-stat operations explicitly disable external diff helpers and textconv execution, ignore submodules, disable rename detection and color output. No clone/fetch/pull/push or other network operation is exposed.
+
+Each Git process has a 15-second runtime limit. stdout and stderr are drained concurrently while retaining at most 1 MiB of each, preventing the UI from retaining unbounded command output. stderr content is not echoed through ordinary UI errors.
+
+DANGOMUSHI does not override Git safe.directory ownership checks. A repository that Git itself refuses as unsafe remains unavailable through this surface.
+
+The native REPOSITORIES view can enumerate up to 512 supported repositories, render up to 500 status rows, show up to 20 recent commits, and show bounded worktree/staged diff statistics. Repository selection and Git outputs remain ephemeral; generic session restoration stores only the active REPOSITORIES navigation view.
+
+REPOSITORIES is a generic non-secret utility and must not be used as a route for decrypted Vault data or other secret-subsystem plaintext.
+
 ## Save and recovery model
 
 Typing never automatically overwrites the source file.
