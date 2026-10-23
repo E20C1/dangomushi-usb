@@ -7,6 +7,11 @@ const SECRET_BOUNDARY: &str = include_str!("../docs/SECRET_DATA_BOUNDARY.md");
 
 #[test]
 fn compare_core_is_read_only_streaming_and_workspace_rooted() {
+    let production = SOURCE
+        .split("#[cfg(test)]")
+        .next()
+        .expect("production source");
+
     for required in [
         "BufReader::with_capacity",
         "fill_buf",
@@ -17,7 +22,10 @@ fn compare_core_is_read_only_streaming_and_workspace_rooted() {
         "first_difference_byte",
         "TEXT_DETAIL_MAX_BYTES",
     ] {
-        assert!(SOURCE.contains(required), "missing compare evidence: {required}");
+        assert!(
+            production.contains(required),
+            "missing compare evidence: {required}"
+        );
     }
 
     for forbidden in [
@@ -31,7 +39,7 @@ fn compare_core_is_read_only_streaming_and_workspace_rooted() {
         "crate::server",
     ] {
         assert!(
-            !SOURCE.contains(forbidden),
+            !production.contains(forbidden),
             "COMPARE core must remain read-only and isolated: {forbidden}"
         );
     }
