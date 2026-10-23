@@ -65,8 +65,18 @@ This roadmap records implementation order, not release dates.
   - oversized and non-UTF-8 files are skipped with explicit counts
   - Tool Launcher entry is READY and result OPEN reuses the existing Editor boundary
   - session restoration stores only the active SEARCH view, not query/results/previews
-- [ ] **Repository status and safe Git operations** — Exactly One Next Task
-- [ ] Backup and restore workflow
+- [x] **Repository status and safe Git operations**
+  - direct-child repositories only under workspace/repositories
+  - real repository directory plus real .git directory; symlink repos and gitfiles are excluded
+  - fixed read-only STATUS / RECENT COMMITS / WORKTREE DIFF STAT / STAGED DIFF STAT operations
+  - no shell, arbitrary argv, remote/network operation, staging, commit, checkout, reset, clean, stash, merge or rebase
+  - status uses porcelain output with optional Git locks disabled
+  - diff stats disable external diff helpers and textconv execution and ignore submodules
+  - Git environment redirection variables are removed; stdin/prompting are disabled
+  - retained stdout/stderr is bounded to 1 MiB each and Git runtime to 15 seconds
+  - Tool Launcher entry is READY; repository selection and Git output remain ephemeral
+  - session restoration stores only the active REPOSITORIES view
+- [ ] **Backup and restore workflow** — Exactly One Next Task
 
 ## M2-S — Secret management subsystem
 
