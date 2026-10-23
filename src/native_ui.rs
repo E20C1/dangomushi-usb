@@ -3,6 +3,7 @@ use crate::hash_verify;
 use crate::native_ui_theme::{self as theme, PixelIcon, BAD, BG, LINE, MUTED, OK, PANEL, TEXT, WARN};
 use crate::session_state::{self, SessionState, SessionView};
 use crate::text_editor;
+use crate::text_json;
 use crate::tool_registry::{self, ToolId, ToolStatus};
 use crate::workspace;
 use eframe::egui;
@@ -35,6 +36,7 @@ enum View {
     Files,
     Editor,
     HashVerify,
+    TextJson,
     Workspace,
     Mobile,
     System,
@@ -48,6 +50,7 @@ impl View {
             Self::Files => SessionView::Files,
             Self::Editor => SessionView::Editor,
             Self::HashVerify => SessionView::HashVerify,
+            Self::TextJson => SessionView::TextJson,
             Self::Workspace => SessionView::Workspace,
             Self::Mobile => SessionView::Mobile,
             Self::System => SessionView::System,
@@ -61,6 +64,7 @@ impl View {
             SessionView::Files => Self::Files,
             SessionView::Editor => Self::Editor,
             SessionView::HashVerify => Self::HashVerify,
+            SessionView::TextJson => Self::TextJson,
             SessionView::Workspace => Self::Workspace,
             SessionView::Mobile => Self::Mobile,
             SessionView::System => Self::System,
@@ -389,12 +393,92 @@ impl HashVerifyState {
     }
 }
 
+struct TextJsonState {
+    input: String,
+    output: String,
+    status: Option<String>,
+    error: Option<String>,
+}
+
+impl TextJsonState {
+    fn new() -> Self {
+        Self {
+            input: String::new(),
+            output: String::new(),
+            status: None,
+            error: None,
+        }
+    }
+
+    fn clear_result(&mut self) {
+        self.output.clear();
+        self.status = None;
+        self.error = None;
+    }
+
+    fn set_input(&mut self, input: String) {
+        self.input = input;
+        self.clear_result();
+    }
+
+    fn load_file(&mut self, root: &Path, path: &Path) -> io::Result<()> {
+        let input = text_editor::read_text(root, path)?;
+        self.set_input(input);
+        Ok(())
+    }
+
+    fn apply_text_result(
+        &mut self,
+        result: Result<String, text_json::TextJsonError>,
+        status: &str,
+    ) -> Result<(), text_json::TextJsonError> {
+        match result {
+            Ok(output) => {
+                self.output = output;
+                self.status = Some(status.to_string());
+                self.error = None;
+                Ok(())
+            }
+            Err(error) => {
+                self.output.clear();
+                self.status = None;
+                self.error = Some(error.to_string());
+                Err(error)
+            }
+        }
+    }
+
+    fn validate_json(&mut self) -> Result<text_json::JsonKind, text_json::TextJsonError> {
+        match text_json::validate_json(&self.input) {
+            Ok(kind) => {
+                self.output.clear();
+                self.status = Some(format!("JSON VALID / {}", kind.label()));
+                self.error = None;
+                Ok(kind)
+            }
+            Err(error) => {
+                self.output.clear();
+                self.status = None;
+                self.error = Some(error.to_string());
+                Err(error)
+            }
+        }
+    }
+
+    fn use_output_as_input(&mut self) {
+        self.input = std::mem::take(&mut self.output);
+        self.status = None;
+        self.error = None;
+    }
+}
+
 struct NativeApp {
     view: View,
     workspace_root: PathBuf,
     browser: FileBrowserState,
     editor: EditorState,
     hash_verify: HashVerifyState,
+    text_json: TextJsonState,
     notice: String,
     session_saved: SessionState,
     session_failed: Option<SessionState>,
@@ -413,6 +497,7 @@ impl NativeApp {
             browser,
             editor: EditorState::new(),
             hash_verify: HashVerifyState::new(),
+            text_json: TextJsonState::new(),
             notice: "READY".to_string(),
             session_saved: SessionState::default(),
             session_failed: None,
@@ -723,6 +808,10 @@ impl NativeApp {
                 self.view = View::HashVerify;
                 self.notice = "HASH / VERIFY READY".to_string();
             }
+            ToolId::TextJson => {
+                self.view = View::TextJson;
+                self.notice = "TEXT / JSON READY".to_string();
+            }
             ToolId::Compare | ToolId::Repositories | ToolId::Backup => {
                 self.notice = "TOOL NOT IMPLEMENTED".to_string();
             }
@@ -888,6 +977,7 @@ impl NativeApp {
         });
         let mut open_selected: Option<PathBuf> = None;
         let mut hash_selected: Option<PathBuf> = None;
+        let mut text_json_selected: Option<PathBuf> = None;
 
         theme::panel(ui, |ui| {
             if let Some(selected) = &selected_path {
@@ -909,6 +999,9 @@ impl NativeApp {
                                 }
                                 if ui.button("HASH / VERIFY").clicked() {
                                     hash_selected = Some(entry.relative_path.clone());
+                                }
+                                if ui.button("TEXT / JSON").clicked() {
+                                    text_json_selected = Some(entry.relative_path.clone());
                                 }
                             });
                         }
@@ -942,6 +1035,17 @@ impl NativeApp {
             self.hash_verify.set_target_path(&path);
             self.view = View::HashVerify;
             self.notice = "HASH / VERIFY READY".to_string();
+        }
+        if let Some(path) = text_json_selected {
+            match self.text_json.load_file(&self.workspace_root, &path) {
+                Ok(()) => {
+                    self.view = View::TextJson;
+                    self.notice = "TEXT / JSON FILE LOADED".to_string();
+                }
+                Err(error) => {
+                    self.notice = format!("TEXT / JSON LOAD FAILED: {error}");
+                }
+            }
         }
     }
 
@@ -1264,6 +1368,196 @@ impl NativeApp {
         );
     }
 
+    fn text_json_view(&mut self, ui: &mut egui::Ui) {
+        theme::section_title(ui, PixelIcon::Editor, "TEXT / JSON");
+        ui.label(
+            egui::RichText::new(
+                "In-memory non-secret text cleanup and JSON validation/formatting. No output is written back automatically.",
+            )
+            .color(MUTED),
+        );
+        ui.label(
+            egui::RichText::new(
+                "Do not use this generic utility for passwords, Recovery Codes, Master Passphrases or decrypted Vault data.",
+            )
+            .color(WARN)
+            .size(11.0),
+        );
+        ui.add_space(10.0);
+
+        let selected_file = self.browser.selected.as_ref().and_then(|selected| {
+            self.browser
+                .entries
+                .iter()
+                .find(|entry| {
+                    entry.kind == EntryKind::File && &entry.relative_path == selected
+                })
+                .map(|entry| entry.relative_path.clone())
+        });
+
+        theme::panel(ui, |ui| {
+            theme::small_label(ui, "INPUT / EPHEMERAL");
+            let response = ui.add(
+                egui::TextEdit::multiline(&mut self.text_json.input)
+                    .font(egui::TextStyle::Monospace)
+                    .desired_width(f32::INFINITY)
+                    .desired_rows(10),
+            );
+            if response.changed() {
+                self.text_json.clear_result();
+            }
+
+            ui.horizontal_wrapped(|ui| {
+                ui.label(
+                    egui::RichText::new(format!(
+                        "{} / {} input bytes",
+                        self.text_json.input.len(),
+                        text_json::MAX_UTILITY_INPUT_BYTES
+                    ))
+                    .color(MUTED)
+                    .monospace()
+                    .size(11.0),
+                );
+
+                if ui
+                    .add_enabled(
+                        selected_file.is_some(),
+                        egui::Button::new("[LOAD FILES SELECTION]"),
+                    )
+                    .clicked()
+                {
+                    if let Some(path) = &selected_file {
+                        match self.text_json.load_file(&self.workspace_root, path) {
+                            Ok(()) => self.notice = "TEXT / JSON FILE LOADED".to_string(),
+                            Err(error) => {
+                                self.notice = format!("TEXT / JSON LOAD FAILED: {error}")
+                            }
+                        }
+                    }
+                }
+
+                if ui.button("[GO TO FILES]").clicked() {
+                    self.view = View::Files;
+                }
+
+                if ui.button("[CLEAR ALL]").clicked() {
+                    self.text_json = TextJsonState::new();
+                    self.notice = "TEXT / JSON CLEARED".to_string();
+                }
+            });
+        });
+
+        ui.add_space(8.0);
+
+        theme::panel(ui, |ui| {
+            theme::small_label(ui, "TEXT");
+            ui.horizontal_wrapped(|ui| {
+                if ui.button("[NORMALIZE LF]").clicked() {
+                    let result = text_json::normalize_line_endings(&self.text_json.input);
+                    match self
+                        .text_json
+                        .apply_text_result(result, "TEXT / LF NORMALIZED")
+                    {
+                        Ok(()) => self.notice = "TEXT LF NORMALIZED".to_string(),
+                        Err(error) => self.notice = format!("TEXT FAILED: {error}"),
+                    }
+                }
+
+                if ui.button("[CLEAN LINES]").clicked() {
+                    let result = text_json::clean_text_lines(&self.text_json.input);
+                    match self
+                        .text_json
+                        .apply_text_result(result, "TEXT / LF + TRAILING SPACE CLEAN")
+                    {
+                        Ok(()) => self.notice = "TEXT LINES CLEANED".to_string(),
+                        Err(error) => self.notice = format!("TEXT FAILED: {error}"),
+                    }
+                }
+            });
+
+            ui.add_space(6.0);
+            theme::small_label(ui, "JSON");
+            ui.horizontal_wrapped(|ui| {
+                if ui.button("[VALIDATE JSON]").clicked() {
+                    match self.text_json.validate_json() {
+                        Ok(kind) => {
+                            self.notice = format!("JSON VALID / {}", kind.label());
+                        }
+                        Err(error) => self.notice = format!("JSON INVALID: {error}"),
+                    }
+                }
+
+                if ui.button("[PRETTY JSON]").clicked() {
+                    let result = text_json::pretty_json(&self.text_json.input);
+                    match self.text_json.apply_text_result(result, "JSON / PRETTY") {
+                        Ok(()) => self.notice = "JSON PRETTY READY".to_string(),
+                        Err(error) => self.notice = format!("JSON FAILED: {error}"),
+                    }
+                }
+
+                if ui.button("[COMPACT JSON]").clicked() {
+                    let result = text_json::compact_json(&self.text_json.input);
+                    match self.text_json.apply_text_result(result, "JSON / COMPACT") {
+                        Ok(()) => self.notice = "JSON COMPACT READY".to_string(),
+                        Err(error) => self.notice = format!("JSON FAILED: {error}"),
+                    }
+                }
+            });
+        });
+
+        ui.add_space(8.0);
+
+        theme::panel(ui, |ui| {
+            theme::small_label(ui, "RESULT / EPHEMERAL");
+
+            if let Some(error) = &self.text_json.error {
+                ui.label(
+                    egui::RichText::new("UTILITY ERROR")
+                        .color(BAD)
+                        .strong()
+                        .monospace(),
+                );
+                ui.label(egui::RichText::new(error).color(MUTED).monospace());
+                return;
+            }
+
+            if let Some(status) = &self.text_json.status {
+                theme::status_badge(ui, status, OK);
+                ui.add_space(4.0);
+            }
+
+            if self.text_json.output.is_empty() {
+                ui.label(
+                    egui::RichText::new("NO TRANSFORM OUTPUT")
+                        .color(MUTED)
+                        .monospace(),
+                );
+            } else {
+                ui.add(
+                    egui::TextEdit::multiline(&mut self.text_json.output)
+                        .font(egui::TextStyle::Monospace)
+                        .desired_width(f32::INFINITY)
+                        .desired_rows(10)
+                        .interactive(false),
+                );
+                ui.label(
+                    egui::RichText::new(format!(
+                        "{} output bytes",
+                        self.text_json.output.len()
+                    ))
+                    .color(MUTED)
+                    .monospace()
+                    .size(11.0),
+                );
+
+                if ui.button("[USE OUTPUT AS INPUT]").clicked() {
+                    self.text_json.use_output_as_input();
+                    self.notice = "TEXT / JSON OUTPUT MOVED TO INPUT".to_string();
+                }
+            }
+        });
+    }
+
     fn workspace(&mut self, ui: &mut egui::Ui) {
         let summary = workspace::summary(&self.workspace_root);
 
@@ -1354,6 +1648,7 @@ impl eframe::App for NativeApp {
                     View::Files => self.files(ui),
                     View::Editor => self.editor(ui),
                     View::HashVerify => self.hash_verify_view(ui),
+                    View::TextJson => self.text_json_view(ui),
                     View::Workspace => self.workspace(ui),
                     View::Mobile => self.mobile(ui),
                     View::System => self.system(ui),
@@ -1378,6 +1673,7 @@ fn tool_icon(tool: ToolId) -> PixelIcon {
         ToolId::Files => PixelIcon::Files,
         ToolId::Editor => PixelIcon::Editor,
         ToolId::HashVerify => PixelIcon::Hash,
+        ToolId::TextJson => PixelIcon::Editor,
         ToolId::Compare => PixelIcon::Compare,
         ToolId::Repositories => PixelIcon::Repository,
         ToolId::Backup => PixelIcon::Backup,
@@ -1460,6 +1756,39 @@ mod tests {
         assert!(state.error.is_none());
 
         fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn text_json_ui_state_loads_and_transforms_without_writing_source() {
+        let root = temporary_workspace("text-json");
+        let path = root.join("sample.json");
+        fs::write(&path, "{ \"b\" : 2, \"a\" : 1 }\r\n").expect("seed");
+
+        let mut state = TextJsonState::new();
+        state
+            .load_file(&root, Path::new("sample.json"))
+            .expect("load");
+
+        let original = fs::read_to_string(&path).expect("source before");
+        let result = text_json::compact_json(&state.input);
+        state
+            .apply_text_result(result, "JSON / COMPACT")
+            .expect("compact");
+
+        assert_eq!(state.output, "{\"b\":2,\"a\":1}");
+        assert_eq!(fs::read_to_string(&path).expect("source after"), original);
+
+        state.use_output_as_input();
+        assert_eq!(state.input, "{\"b\":2,\"a\":1}");
+        assert!(state.output.is_empty());
+
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn text_json_view_maps_to_navigation_only_session_state() {
+        assert_eq!(View::TextJson.session_view(), SessionView::TextJson);
+        assert_eq!(View::from_session(SessionView::TextJson), View::TextJson);
     }
 
     #[test]
