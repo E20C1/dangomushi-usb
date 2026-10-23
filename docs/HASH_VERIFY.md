@@ -1,6 +1,6 @@
 # HASH / VERIFY Core
 
-Status: **SHA-256 / integrity verification core implemented. Native UI integration remains separate and is not READY yet.**
+Status: **SHA-256 / integrity verification core and native UI integration implemented; HASH / VERIFY is READY.**
 
 ## Scope
 
@@ -41,10 +41,24 @@ If an attacker can replace both a file and the expected digest, a successful com
 
 Path components are checked for symlinks and the canonical target is checked against the canonical Workspace root before the file is opened. As with the existing portable filesystem APIs, this does not claim an OS-level atomic no-follow guarantee against a path being concurrently replaced between checks and open.
 
-## UI boundary
+## Native UI
 
-HASH / VERIFY remains PLANNED in the Tool Registry during this core task. No native UI activation path is added here.
+HASH / VERIFY is READY in the Tool Registry and is launched through explicit Rust dispatch into a dedicated native view.
+
+The native view supports:
+
+- a manually entered Workspace-relative target path,
+- adopting the currently selected regular file from FILES,
+- SHA-256 calculation without an expected digest,
+- verification against an expected 64-hex SHA-256 value,
+- visible calculated digest, byte count, MATCH / MISMATCH state, and bounded operation errors.
+
+The FILES screen also exposes a HASH / VERIFY action for selected regular files. Symlinks, directories, absolute paths, traversal and out-of-workspace paths remain rejected by the core even if a UI path is manipulated.
+
+HASH / VERIFY input, expected digest, calculated digest and verification result are intentionally not added to the generic session payload. Session restoration remembers only that the HASH / VERIFY native view was active.
+
+No clipboard copy action, remote checksum lookup, checksum-file parser, signature verification, multi-algorithm selection, or background hashing is introduced by this task.
 
 The repository-wide Exactly One Next Task is:
 
-**HASH / VERIFY native UI integration**
+**Text / JSON utilities**
