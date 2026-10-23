@@ -158,8 +158,9 @@ fn repositories_stay_outside_secret_boundary_after_backup_advances() {
     ));
     assert!(ROADMAP.contains("- [x] **Repository status and safe Git operations**"));
     assert!(ROADMAP.contains("- [x] **Backup and restore workflow**"));
+    assert!(ROADMAP.contains("- [x] **Explicit LAN enable control**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Explicit LAN enable control** — Exactly One Next Task"
+        "- [ ] **Device pairing** — Exactly One Next Task"
     ));
     assert!(ROADMAP.contains("- [x] **Backup and restore workflow**"));
 }
