@@ -252,6 +252,14 @@ The project must not silently add:
 
 LAN/mobile mode is a future capability and requires an explicit security design before implementation. At minimum that design must include device pairing, persistent trusted-device identity, revocation, authorization boundaries, and safe behavior on public networks.
 
+### Explicit LAN enable control
+
+M3 begins with a process-local LanEnableControl in src/lan_access_control.rs. It is an operator-intent gate, not a network-listener authorization.
+
+Every application process starts with the control disabled. Only an explicit action in the native MOBILE view can enable it, and the same view can disable it again. The state is intentionally not written to `workspace/state/session.v1`, Workspace `config/`, generic backups, or another durable store. Restarting DANGOMUSHI therefore returns the control to disabled, and restoring an older Workspace snapshot cannot silently re-enable it.
+
+Enabling the control does not modify the current gateway. src/server.rs remains bound to `127.0.0.1`, retains its loopback peer check and Host restriction, and exposes no new state-changing HTTP route. A future LAN listener must treat this explicit control as necessary operator intent but still remain blocked until the later M3 device-pairing, trusted-device, revocation, permission and public-network safety boundaries are implemented and tested.
+
 ## Web gateway
 
 The embedded gateway currently serves only fixed assets and a read-only status endpoint.
