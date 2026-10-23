@@ -496,7 +496,7 @@ impl NativeApp {
         }
     }
 
-    fn files(&mut self, ui: &mut egui::Ui) {    fn files(&mut self, ui: &mut egui::Ui) {
+    fn files(&mut self, ui: &mut egui::Ui) {
         section_title(ui, "FILES");
         ui.label(
             egui::RichText::new(
