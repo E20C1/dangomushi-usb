@@ -71,6 +71,20 @@ Utility input/output and validation state are ephemeral. Generic session restora
 
 TEXT / JSON is a generic utility and is not a secret-processing surface. Passwords, Master Passphrases, Recovery Codes, decrypted Vault data, and similar secret values remain outside this boundary.
 
+## File comparison boundary
+
+The M2 COMPARE core is implemented in src/file_compare.rs and is read-only.
+
+Both targets must be existing regular files below the configured Workspace root. Relative normal-component paths are required; symlink path components are rejected; canonical targets must remain below the canonical Workspace root.
+
+The authoritative equality result is binary-safe and byte-exact. Files are compared incrementally with 64 KiB buffered reads so large files are not loaded completely into memory. The result contains both byte lengths and the first differing zero-based byte offset when files differ.
+
+When both files are at most 4 MiB and both decode as UTF-8, COMPARE may additionally report line counts and the first differing one-based line. This text detail is supplementary and does not normalize or replace the byte-exact comparison.
+
+The native COMPARE view accepts two Workspace-relative paths and can adopt the current regular FILES selection as either side. It never writes source files. Compare paths, contents and results remain ephemeral; generic session restoration stores only the active COMPARE navigation view.
+
+COMPARE is a generic non-secret file utility and must not be used as a route for decrypted Vault data or other secret-subsystem plaintext.
+
 ## Save and recovery model
 
 Typing never automatically overwrites the source file.
