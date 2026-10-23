@@ -1,4 +1,5 @@
 use crate::file_browser::{self, EntryKind, FileEntry};
+use crate::hash_verify;
 use crate::native_ui_theme::{self as theme, PixelIcon, BAD, BG, LINE, MUTED, OK, PANEL, TEXT, WARN};
 use crate::session_state::{self, SessionState, SessionView};
 use crate::text_editor;
@@ -33,6 +34,7 @@ enum View {
     Tools,
     Files,
     Editor,
+    HashVerify,
     Workspace,
     Mobile,
     System,
@@ -45,6 +47,7 @@ impl View {
             Self::Tools => SessionView::Tools,
             Self::Files => SessionView::Files,
             Self::Editor => SessionView::Editor,
+            Self::HashVerify => SessionView::HashVerify,
             Self::Workspace => SessionView::Workspace,
             Self::Mobile => SessionView::Mobile,
             Self::System => SessionView::System,
@@ -57,6 +60,7 @@ impl View {
             SessionView::Tools => Self::Tools,
             SessionView::Files => Self::Files,
             SessionView::Editor => Self::Editor,
+            SessionView::HashVerify => Self::HashVerify,
             SessionView::Workspace => Self::Workspace,
             SessionView::Mobile => Self::Mobile,
             SessionView::System => Self::System,
@@ -305,11 +309,92 @@ impl EditorState {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HashResultState {
+    Calculated,
+    Match,
+    Mismatch,
+}
+
+struct HashVerifyState {
+    target: String,
+    expected: String,
+    actual: Option<hash_verify::FileHash>,
+    status: Option<HashResultState>,
+    error: Option<String>,
+}
+
+impl HashVerifyState {
+    fn new() -> Self {
+        Self {
+            target: String::new(),
+            expected: String::new(),
+            actual: None,
+            status: None,
+            error: None,
+        }
+    }
+
+    fn set_target_path(&mut self, path: &Path) {
+        self.target = path.to_string_lossy().into_owned();
+        self.clear_result();
+    }
+
+    fn clear_result(&mut self) {
+        self.actual = None;
+        self.status = None;
+        self.error = None;
+    }
+
+    fn calculate(&mut self, root: &Path) -> Result<(), hash_verify::HashVerifyError> {
+        self.error = None;
+        match hash_verify::hash_workspace_file(root, Path::new(self.target.trim())) {
+            Ok(actual) => {
+                self.actual = Some(actual);
+                self.status = Some(HashResultState::Calculated);
+                Ok(())
+            }
+            Err(error) => {
+                self.actual = None;
+                self.status = None;
+                self.error = Some(error.to_string());
+                Err(error)
+            }
+        }
+    }
+
+    fn verify(&mut self, root: &Path) -> Result<bool, hash_verify::HashVerifyError> {
+        self.error = None;
+        match hash_verify::verify_workspace_file(
+            root,
+            Path::new(self.target.trim()),
+            &self.expected,
+        ) {
+            Ok(result) => {
+                self.actual = Some(result.actual);
+                self.status = Some(if result.matches {
+                    HashResultState::Match
+                } else {
+                    HashResultState::Mismatch
+                });
+                Ok(result.matches)
+            }
+            Err(error) => {
+                self.actual = None;
+                self.status = None;
+                self.error = Some(error.to_string());
+                Err(error)
+            }
+        }
+    }
+}
+
 struct NativeApp {
     view: View,
     workspace_root: PathBuf,
     browser: FileBrowserState,
     editor: EditorState,
+    hash_verify: HashVerifyState,
     notice: String,
     session_saved: SessionState,
     session_failed: Option<SessionState>,
@@ -327,6 +412,7 @@ impl NativeApp {
             workspace_root,
             browser,
             editor: EditorState::new(),
+            hash_verify: HashVerifyState::new(),
             notice: "READY".to_string(),
             session_saved: SessionState::default(),
             session_failed: None,
@@ -435,7 +521,9 @@ impl NativeApp {
                     ui.with_layout(
                         egui::Layout::right_to_left(egui::Align::Center),
                         |ui| {
-                            let color = if self.notice.contains("FAILED") {
+                            let color = if self.notice.contains("FAILED")
+                                || self.notice.contains("MISMATCH")
+                            {
                                 BAD
                             } else {
                                 OK
@@ -631,10 +719,11 @@ impl NativeApp {
                     "EDITOR: CHOOSE A FILE".to_string()
                 };
             }
-            ToolId::HashVerify
-            | ToolId::Compare
-            | ToolId::Repositories
-            | ToolId::Backup => {
+            ToolId::HashVerify => {
+                self.view = View::HashVerify;
+                self.notice = "HASH / VERIFY READY".to_string();
+            }
+            ToolId::Compare | ToolId::Repositories | ToolId::Backup => {
                 self.notice = "TOOL NOT IMPLEMENTED".to_string();
             }
         }
@@ -798,6 +887,7 @@ impl NativeApp {
                 .cloned()
         });
         let mut open_selected: Option<PathBuf> = None;
+        let mut hash_selected: Option<PathBuf> = None;
 
         theme::panel(ui, |ui| {
             if let Some(selected) = &selected_path {
@@ -813,9 +903,14 @@ impl NativeApp {
                             }
                         }
                         EntryKind::File => {
-                            if ui.button("OPEN IN EDITOR").clicked() {
-                                edit_path = Some(entry.relative_path.clone());
-                            }
+                            ui.horizontal(|ui| {
+                                if ui.button("OPEN IN EDITOR").clicked() {
+                                    edit_path = Some(entry.relative_path.clone());
+                                }
+                                if ui.button("HASH / VERIFY").clicked() {
+                                    hash_selected = Some(entry.relative_path.clone());
+                                }
+                            });
                         }
                         EntryKind::Symlink => {
                             ui.label(
@@ -842,6 +937,11 @@ impl NativeApp {
         }
         if let Some(path) = edit_path {
             self.open_in_editor(path);
+        }
+        if let Some(path) = hash_selected {
+            self.hash_verify.set_target_path(&path);
+            self.view = View::HashVerify;
+            self.notice = "HASH / VERIFY READY".to_string();
         }
     }
 
@@ -996,6 +1096,174 @@ impl NativeApp {
         }
     }
 
+    fn hash_verify_view(&mut self, ui: &mut egui::Ui) {
+        theme::section_title(ui, PixelIcon::Hash, "HASH / VERIFY");
+        ui.label(
+            egui::RichText::new(
+                "Calculate SHA-256 locally or compare a Workspace file with a trusted expected digest.",
+            )
+            .color(MUTED),
+        );
+        ui.add_space(10.0);
+
+        let selected_file = self.browser.selected.as_ref().and_then(|selected| {
+            self.browser
+                .entries
+                .iter()
+                .find(|entry| {
+                    entry.kind == EntryKind::File && &entry.relative_path == selected
+                })
+                .map(|entry| entry.relative_path.clone())
+        });
+
+        theme::panel(ui, |ui| {
+            theme::small_label(ui, "TARGET / WORKSPACE-RELATIVE PATH");
+            let target_response = ui.add(
+                egui::TextEdit::singleline(&mut self.hash_verify.target)
+                    .font(egui::TextStyle::Monospace)
+                    .desired_width(f32::INFINITY)
+                    .hint_text("data/example.bin"),
+            );
+            if target_response.changed() {
+                self.hash_verify.clear_result();
+            }
+
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        selected_file.is_some(),
+                        egui::Button::new("[USE FILES SELECTION]"),
+                    )
+                    .clicked()
+                {
+                    if let Some(path) = &selected_file {
+                        self.hash_verify.set_target_path(path);
+                    }
+                }
+
+                if ui.button("[GO TO FILES]").clicked() {
+                    self.view = View::Files;
+                }
+            });
+        });
+
+        ui.add_space(8.0);
+
+        theme::panel(ui, |ui| {
+            theme::small_label(ui, "EXPECTED SHA-256 / OPTIONAL FOR CALCULATE");
+            let expected_response = ui.add(
+                egui::TextEdit::singleline(&mut self.hash_verify.expected)
+                    .font(egui::TextStyle::Monospace)
+                    .desired_width(f32::INFINITY)
+                    .hint_text("64 hexadecimal characters"),
+            );
+            if expected_response.changed() {
+                self.hash_verify.clear_result();
+            }
+
+            ui.label(
+                egui::RichText::new(format!(
+                    "{} / {} hex characters after trim",
+                    self.hash_verify.expected.trim().len(),
+                    hash_verify::SHA256_HEX_LENGTH
+                ))
+                .color(MUTED)
+                .monospace()
+                .size(11.0),
+            );
+
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                let can_hash = !self.hash_verify.target.trim().is_empty();
+
+                if ui
+                    .add_enabled(can_hash, egui::Button::new("[CALCULATE SHA-256]"))
+                    .clicked()
+                {
+                    match self.hash_verify.calculate(&self.workspace_root) {
+                        Ok(()) => self.notice = "SHA-256 CALCULATED".to_string(),
+                        Err(error) => self.notice = format!("HASH FAILED: {error}"),
+                    }
+                }
+
+                let can_verify =
+                    can_hash && !self.hash_verify.expected.trim().is_empty();
+                if ui
+                    .add_enabled(can_verify, egui::Button::new("[VERIFY]"))
+                    .clicked()
+                {
+                    match self.hash_verify.verify(&self.workspace_root) {
+                        Ok(true) => self.notice = "SHA-256 MATCH".to_string(),
+                        Ok(false) => self.notice = "SHA-256 MISMATCH".to_string(),
+                        Err(error) => self.notice = format!("VERIFY FAILED: {error}"),
+                    }
+                }
+
+                if ui.button("[CLEAR]").clicked() {
+                    self.hash_verify = HashVerifyState::new();
+                    self.notice = "HASH / VERIFY CLEARED".to_string();
+                }
+            });
+        });
+
+        ui.add_space(8.0);
+
+        theme::panel(ui, |ui| {
+            theme::small_label(ui, "RESULT");
+
+            if let Some(error) = &self.hash_verify.error {
+                ui.label(
+                    egui::RichText::new("HASH / VERIFY ERROR")
+                        .color(BAD)
+                        .strong()
+                        .monospace(),
+                );
+                ui.label(egui::RichText::new(error).color(MUTED).monospace());
+                return;
+            }
+
+            let Some(actual) = self.hash_verify.actual else {
+                ui.label(
+                    egui::RichText::new("NO RESULT")
+                        .color(MUTED)
+                        .monospace(),
+                );
+                return;
+            };
+
+            theme::key_value(ui, "SHA-256", &actual.sha256.to_string());
+            theme::key_value(ui, "BYTES HASHED", &actual.bytes_hashed.to_string());
+
+            match self.hash_verify.status {
+                Some(HashResultState::Calculated) => {
+                    theme::status_badge(ui, "CALCULATED", OK);
+                }
+                Some(HashResultState::Match) => {
+                    theme::status_badge(ui, "MATCH", OK);
+                }
+                Some(HashResultState::Mismatch) => {
+                    theme::status_badge(ui, "MISMATCH", BAD);
+                    ui.label(
+                        egui::RichText::new(
+                            "The file does not match the expected SHA-256 digest.",
+                        )
+                        .color(BAD),
+                    );
+                }
+                None => {}
+            }
+        });
+
+        ui.add_space(8.0);
+        ui.label(
+            egui::RichText::new(
+                "A matching SHA-256 verifies bytes against the supplied digest; it does not authenticate who supplied that digest.",
+            )
+            .color(MUTED)
+            .size(11.0),
+        );
+    }
+
     fn workspace(&mut self, ui: &mut egui::Ui) {
         let summary = workspace::summary(&self.workspace_root);
 
@@ -1085,6 +1353,7 @@ impl eframe::App for NativeApp {
                     View::Tools => self.tools(ui),
                     View::Files => self.files(ui),
                     View::Editor => self.editor(ui),
+                    View::HashVerify => self.hash_verify_view(ui),
                     View::Workspace => self.workspace(ui),
                     View::Mobile => self.mobile(ui),
                     View::System => self.system(ui),
@@ -1121,6 +1390,88 @@ fn kind_color(kind: EntryKind) -> egui::Color32 {
         EntryKind::File => TEXT,
         EntryKind::Symlink => WARN,
         EntryKind::Other => MUTED,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    const SHA256_ABC: &str =
+        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+    const SHA256_EMPTY: &str =
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+    fn temporary_workspace(label: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "dangomushi-hash-ui-{label}-{}-{unique}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).expect("workspace");
+        root
+    }
+
+    #[test]
+    fn hash_ui_state_calculates_match_and_mismatch() {
+        let root = temporary_workspace("state");
+        fs::write(root.join("sample.bin"), b"abc").expect("seed");
+
+        let mut state = HashVerifyState::new();
+        state.set_target_path(Path::new("sample.bin"));
+        state.calculate(&root).expect("calculate");
+
+        assert_eq!(state.status, Some(HashResultState::Calculated));
+        assert_eq!(
+            state.actual.expect("actual").sha256.to_string(),
+            SHA256_ABC
+        );
+
+        state.expected = SHA256_ABC.to_string();
+        assert!(state.verify(&root).expect("verify match"));
+        assert_eq!(state.status, Some(HashResultState::Match));
+
+        state.expected = SHA256_EMPTY.to_string();
+        assert!(!state.verify(&root).expect("verify mismatch"));
+        assert_eq!(state.status, Some(HashResultState::Mismatch));
+
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn changing_hash_target_clears_stale_result() {
+        let root = temporary_workspace("target");
+        fs::write(root.join("first.bin"), b"abc").expect("first");
+        fs::write(root.join("second.bin"), b"other").expect("second");
+
+        let mut state = HashVerifyState::new();
+        state.set_target_path(Path::new("first.bin"));
+        state.calculate(&root).expect("calculate");
+        assert!(state.actual.is_some());
+
+        state.set_target_path(Path::new("second.bin"));
+        assert!(state.actual.is_none());
+        assert!(state.status.is_none());
+        assert!(state.error.is_none());
+
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn hash_verify_view_maps_to_navigation_only_session_state() {
+        assert_eq!(
+            View::HashVerify.session_view(),
+            SessionView::HashVerify
+        );
+        assert_eq!(
+            View::from_session(SessionView::HashVerify),
+            View::HashVerify
+        );
     }
 }
 
