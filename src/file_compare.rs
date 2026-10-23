@@ -148,9 +148,16 @@ fn text_comparison(
 }
 
 fn read_small_utf8(path: &Path) -> Result<Option<String>, FileCompareError> {
-    let mut file = File::open(path).map_err(|_| FileCompareError::Io)?;
+    let file = File::open(path).map_err(|_| FileCompareError::Io)?;
+    let mut limited = file.take(TEXT_DETAIL_MAX_BYTES + 1);
     let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes).map_err(|_| FileCompareError::Io)?;
+    limited
+        .read_to_end(&mut bytes)
+        .map_err(|_| FileCompareError::Io)?;
+
+    if bytes.len() as u64 > TEXT_DETAIL_MAX_BYTES {
+        return Ok(None);
+    }
 
     Ok(String::from_utf8(bytes).ok())
 }
