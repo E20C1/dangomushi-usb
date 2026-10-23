@@ -7,6 +7,7 @@ pub mod session_state;
 pub mod text_editor;
 pub mod tool_registry;
 pub mod vault_storage;
+pub mod vault_unlock;
 pub mod workspace;
 
 #[cfg(feature = "desktop")]

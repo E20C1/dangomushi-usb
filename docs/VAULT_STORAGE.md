@@ -81,9 +81,11 @@ ciphertext_length      8 bytes
 ciphertext + tag       variable
 ~~~
 
-The KDF fields are public metadata needed by the future unlock layer. They are not trusted merely because they can be parsed: they are size-bounded before use, and the entire header is authenticated as AAD once the correct VaultKey is available.
+The KDF fields are public metadata needed by the unlock layer. They are not trusted merely because they can be parsed: they are size-bounded before use, and the entire header is authenticated as AAD once the correct VaultKey is available.
 
-The current storage task does not derive the key from a Master Passphrase.
+Pre-authentication KDF bounds are currently 256 MiB memory, 10 iterations, and parallelism 8, with the Argon2 structural requirement that memory is at least 8 KiB per lane. These caps limit resource consumption from unauthenticated metadata before a Vault key can authenticate the header.
+
+Master Passphrase -> VaultKey derivation is implemented separately in `VAULT_UNLOCK.md`; the storage layer itself remains key-agnostic.
 
 ## Durable replacement
 

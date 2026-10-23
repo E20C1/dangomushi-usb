@@ -59,8 +59,14 @@ This is a security-sensitive subsystem separate from ordinary M2 Local Tools. No
   - authenticated format header with bounded future Argon2id metadata
   - temp -> sync -> reopen/verify -> replace -> rollback/recovery
   - redacted/zeroized storage-owned key and plaintext buffers
-- [ ] **Vault unlock / lock** — Exactly One Next Task
-- [ ] Generator -> Credential integration
+- [x] **Vault unlock / lock**
+  - Master Passphrase is consumed into a redacted/zeroized core-owned buffer
+  - Argon2id v=19 derives the 32-byte VaultKey from authenticated KDF metadata
+  - default new-Vault profile: 19 MiB / 2 iterations / p=1
+  - explicit UnlockedVault lifetime and consuming lock()
+  - wrong passphrase / AEAD failure maps to a generic unlock failure
+  - no UI, session secret restoration, Credential payload format, Recovery Code, or Clipboard behavior
+- [ ] **Generator -> Credential integration** — Exactly One Next Task
 - [ ] Recovery Codes
 - [ ] Clipboard hygiene
 - [ ] Secret Backup / Restore

@@ -1,6 +1,6 @@
 # DANGOMUSHI Secret Data Boundary
 
-Status: **architectural contract established; Password Generator Core, Credential model, existing-credential input boundary and encrypted Vault storage implemented; unlock/UI integration remains unimplemented**
+Status: **architectural contract established; Password Generator Core, Credential model, existing-credential input boundary, encrypted Vault storage, and Vault unlock/lock core implemented; UI integration remains unimplemented**
 
 This document defines the mandatory boundary for future password, credential, recovery-code and vault work.
 
@@ -178,6 +178,6 @@ Normal M2 tools such as HASH / VERIFY continue independently. The secret subsyst
 
 ## Exactly One Next Task
 
-**Vault unlock / lock**
+**Generator -> Credential integration**
 
-That next task must derive a VaultKey from a Master Passphrase and the bounded public KDF metadata, own the unlocked key for a deliberate lifetime, and clear storage-owned key material on lock as best effort. It must preserve the existing warning that complete memory erasure cannot be guaranteed and must not yet add Generator -> Credential integration.
+That next task must move a generated password into the existing source-agnostic Credential path without routing the generated secret through generic Text Editor/autosave/session persistence. It must not yet add Recovery Codes or Clipboard behavior.

@@ -23,9 +23,9 @@ const PREVIOUS_FILE: &str = "vault.previous.dgmv";
 const PENDING_FILE: &str = "vault.pending.dgmv";
 
 pub const MAX_VAULT_PLAINTEXT_BYTES: usize = 64 * 1024 * 1024;
-pub const MAX_KDF_MEMORY_KIB: u32 = 1024 * 1024;
-pub const MAX_KDF_ITERATIONS: u32 = 64;
-pub const MAX_KDF_PARALLELISM: u32 = 64;
+pub const MAX_KDF_MEMORY_KIB: u32 = 256 * 1024;
+pub const MAX_KDF_ITERATIONS: u32 = 10;
+pub const MAX_KDF_PARALLELISM: u32 = 8;
 
 #[must_use]
 pub struct VaultKey {
@@ -33,7 +33,14 @@ pub struct VaultKey {
 }
 
 impl VaultKey {
-    pub fn from_bytes(bytes: [u8; 32]) -> Self {
+    pub(crate) fn from_derived_bytes(bytes: &mut [u8; 32]) -> Self {
+        let key = Self { bytes: *bytes };
+        bytes.zeroize();
+        key
+    }
+
+    #[cfg(test)]
+    fn from_test_bytes(bytes: [u8; 32]) -> Self {
         Self { bytes }
     }
 
@@ -106,6 +113,7 @@ impl VaultKdfMetadata {
             || iterations > MAX_KDF_ITERATIONS
             || parallelism == 0
             || parallelism > MAX_KDF_PARALLELISM
+            || memory_kib < parallelism.saturating_mul(8)
         {
             return Err(VaultError::InvalidKdfMetadata);
         }
@@ -714,7 +722,7 @@ mod tests {
     }
 
     fn key(byte: u8) -> VaultKey {
-        VaultKey::from_bytes([byte; 32])
+        VaultKey::from_test_bytes([byte; 32])
     }
 
     fn metadata() -> VaultKdfMetadata {

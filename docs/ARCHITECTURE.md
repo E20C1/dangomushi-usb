@@ -102,6 +102,11 @@ Save durability follows create-new pending ciphertext -> file sync -> reopen/aut
 
 The Vault directory must remain outside the generic Workspace browser root before user-facing Vault functionality is enabled.
 
+Vault unlock/lock is implemented by `src/vault_unlock.rs`. `MasterPassphrase` consumes an owned String, stores it in a redacted core-owned byte buffer, and zeroizes that directly owned buffer on Drop. Argon2id version 19 derives the 32-byte VaultKey from the Vault header's bounded KDF metadata.
+
+`UnlockedVault` owns the VaultStore, VaultKey, and KDF metadata for a deliberate lifetime. `lock(self)` consumes the unlocked object and drops the VaultKey before returning the non-secret store. Wrong-passphrase and AEAD-authentication failures are intentionally reduced to the same generic unlock failure.
+
+
 
 
 
@@ -187,7 +192,7 @@ The core CLI, workspace model, filesystem browser, text editor storage layer and
 
 The Password Generator Core introduces `getrandom` as a small unconditional dependency for production access to the operating system's preferred cryptographically secure random source. Generator logic itself remains independent from UI and storage through an injectable `RandomSource` boundary.
 
-Encrypted Vault storage adds RustCrypto `chacha20poly1305` for XChaCha20Poly1305 AEAD and `zeroize` for best-effort clearing of directly owned Vault key/plaintext buffers. This does not change the project's explicit limitation that allocator, GUI, OS, crash, clipboard, or other copies cannot be guaranteed erased. RustCrypto `argon2` was re-evaluated for the future unlock layer but is not yet a dependency because passphrase-to-key derivation is the next task.
+Encrypted Vault storage adds RustCrypto `chacha20poly1305` for XChaCha20Poly1305 AEAD and `zeroize` for best-effort clearing of directly owned Vault key/plaintext buffers. This does not change the project's explicit limitation that allocator, GUI, OS, crash, clipboard, or other copies cannot be guaranteed erased. RustCrypto `argon2` 0.6 is used by the Vault unlock layer with the `alloc` and `zeroize` features for Argon2id raw-key derivation. New Vaults use the current portable baseline of 19 MiB memory, 2 iterations, and parallelism 1; per-Vault KDF metadata remains bounded and authenticated.
 
 The native desktop shell introduces eframe/egui as an optional feature-gated dependency. Building without the desktop feature does not require the desktop stack.
 
