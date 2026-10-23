@@ -155,7 +155,8 @@ fn generic_backup_stays_outside_secret_boundary_and_completes_m2() {
         "Generic BACKUP does not replace or wrap the M2-S Secret Backup / Restore flow"
     ));
     assert!(ROADMAP.contains("- [x] **Backup and restore workflow**"));
+    assert!(ROADMAP.contains("- [x] **Explicit LAN enable control**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Explicit LAN enable control** — Exactly One Next Task"
+        "- [ ] **Device pairing** — Exactly One Next Task"
     ));
 }
