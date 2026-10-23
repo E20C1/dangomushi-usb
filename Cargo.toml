@@ -1,6 +1,6 @@
 [package]
 name = "dangomushi"
-version = "0.4.2"
+version = "0.5.0"
 edition = "2021"
 rust-version = "1.95"
 description = "Portable, local-first workspace core"
@@ -12,6 +12,8 @@ desktop = ["dep:eframe"]
 
 [dependencies]
 getrandom = "0.4.3"
+chacha20poly1305 = { version = "0.11.0", default-features = false, features = ["alloc", "zeroize"] }
+zeroize = "1.9.1"
 eframe = { version = "0.37.0", optional = true, default-features = false, features = ["default_fonts", "glow", "wayland", "x11"] }
 
 [[bin]]

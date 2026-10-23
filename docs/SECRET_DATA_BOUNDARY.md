@@ -1,6 +1,6 @@
 # DANGOMUSHI Secret Data Boundary
 
-Status: **architectural contract established; Password Generator Core, Credential model and existing-credential input boundary implemented; persistence remains unimplemented**
+Status: **architectural contract established; Password Generator Core, Credential model, existing-credential input boundary and encrypted Vault storage implemented; unlock/UI integration remains unimplemented**
 
 This document defines the mandatory boundary for future password, credential, recovery-code and vault work.
 
@@ -65,7 +65,7 @@ Secret subsystem development must preserve that separation. If a future session 
 
 ## Vault API boundary
 
-The physical Vault location and cryptographic format are deliberately not selected in this task.
+The encrypted Vault storage format is now defined in `VAULT_STORAGE.md`. User-facing placement remains disabled until Vault unlock/lock and PASSWORDS integration are implemented.
 
 Before encrypted storage is implemented, the architecture must provide a dedicated boundary conceptually similar to:
 
@@ -178,6 +178,6 @@ Normal M2 tools such as HASH / VERIFY continue independently. The secret subsyst
 
 ## Exactly One Next Task
 
-**Encrypted Vault storage**
+**Vault unlock / lock**
 
-That next task must re-evaluate maintained Rust cryptography and secret-management crates from official documentation, define an authenticated encrypted format, and implement a dedicated Vault storage API with durable temp -> sync -> verification -> replace/rollback behavior. It must remain outside generic File Browser/Text Editor persistence.
+That next task must derive a VaultKey from a Master Passphrase and the bounded public KDF metadata, own the unlocked key for a deliberate lifetime, and clear storage-owned key material on lock as best effort. It must preserve the existing warning that complete memory erasure cannot be guaranteed and must not yet add Generator -> Credential integration.

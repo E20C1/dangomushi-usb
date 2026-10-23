@@ -94,6 +94,15 @@ The in-memory Credential model is source-agnostic and owns Service, Username or 
 
 Existing credential input uses a separate in-memory boundary that accepts owned Strings and immediately wraps them in `SecretString`. Converting that input into `Credential` consumes the boundary object and moves its owned secret values without a required clone. The boundary has no filesystem, session, autosave, Clipboard, serialization, or Vault behavior.
 
+Encrypted Vault persistence is implemented by the dedicated `VaultStore` API in `src/vault_storage.rs`. It does not import the generic File Browser, Text Editor, autosave, or session modules. The store uses fixed filenames inside an explicitly supplied dedicated Vault directory and rejects symlink roots/fixed-file entries.
+
+Format v1 uses RustCrypto XChaCha20Poly1305 AEAD. The fixed cleartext header, including bounded future Argon2id KDF metadata and the 24-byte nonce, is authenticated as associated data. No unauthenticated plaintext is returned.
+
+Save durability follows create-new pending ciphertext -> file sync -> reopen/authenticate/decrypt verification -> preserve current as previous -> promote pending -> sync -> reopen/authenticate current -> delete previous. Interrupted layouts can promote a valid pending Vault or roll back to a valid previous Vault.
+
+The Vault directory must remain outside the generic Workspace browser root before user-facing Vault functionality is enabled.
+
+
 
 
 Cryptographic primitives must come from maintained existing Rust crates selected after an implementation-time review of official documentation and security/maintenance properties. DANGOMUSHI does not claim guaranteed complete memory erasure of secret values, especially across GUI toolkit, allocator, OS clipboard and operating-system boundaries.
@@ -177,6 +186,8 @@ The native navigation, Tool Launcher and FILES entry types use the shared icon v
 The core CLI, workspace model, filesystem browser, text editor storage layer and loopback server remain standard-library based.
 
 The Password Generator Core introduces `getrandom` as a small unconditional dependency for production access to the operating system's preferred cryptographically secure random source. Generator logic itself remains independent from UI and storage through an injectable `RandomSource` boundary.
+
+Encrypted Vault storage adds RustCrypto `chacha20poly1305` for XChaCha20Poly1305 AEAD and `zeroize` for best-effort clearing of directly owned Vault key/plaintext buffers. This does not change the project's explicit limitation that allocator, GUI, OS, crash, clipboard, or other copies cannot be guaranteed erased. RustCrypto `argon2` was re-evaluated for the future unlock layer but is not yet a dependency because passphrase-to-key derivation is the next task.
 
 The native desktop shell introduces eframe/egui as an optional feature-gated dependency. Building without the desktop feature does not require the desktop stack.
 

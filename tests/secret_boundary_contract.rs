@@ -27,7 +27,8 @@ fn roadmap_keeps_secret_work_separate_and_vault_storage_next() {
     assert!(ROADMAP.contains("[x] **Password Generator Core**"));
     assert!(ROADMAP.contains("[x] **Credential model**"));
     assert!(ROADMAP.contains("[x] **Add Existing Credential input boundary**"));
-    assert!(ROADMAP.contains("[ ] **Encrypted Vault storage** — Exactly One Next Task"));
+    assert!(ROADMAP.contains("[x] **Encrypted Vault storage**"));
+    assert!(ROADMAP.contains("[ ] **Vault unlock / lock** — Exactly One Next Task"));
 }
 
 #[test]

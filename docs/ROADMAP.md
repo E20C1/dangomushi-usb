@@ -53,8 +53,13 @@ This is a security-sensitive subsystem separate from ordinary M2 Local Tools. No
   - existing passwords are preserved without Generator policy rewrite
   - consumes into the same source-agnostic Credential model
   - no UI, Clipboard, generic autosave/session or persistence
-- [ ] **Encrypted Vault storage** — Exactly One Next Task
-- [ ] Vault unlock / lock
+- [x] **Encrypted Vault storage**
+  - dedicated VaultStore API outside generic File Browser/Text Editor
+  - XChaCha20Poly1305 authenticated encryption with fresh OS nonce
+  - authenticated format header with bounded future Argon2id metadata
+  - temp -> sync -> reopen/verify -> replace -> rollback/recovery
+  - redacted/zeroized storage-owned key and plaintext buffers
+- [ ] **Vault unlock / lock** — Exactly One Next Task
 - [ ] Generator -> Credential integration
 - [ ] Recovery Codes
 - [ ] Clipboard hygiene
