@@ -18,6 +18,7 @@ The current implementation includes:
 - A READY native TEXT / JSON utility for LF normalization, trailing-space cleanup, JSON validation, and whitespace-only pretty/compact formatting with no automatic source-file writes.
 - A READY native COMPARE tool for binary-safe streaming comparison of two Workspace files, with first-difference byte reporting and optional UTF-8 line detail.
 - A READY native SEARCH tool for bounded literal UTF-8 search under `workspace/data/documents`, with line/column previews and direct OPEN into the existing Editor boundary.
+- A READY native REPOSITORIES tool for bounded read-only Git status, recent log, and worktree/staged diff-stat inspection under `workspace/repositories`, with no shell, network, or mutating Git commands.
 - Restores the previous native view, FILES location/selection and open editor file from workspace-local session state.
 - A reusable square-edged pixel UI system with original 5x5 vector-drawn icons and no external icon/font assets.
 - An M2-S Password Generator Core with OS CSPRNG input, configurable character groups, rejection-sampled selection, deterministic injected-source tests, and no UI/Vault persistence.
@@ -139,6 +140,7 @@ dangomushi-usb/
 │  ├─ file_compare.rs
 │  ├─ password_generator.rs
 │  ├─ recovery_codes.rs
+│  ├─ repository_git.rs
 │  ├─ secret_backup.rs
 │  ├─ text_editor.rs
 │  ├─ text_json.rs
