@@ -24,6 +24,7 @@ The current implementation includes:
 - An M2-S generated-Credential integration boundary that consumes GeneratedPassword into the same source-agnostic Credential model without a required secret clone.
 - An M2-S Recovery Code core with redacted/zeroized secret ownership and a bounded versioned Vault section payload.
 - An M2-S Clipboard hygiene boundary with explicit secret-copy ownership, configurable delayed clearing, compare-before-clear behavior, and a feature-gated desktop OS clipboard adapter.
+- An M2-S Secret Backup / Restore core that packages authenticated Vault ciphertext without decrypting it into generic backup/export flows and restores only after passphrase authentication.
 - A portable workspace path that remains separate from replaceable application binaries.
 - Embedded loopback-only status UI served from the Rust core.
 - No public bind, LAN bind, UPnP, NAT-PMP, reverse tunnel, CDN or external web request.
@@ -58,7 +59,7 @@ All restored paths are relative and are validated again before use. Missing or i
 
 ## Secret subsystem
 
-The secret-management roadmap is intentionally separate from ordinary M2 Local Tools. The current implemented steps are the Password Generator Core, source-agnostic in-memory Credential model, both existing/generated Credential input boundaries, encrypted Vault storage/unlock core, Recovery Code core/payload boundary, and Clipboard hygiene boundary.
+The secret-management roadmap is intentionally separate from ordinary M2 Local Tools. Its core sequence is now complete through Secret Backup / Restore: Password Generator, source-agnostic Credential inputs, encrypted Vault storage/unlock, Recovery Codes, Clipboard hygiene, and encrypted backup/restore.
 
 Secret values are not routed through the Text Editor, generic autosave or session restoration, and are not exposed through the native UI yet. Vault ciphertext uses a dedicated storage API and is not a normal Workspace file. See docs/SECRET_DATA_BOUNDARY.md, docs/PASSWORD_GENERATOR_CORE.md, and docs/VAULT_STORAGE.md.
 
@@ -131,6 +132,7 @@ dangomushi-usb/
 │  ├─ file_browser.rs
 │  ├─ password_generator.rs
 │  ├─ recovery_codes.rs
+│  ├─ secret_backup.rs
 │  ├─ text_editor.rs
 │  ├─ tool_registry.rs
 │  ├─ vault_storage.rs

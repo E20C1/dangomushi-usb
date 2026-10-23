@@ -5,6 +5,7 @@ pub mod generated_credential_input;
 pub mod file_browser;
 pub mod password_generator;
 pub mod recovery_codes;
+pub mod secret_backup;
 pub mod server;
 pub mod session_state;
 pub mod text_editor;

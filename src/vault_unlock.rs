@@ -165,6 +165,20 @@ impl UnlockedVault {
         store
     }
 
+    pub(crate) fn export_verified_ciphertext(&self) -> Result<Vec<u8>, VaultAccessError> {
+        self.store
+            .export_verified_ciphertext(&self.key)
+            .map_err(map_storage_error)
+    }
+
+    pub(crate) fn from_verified_parts(
+        store: VaultStore,
+        key: VaultKey,
+        kdf: VaultKdfMetadata,
+    ) -> Self {
+        Self { store, key, kdf }
+    }
+
     fn initialize_new_with_profile(
         store: VaultStore,
         passphrase: MasterPassphrase,
@@ -222,7 +236,7 @@ impl fmt::Display for VaultAccessError {
 
 impl Error for VaultAccessError {}
 
-fn derive_vault_key(
+pub(crate) fn derive_vault_key(
     passphrase: &MasterPassphrase,
     metadata: VaultKdfMetadata,
 ) -> Result<VaultKey, VaultAccessError> {
