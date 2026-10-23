@@ -39,8 +39,9 @@ fn roadmap_completes_secret_core_and_keeps_non_secret_m2_sequence_bounded() {
     assert!(ROADMAP.contains("[x] **File comparison**"));
     assert!(ROADMAP.contains("[x] **Local document search**"));
     assert!(ROADMAP.contains("[x] **Repository status and safe Git operations**"));
+    assert!(ROADMAP.contains("[x] **Backup and restore workflow**"));
     assert!(ROADMAP.contains(
-        "[ ] **Backup and restore workflow** — Exactly One Next Task"
+        "[ ] **Explicit LAN enable control** — Exactly One Next Task"
     ));
 }
 
