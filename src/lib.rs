@@ -7,3 +7,5 @@ pub mod workspace;
 
 #[cfg(feature = "desktop")]
 pub mod native_ui;
+#[cfg(feature = "desktop")]
+pub mod native_ui_theme;

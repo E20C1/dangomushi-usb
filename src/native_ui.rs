@@ -1,4 +1,5 @@
 use crate::file_browser::{self, EntryKind, FileEntry};
+use crate::native_ui_theme::{self as theme, PixelIcon, BAD, BG, LINE, MUTED, OK, PANEL, TEXT, WARN};
 use crate::session_state::{self, SessionState, SessionView};
 use crate::text_editor;
 use crate::tool_registry::{self, ToolId, ToolStatus};
@@ -8,15 +9,6 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-const BG: egui::Color32 = egui::Color32::from_rgb(8, 10, 8);
-const PANEL: egui::Color32 = egui::Color32::from_rgb(14, 17, 14);
-const PANEL_ALT: egui::Color32 = egui::Color32::from_rgb(19, 23, 19);
-const LINE: egui::Color32 = egui::Color32::from_rgb(57, 64, 57);
-const TEXT: egui::Color32 = egui::Color32::from_rgb(231, 236, 231);
-const MUTED: egui::Color32 = egui::Color32::from_rgb(155, 164, 155);
-const OK: egui::Color32 = egui::Color32::from_rgb(184, 216, 184);
-const WARN: egui::Color32 = egui::Color32::from_rgb(216, 197, 143);
-const BAD: egui::Color32 = egui::Color32::from_rgb(215, 162, 162);
 const AUTOSAVE_DELAY: Duration = Duration::from_secs(2);
 
 pub fn run() -> eframe::Result {
@@ -325,16 +317,7 @@ struct NativeApp {
 
 impl NativeApp {
     fn new(creation_context: &eframe::CreationContext<'_>) -> Self {
-        let mut visuals = egui::Visuals::dark();
-        visuals.panel_fill = BG;
-        visuals.window_fill = PANEL;
-        visuals.override_text_color = Some(TEXT);
-        creation_context.egui_ctx.set_visuals(visuals);
-
-        creation_context.egui_ctx.all_styles_mut(|style| {
-            style.spacing.item_spacing = egui::vec2(8.0, 8.0);
-            style.spacing.button_padding = egui::vec2(10.0, 6.0);
-        });
+        theme::install(&creation_context.egui_ctx);
 
         let workspace_root = workspace::default_workspace_root();
         let browser = FileBrowserState::new(&workspace_root);
@@ -437,6 +420,7 @@ impl NativeApp {
         egui::Frame::new()
             .fill(PANEL)
             .stroke(egui::Stroke::new(1.0, LINE))
+            .corner_radius(0)
             .inner_margin(egui::Margin::same(10))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
@@ -471,16 +455,32 @@ impl NativeApp {
         egui::Frame::new()
             .fill(PANEL)
             .stroke(egui::Stroke::new(1.0, LINE))
+            .corner_radius(0)
             .inner_margin(egui::Margin::same(4))
             .show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
-                    ui.selectable_value(&mut self.view, View::Home, "[01] HOME");
-                    ui.selectable_value(&mut self.view, View::Tools, "[02] TOOLS");
-                    ui.selectable_value(&mut self.view, View::Files, "[03] FILES");
-                    ui.selectable_value(&mut self.view, View::Editor, "[04] EDITOR");
-                    ui.selectable_value(&mut self.view, View::Workspace, "[05] WORKSPACE");
-                    ui.selectable_value(&mut self.view, View::Mobile, "[06] MOBILE");
-                    ui.selectable_value(&mut self.view, View::System, "[07] SYSTEM");
+                    for (view, icon, label) in [
+                        (View::Home, PixelIcon::Home, "[01] HOME"),
+                        (View::Tools, PixelIcon::Tools, "[02] TOOLS"),
+                        (View::Files, PixelIcon::Files, "[03] FILES"),
+                        (View::Editor, PixelIcon::Editor, "[04] EDITOR"),
+                        (View::Workspace, PixelIcon::Workspace, "[05] WORKSPACE"),
+                        (View::Mobile, PixelIcon::Mobile, "[06] MOBILE"),
+                        (View::System, PixelIcon::System, "[07] SYSTEM"),
+                    ] {
+                        if theme::pixel_button(
+                            ui,
+                            icon,
+                            label,
+                            self.view == view,
+                            true,
+                            118.0,
+                        )
+                        .clicked()
+                        {
+                            self.view = view;
+                        }
+                    }
                 });
             });
     }
@@ -488,7 +488,7 @@ impl NativeApp {
     fn home(&mut self, ui: &mut egui::Ui) {
         let summary = workspace::summary(&self.workspace_root);
 
-        section_title(ui, "LOCAL CONTROL PANEL");
+        theme::section_title(ui, PixelIcon::Home, "LOCAL CONTROL PANEL");
         ui.label(
             egui::RichText::new(
                 "Native Rust shell for files, editing, recovery and trusted local access.",
@@ -498,15 +498,23 @@ impl NativeApp {
         ui.add_space(12.0);
 
         ui.columns(3, |columns| {
-            metric(
+            theme::metric(
                 &mut columns[0],
+                PixelIcon::System,
                 "RUNTIME",
                 env!("CARGO_PKG_VERSION"),
                 "eframe / egui",
             );
-            metric(&mut columns[1], "NETWORK", "LOCAL", "no LAN listener");
-            metric(
+            theme::metric(
+                &mut columns[1],
+                PixelIcon::Mobile,
+                "NETWORK",
+                "LOCAL",
+                "no LAN listener",
+            );
+            theme::metric(
                 &mut columns[2],
+                PixelIcon::Workspace,
                 "WORKSPACE",
                 if summary.initialized { "READY" } else { "NOT INIT" },
                 &format!("{}/{} dirs", summary.present_dirs, summary.total_dirs),
@@ -514,27 +522,30 @@ impl NativeApp {
         });
 
         ui.add_space(10.0);
-        panel(ui, |ui| {
-            small_label(ui, "TOOLS");
+        theme::panel(ui, |ui| {
+            theme::small_label(ui, "TOOLS");
             ui.add_space(4.0);
 
             for tool in tool_registry::all() {
                 ui.horizontal(|ui| {
                     let enabled = tool.status.is_ready();
-                    if ui
-                        .add_enabled(
-                            enabled,
-                            egui::Button::new(tool.label).min_size(egui::vec2(180.0, 28.0)),
-                        )
-                        .clicked()
+                    if theme::pixel_button(
+                        ui,
+                        tool_icon(tool.id),
+                        tool.label,
+                        false,
+                        enabled,
+                        190.0,
+                    )
+                    .clicked()
                     {
                         self.launch_tool(tool.id);
                     }
 
-                    ui.label(
-                        egui::RichText::new(tool.status.label())
-                            .color(if enabled { OK } else { MUTED })
-                            .monospace(),
+                    theme::status_badge(
+                        ui,
+                        tool.status.label(),
+                        if enabled { OK } else { MUTED },
                     );
                 });
             }
@@ -547,7 +558,7 @@ impl NativeApp {
     }
 
     fn tools(&mut self, ui: &mut egui::Ui) {
-        section_title(ui, "TOOLS");
+        theme::section_title(ui, PixelIcon::Tools, "TOOLS");
         ui.label(
             egui::RichText::new(
                 "Central registry for built-in DANGOMUSHI tools. Registry entries describe tools; explicit Rust dispatch decides what can run.",
@@ -562,8 +573,8 @@ impl NativeApp {
             crate::tool_registry::ToolCategory::VersionControl,
             crate::tool_registry::ToolCategory::Recovery,
         ] {
-            panel(ui, |ui| {
-                small_label(ui, category.label());
+            theme::panel(ui, |ui| {
+                theme::small_label(ui, category.label());
                 ui.add_space(4.0);
 
                 for tool in tool_registry::all()
@@ -572,22 +583,24 @@ impl NativeApp {
                 {
                     ui.horizontal(|ui| {
                         let ready = tool.status == ToolStatus::Ready;
-                        if ui
-                            .add_enabled(
-                                ready,
-                                egui::Button::new(tool.label)
-                                    .min_size(egui::vec2(190.0, 30.0)),
-                            )
-                            .clicked()
+                        if theme::pixel_button(
+                            ui,
+                            tool_icon(tool.id),
+                            tool.label,
+                            false,
+                            ready,
+                            200.0,
+                        )
+                        .clicked()
                         {
                             self.launch_tool(tool.id);
                         }
 
                         ui.vertical(|ui| {
-                            ui.label(
-                                egui::RichText::new(tool.status.label())
-                                    .color(if ready { OK } else { MUTED })
-                                    .monospace(),
+                            theme::status_badge(
+                                ui,
+                                tool.status.label(),
+                                if ready { OK } else { MUTED },
                             );
                             ui.label(
                                 egui::RichText::new(tool.description)
@@ -628,7 +641,7 @@ impl NativeApp {
     }
 
     fn files(&mut self, ui: &mut egui::Ui) {
-        section_title(ui, "FILES");
+        theme::section_title(ui, PixelIcon::Files, "FILES");
         ui.label(
             egui::RichText::new(
                 "Read-only browser constrained to the DANGOMUSHI workspace root.",
@@ -637,7 +650,7 @@ impl NativeApp {
         );
         ui.add_space(10.0);
 
-        panel(ui, |ui| {
+        theme::panel(ui, |ui| {
             ui.horizontal(|ui| {
                 let at_root = self.browser.current_dir.as_os_str().is_empty();
                 if ui.add_enabled(!at_root, egui::Button::new("[UP]")).clicked() {
@@ -663,7 +676,8 @@ impl NativeApp {
             egui::Frame::new()
                 .fill(PANEL)
                 .stroke(egui::Stroke::new(1.0, BAD))
-                .inner_margin(egui::Margin::same(10))
+                .corner_radius(0)
+            .inner_margin(egui::Margin::same(10))
                 .show(ui, |ui| {
                     ui.label(egui::RichText::new("BROWSER ERROR").color(BAD).strong());
                     ui.label(egui::RichText::new(error).color(MUTED).monospace());
@@ -724,14 +738,17 @@ impl NativeApp {
                                 .is_some_and(|path| path == &entry.relative_path);
 
                             ui.horizontal(|ui| {
-                                ui.add_sized(
-                                    [80.0, 22.0],
-                                    egui::Label::new(
-                                        egui::RichText::new(entry.kind.label())
-                                            .monospace()
-                                            .color(kind_color(entry.kind)),
-                                    ),
-                                );
+                                ui.horizontal(|ui| {
+                                    theme::pixel_icon(ui, entry_icon(entry.kind), kind_color(entry.kind));
+                                    ui.add_sized(
+                                        [58.0, 22.0],
+                                        egui::Label::new(
+                                            egui::RichText::new(entry.kind.label())
+                                                .monospace()
+                                                .color(kind_color(entry.kind)),
+                                        ),
+                                    );
+                                });
 
                                 let response = ui.add_sized(
                                     [420.0, 22.0],
@@ -782,12 +799,12 @@ impl NativeApp {
         });
         let mut open_selected: Option<PathBuf> = None;
 
-        panel(ui, |ui| {
+        theme::panel(ui, |ui| {
             if let Some(selected) = &selected_path {
-                key_value(ui, "SELECTED", &file_browser::display_path(selected));
+                theme::key_value(ui, "SELECTED", &file_browser::display_path(selected));
 
                 if let Some(entry) = &selected_entry {
-                    key_value(ui, "TYPE", entry.kind.label());
+                    theme::key_value(ui, "TYPE", entry.kind.label());
 
                     match entry.kind {
                         EntryKind::Directory => {
@@ -829,10 +846,10 @@ impl NativeApp {
     }
 
     fn editor(&mut self, ui: &mut egui::Ui) {
-        section_title(ui, "EDITOR");
+        theme::section_title(ui, PixelIcon::Editor, "EDITOR");
 
         let Some(path) = self.editor.path.clone() else {
-            panel(ui, |ui| {
+            theme::panel(ui, |ui| {
                 ui.label(
                     egui::RichText::new("NO FILE OPEN")
                         .color(WARN)
@@ -848,7 +865,7 @@ impl NativeApp {
             return;
         };
 
-        panel(ui, |ui| {
+        theme::panel(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
                 ui.label(
                     egui::RichText::new(file_browser::display_path(&path))
@@ -879,7 +896,8 @@ impl NativeApp {
             egui::Frame::new()
                 .fill(PANEL)
                 .stroke(egui::Stroke::new(1.0, WARN))
-                .inner_margin(egui::Margin::same(10))
+                .corner_radius(0)
+            .inner_margin(egui::Margin::same(10))
                 .show(ui, |ui| {
                     ui.label(
                         egui::RichText::new("UNSAVED RECOVERY FOUND")
@@ -981,9 +999,9 @@ impl NativeApp {
     fn workspace(&mut self, ui: &mut egui::Ui) {
         let summary = workspace::summary(&self.workspace_root);
 
-        section_title(ui, "WORKSPACE");
-        panel(ui, |ui| {
-            key_value(ui, "PATH", &self.workspace_root.display().to_string());
+        theme::section_title(ui, PixelIcon::Workspace, "WORKSPACE");
+        theme::panel(ui, |ui| {
+            theme::key_value(ui, "PATH", &self.workspace_root.display().to_string());
             key_value(
                 ui,
                 "STATE",
@@ -1019,10 +1037,10 @@ impl NativeApp {
     }
 
     fn mobile(&mut self, ui: &mut egui::Ui) {
-        section_title(ui, "MOBILE ACCESS");
-        panel(ui, |ui| {
+        theme::section_title(ui, PixelIcon::Mobile, "MOBILE ACCESS");
+        theme::panel(ui, |ui| {
             ui.label(
-                egui::RichText::new("NOT ENABLED IN v0.3")
+                egui::RichText::new("NOT ENABLED IN M1")
                     .color(WARN)
                     .strong()
                     .monospace(),
@@ -1035,16 +1053,16 @@ impl NativeApp {
     }
 
     fn system(&mut self, ui: &mut egui::Ui) {
-        section_title(ui, "SYSTEM");
-        panel(ui, |ui| {
-            key_value(ui, "DESKTOP UI", "eframe / egui 0.37");
-            key_value(ui, "FILE BROWSER", "workspace-rooted / read-only");
-            key_value(ui, "TEXT EDITOR", "UTF-8 / explicit save / recovery");
-            key_value(ui, "EDITOR LIMIT", "4 MiB per file");
-            key_value(ui, "WEB GATEWAY", "127.0.0.1 only");
-            key_value(ui, "PUBLIC INTERNET", "not exposed");
-            key_value(ui, "EXTERNAL CDN", "none");
-            key_value(ui, "WORKSPACE SOURCE", "local filesystem");
+        theme::section_title(ui, PixelIcon::System, "SYSTEM");
+        theme::panel(ui, |ui| {
+            theme::key_value(ui, "DESKTOP UI", "eframe / egui 0.37");
+            theme::key_value(ui, "FILE BROWSER", "workspace-rooted / read-only");
+            theme::key_value(ui, "TEXT EDITOR", "UTF-8 / explicit save / recovery");
+            theme::key_value(ui, "EDITOR LIMIT", "4 MiB per file");
+            theme::key_value(ui, "WEB GATEWAY", "127.0.0.1 only");
+            theme::key_value(ui, "PUBLIC INTERNET", "not exposed");
+            theme::key_value(ui, "EXTERNAL CDN", "none");
+            theme::key_value(ui, "WORKSPACE SOURCE", "local filesystem");
         });
     }
 }
@@ -1055,6 +1073,7 @@ impl eframe::App for NativeApp {
             .frame(
                 egui::Frame::new()
                     .fill(BG)
+                    .corner_radius(0)
                     .inner_margin(egui::Margin::same(14)),
             )
             .show(ui, |ui| {
@@ -1076,59 +1095,24 @@ impl eframe::App for NativeApp {
     }
 }
 
-fn section_title(ui: &mut egui::Ui, text: &str) {
-    ui.label(
-        egui::RichText::new(text)
-            .monospace()
-            .strong()
-            .size(15.0)
-            .color(TEXT),
-    );
+fn entry_icon(kind: EntryKind) -> PixelIcon {
+    match kind {
+        EntryKind::Directory => PixelIcon::Folder,
+        EntryKind::File => PixelIcon::File,
+        EntryKind::Symlink => PixelIcon::Link,
+        EntryKind::Other => PixelIcon::Other,
+    }
 }
 
-fn panel(ui: &mut egui::Ui, contents: impl FnOnce(&mut egui::Ui)) {
-    egui::Frame::new()
-        .fill(PANEL)
-        .stroke(egui::Stroke::new(1.0, LINE))
-        .inner_margin(egui::Margin::same(12))
-        .show(ui, contents);
-}
-
-fn metric(ui: &mut egui::Ui, label: &str, value: &str, detail: &str) {
-    egui::Frame::new()
-        .fill(PANEL_ALT)
-        .stroke(egui::Stroke::new(1.0, LINE))
-        .inner_margin(egui::Margin::same(10))
-        .show(ui, |ui| {
-            small_label(ui, label);
-            ui.label(
-                egui::RichText::new(value)
-                    .monospace()
-                    .strong()
-                    .size(19.0)
-                    .color(TEXT),
-            );
-            ui.label(egui::RichText::new(detail).color(MUTED).monospace());
-        });
-}
-
-fn small_label(ui: &mut egui::Ui, text: &str) {
-    ui.label(
-        egui::RichText::new(text)
-            .monospace()
-            .size(11.0)
-            .color(MUTED),
-    );
-}
-
-fn key_value(ui: &mut egui::Ui, key: &str, value: &str) {
-    ui.horizontal(|ui| {
-        ui.add_sized(
-            [150.0, 20.0],
-            egui::Label::new(egui::RichText::new(key).color(MUTED).monospace()),
-        );
-        ui.label(egui::RichText::new(value).monospace());
-    });
+fn tool_icon(tool: ToolId) -> PixelIcon {
+    match tool {
+        ToolId::Files => PixelIcon::Files,
+        ToolId::Editor => PixelIcon::Editor,
+        ToolId::HashVerify => PixelIcon::Hash,
+        ToolId::Compare => PixelIcon::Compare,
+        ToolId::Repositories => PixelIcon::Repository,
+        ToolId::Backup => PixelIcon::Backup,
+    }
 }
 
 fn kind_color(kind: EntryKind) -> egui::Color32 {

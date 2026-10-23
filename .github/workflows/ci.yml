@@ -31,5 +31,8 @@ jobs:
       - name: Core release build
         run: cargo build --release --bin dangomushi
 
+      - name: Desktop library tests
+        run: cargo test --features desktop --lib
+
       - name: Native desktop release build
         run: cargo build --release --features desktop --bin dangomushi-desktop

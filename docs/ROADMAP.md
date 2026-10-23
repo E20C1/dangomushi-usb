@@ -20,7 +20,7 @@ This roadmap records implementation order, not release dates.
 - [x] Text editor with explicit save and autosave recovery
 - [x] Tool launcher
 - [x] Workspace/session restoration
-- [ ] Pixel-oriented UI system and original icon set
+- [x] Pixel-oriented UI system and original icon set
 
 ## M2 — Local tools
 

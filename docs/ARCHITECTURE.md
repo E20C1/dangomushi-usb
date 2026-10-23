@@ -135,7 +135,23 @@ The UI uses a compact, square-edged, pixel-oriented visual system rather than a 
 
 The embedded web UI remains a separate client surface for local status and future authenticated mobile access. It is not used to grant the desktop application filesystem authority.
 
-## Dependency policy
+## Native UI system
+
+The desktop shell uses a reusable pixel-oriented visual system in src/native_ui_theme.rs.
+
+The system defines:
+
+- a shared dark palette and semantic OK/WARN/BAD colors,
+- square zero-radius widget states,
+- one-pixel panel borders,
+- shared spacing tokens,
+- reusable panel, metric, status-badge and pixel-button components,
+- original 5x5 monochrome icons drawn directly through egui's painter.
+
+The icon set is generated from source-code bit patterns. No external icon pack, CDN, image asset, or font file is required for these icons.
+
+The native navigation, Tool Launcher and FILES entry types use the shared icon vocabulary so later tools can extend the same visual language without duplicating screen-specific styling.
+
 
 The core CLI, workspace model, filesystem browser, text editor storage layer and loopback server use the Rust standard library only.
 

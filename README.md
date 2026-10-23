@@ -15,6 +15,7 @@ The current implementation includes:
 - A workspace-rooted UTF-8 text editor with explicit save, dirty tracking and recovery autosave.
 - A central built-in tool registry and native Tool Launcher.
 - Restores the previous native view, FILES location/selection and open editor file from workspace-local session state.
+- A reusable square-edged pixel UI system with original 5x5 vector-drawn icons and no external icon/font assets.
 - A portable workspace path that remains separate from replaceable application binaries.
 - Embedded loopback-only status UI served from the Rust core.
 - No public bind, LAN bind, UPnP, NAT-PMP, reverse tunnel, CDN or external web request.
@@ -47,6 +48,7 @@ Unsaved editor text is not stored in the session file. It continues to use the i
 
 All restored paths are relative and are validated again before use. Missing or invalid locations degrade safely instead of escaping the workspace.
 
+## Windows quick start
 
 With a Rust toolchain installed, double-click:
 
@@ -114,6 +116,7 @@ dangomushi-usb/
 │  ├─ server.rs
 │  ├─ session_state.rs
 │  ├─ native_ui.rs
+│  ├─ native_ui_theme.rs
 │  └─ bin/dangomushi-desktop.rs
 ├─ web/                 embedded loopback/mobile UI
 ├─ docs/                architecture, decisions and roadmap
