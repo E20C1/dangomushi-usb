@@ -104,6 +104,8 @@ stderr is not copied into normal UI error messages. Git failures are reported by
 
 DANGOMUSHI does not override Git safe.directory ownership checks. Git may therefore reject a repository that Git itself considers unsafe.
 
+As with the other portable filesystem boundaries, validation followed by process launch is not an operating-system-level atomic no-follow guarantee. Another process racing directory replacement between validation and Git launch is outside this first portable boundary.
+
 ## Repository discovery
 
 Repository discovery considers at most 512 direct children of workspace/repositories.
