@@ -8,6 +8,7 @@ pub mod file_browser;
 pub mod file_compare;
 pub mod password_generator;
 pub mod recovery_codes;
+pub mod repository_git;
 pub mod secret_backup;
 pub mod server;
 pub mod session_state;
