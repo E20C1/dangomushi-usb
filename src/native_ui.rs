@@ -1,3 +1,4 @@
+use crate::document_search;
 use crate::file_browser::{self, EntryKind, FileEntry};
 use crate::file_compare;
 use crate::hash_verify;
@@ -39,6 +40,7 @@ enum View {
     HashVerify,
     TextJson,
     Compare,
+    Search,
     Workspace,
     Mobile,
     System,
@@ -54,6 +56,7 @@ impl View {
             Self::HashVerify => SessionView::HashVerify,
             Self::TextJson => SessionView::TextJson,
             Self::Compare => SessionView::Compare,
+            Self::Search => SessionView::Search,
             Self::Workspace => SessionView::Workspace,
             Self::Mobile => SessionView::Mobile,
             Self::System => SessionView::System,
@@ -69,6 +72,7 @@ impl View {
             SessionView::HashVerify => Self::HashVerify,
             SessionView::TextJson => Self::TextJson,
             SessionView::Compare => Self::Compare,
+            SessionView::Search => Self::Search,
             SessionView::Workspace => Self::Workspace,
             SessionView::Mobile => Self::Mobile,
             SessionView::System => Self::System,
@@ -529,6 +533,46 @@ impl FileCompareState {
     }
 }
 
+struct DocumentSearchState {
+    query: String,
+    report: Option<document_search::DocumentSearchReport>,
+    error: Option<String>,
+}
+
+impl DocumentSearchState {
+    fn new() -> Self {
+        Self {
+            query: String::new(),
+            report: None,
+            error: None,
+        }
+    }
+
+    fn clear_result(&mut self) {
+        self.report = None;
+        self.error = None;
+    }
+
+    fn search(
+        &mut self,
+        root: &Path,
+    ) -> Result<usize, document_search::DocumentSearchError> {
+        self.error = None;
+        match document_search::search_documents(root, &self.query) {
+            Ok(report) => {
+                let count = report.matches.len();
+                self.report = Some(report);
+                Ok(count)
+            }
+            Err(error) => {
+                self.report = None;
+                self.error = Some(error.to_string());
+                Err(error)
+            }
+        }
+    }
+}
+
 struct NativeApp {
     view: View,
     workspace_root: PathBuf,
@@ -537,6 +581,7 @@ struct NativeApp {
     hash_verify: HashVerifyState,
     text_json: TextJsonState,
     file_compare: FileCompareState,
+    document_search: DocumentSearchState,
     notice: String,
     session_saved: SessionState,
     session_failed: Option<SessionState>,
@@ -557,6 +602,7 @@ impl NativeApp {
             hash_verify: HashVerifyState::new(),
             text_json: TextJsonState::new(),
             file_compare: FileCompareState::new(),
+            document_search: DocumentSearchState::new(),
             notice: "READY".to_string(),
             session_saved: SessionState::default(),
             session_failed: None,
@@ -875,6 +921,10 @@ impl NativeApp {
             ToolId::Compare => {
                 self.view = View::Compare;
                 self.notice = "COMPARE READY".to_string();
+            }
+            ToolId::Search => {
+                self.view = View::Search;
+                self.notice = "SEARCH READY".to_string();
             }
             ToolId::Repositories | ToolId::Backup => {
                 self.notice = "TOOL NOT IMPLEMENTED".to_string();
@@ -1817,6 +1867,197 @@ impl NativeApp {
         );
     }
 
+    fn search_view(&mut self, ui: &mut egui::Ui) {
+        theme::section_title(ui, PixelIcon::Files, "SEARCH / DOCUMENTS");
+        ui.label(
+            egui::RichText::new(
+                "Read-only literal search under workspace:/data/documents. Internal state, backups, repositories, identity and config are outside this search scope.",
+            )
+            .color(MUTED),
+        );
+        ui.add_space(10.0);
+
+        theme::panel(ui, |ui| {
+            theme::small_label(ui, "QUERY / EPHEMERAL");
+            let response = ui.add(
+                egui::TextEdit::singleline(&mut self.document_search.query)
+                    .font(egui::TextStyle::Monospace)
+                    .desired_width(f32::INFINITY)
+                    .hint_text("literal text to find"),
+            );
+            if response.changed() {
+                self.document_search.clear_result();
+            }
+
+            ui.horizontal_wrapped(|ui| {
+                ui.label(
+                    egui::RichText::new(format!(
+                        "{} / {} query bytes",
+                        self.document_search.query.len(),
+                        document_search::MAX_SEARCH_QUERY_BYTES
+                    ))
+                    .color(MUTED)
+                    .monospace()
+                    .size(11.0),
+                );
+
+                let can_search = !self.document_search.query.trim().is_empty()
+                    && self.document_search.query.len()
+                        <= document_search::MAX_SEARCH_QUERY_BYTES
+                    && !self.document_search.query.contains('\n')
+                    && !self.document_search.query.contains('\r');
+
+                if ui
+                    .add_enabled(can_search, egui::Button::new("[SEARCH DOCUMENTS]"))
+                    .clicked()
+                {
+                    match self.document_search.search(&self.workspace_root) {
+                        Ok(count) => {
+                            self.notice = format!("SEARCH COMPLETE / {count} RESULT(S)");
+                        }
+                        Err(error) => {
+                            self.notice = format!("SEARCH FAILED: {error}");
+                        }
+                    }
+                }
+
+                if ui.button("[CLEAR]").clicked() {
+                    self.document_search = DocumentSearchState::new();
+                    self.notice = "SEARCH CLEARED".to_string();
+                }
+            });
+
+            ui.add_space(4.0);
+            ui.label(
+                egui::RichText::new(format!(
+                    "Limits: {} MiB/file · {} files · {} results · {} preview chars",
+                    document_search::MAX_DOCUMENT_BYTES / (1024 * 1024),
+                    document_search::MAX_FILES_CONSIDERED,
+                    document_search::MAX_SEARCH_RESULTS,
+                    document_search::MAX_PREVIEW_CHARS
+                ))
+                .color(MUTED)
+                .monospace()
+                .size(11.0),
+            );
+        });
+
+        ui.add_space(8.0);
+
+        let mut open_path: Option<PathBuf> = None;
+        theme::panel(ui, |ui| {
+            theme::small_label(ui, "RESULTS");
+
+            if let Some(error) = &self.document_search.error {
+                ui.label(
+                    egui::RichText::new("SEARCH ERROR")
+                        .color(BAD)
+                        .strong()
+                        .monospace(),
+                );
+                ui.label(egui::RichText::new(error).color(MUTED).monospace());
+                return;
+            }
+
+            let Some(report) = &self.document_search.report else {
+                ui.label(
+                    egui::RichText::new("NO SEARCH YET")
+                        .color(MUTED)
+                        .monospace(),
+                );
+                return;
+            };
+
+            theme::key_value(ui, "MATCHING LINES", &report.matches.len().to_string());
+            theme::key_value(
+                ui,
+                "FILES SEARCHED",
+                &format!("{}/{}", report.files_searched, report.files_considered),
+            );
+            theme::key_value(ui, "SKIPPED LARGE", &report.skipped_large.to_string());
+            theme::key_value(
+                ui,
+                "SKIPPED NON-UTF8",
+                &report.skipped_non_utf8.to_string(),
+            );
+            theme::key_value(
+                ui,
+                "SKIPPED SYMLINKS",
+                &report.skipped_symlinks.to_string(),
+            );
+
+            if report.result_limit_reached {
+                ui.label(
+                    egui::RichText::new("RESULT LIMIT REACHED / RESULTS ARE TRUNCATED")
+                        .color(WARN)
+                        .strong()
+                        .monospace(),
+                );
+            }
+            if report.file_limit_reached {
+                ui.label(
+                    egui::RichText::new("FILE SCAN LIMIT REACHED / SEARCH IS PARTIAL")
+                        .color(WARN)
+                        .strong()
+                        .monospace(),
+                );
+            }
+
+            ui.add_space(6.0);
+            egui::ScrollArea::vertical()
+                .max_height(360.0)
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    if report.matches.is_empty() {
+                        ui.label(
+                            egui::RichText::new("(no matches)")
+                                .color(MUTED)
+                                .monospace(),
+                        );
+                    }
+
+                    for result in &report.matches {
+                        ui.group(|ui| {
+                            ui.horizontal_wrapped(|ui| {
+                                if ui.button("[OPEN]").clicked() {
+                                    open_path = Some(result.relative_path.clone());
+                                }
+                                ui.label(
+                                    egui::RichText::new(format!(
+                                        "{} : {}:{}",
+                                        file_browser::display_path(&result.relative_path),
+                                        result.line,
+                                        result.column
+                                    ))
+                                    .color(TEXT)
+                                    .monospace(),
+                                );
+                            });
+                            ui.label(
+                                egui::RichText::new(&result.preview)
+                                    .color(MUTED)
+                                    .monospace(),
+                            );
+                        });
+                        ui.add_space(4.0);
+                    }
+                });
+        });
+
+        if let Some(path) = open_path {
+            self.open_in_editor(path);
+        }
+
+        ui.add_space(8.0);
+        ui.label(
+            egui::RichText::new(
+                "Search query, previews and results are ephemeral and are not stored in generic session state.",
+            )
+            .color(MUTED)
+            .size(11.0),
+        );
+    }
+
     fn workspace(&mut self, ui: &mut egui::Ui) {
         let summary = workspace::summary(&self.workspace_root);
 
@@ -1909,6 +2150,7 @@ impl eframe::App for NativeApp {
                     View::HashVerify => self.hash_verify_view(ui),
                     View::TextJson => self.text_json_view(ui),
                     View::Compare => self.compare_view(ui),
+                    View::Search => self.search_view(ui),
                     View::Workspace => self.workspace(ui),
                     View::Mobile => self.mobile(ui),
                     View::System => self.system(ui),
@@ -1935,6 +2177,7 @@ fn tool_icon(tool: ToolId) -> PixelIcon {
         ToolId::HashVerify => PixelIcon::Hash,
         ToolId::TextJson => PixelIcon::Editor,
         ToolId::Compare => PixelIcon::Compare,
+        ToolId::Search => PixelIcon::Files,
         ToolId::Repositories => PixelIcon::Repository,
         ToolId::Backup => PixelIcon::Backup,
     }
@@ -2072,6 +2315,32 @@ mod tests {
         assert_eq!(fs::read(&right).expect("right after"), right_before);
 
         fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn document_search_ui_state_finds_documents_without_writing_source() {
+        let root = temporary_workspace("search");
+        fs::create_dir_all(root.join("data/documents")).expect("documents");
+        let path = root.join("data/documents/note.txt");
+        fs::write(&path, "alpha\nneedle here\nomega\n").expect("seed");
+        let before = fs::read(&path).expect("before");
+
+        let mut state = DocumentSearchState::new();
+        state.query = "needle".to_string();
+        assert_eq!(state.search(&root).expect("search"), 1);
+
+        let report = state.report.expect("report");
+        assert_eq!(report.matches.len(), 1);
+        assert_eq!(report.matches[0].line, 2);
+        assert_eq!(fs::read(&path).expect("after"), before);
+
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn search_view_maps_to_navigation_only_session_state() {
+        assert_eq!(View::Search.session_view(), SessionView::Search);
+        assert_eq!(View::from_session(SessionView::Search), View::Search);
     }
 
     #[test]

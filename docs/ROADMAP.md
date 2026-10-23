@@ -55,8 +55,17 @@ This roadmap records implementation order, not release dates.
   - symlink, traversal, absolute-path, directory and out-of-workspace targets are rejected
   - Tool Launcher entry is READY; FILES can assign the current regular file as Compare A or B
   - session restoration stores only the active COMPARE view, not paths/results/file contents
-- [ ] **Local document search** — Exactly One Next Task
-- [ ] Repository status and safe Git operations
+- [x] **Local document search**
+  - read-only exact literal search restricted to workspace/data/documents
+  - fixed documents root must be real in-Workspace directories; recursive symlinks are skipped
+  - UTF-8 regular files only, with a 4 MiB per-file hard read bound
+  - query is non-empty, single-line and capped at 4 KiB
+  - maximum 10,000 regular files considered and 500 matching lines returned
+  - results report Workspace-relative path, one-based line/column and a bounded preview
+  - oversized and non-UTF-8 files are skipped with explicit counts
+  - Tool Launcher entry is READY and result OPEN reuses the existing Editor boundary
+  - session restoration stores only the active SEARCH view, not query/results/previews
+- [ ] **Repository status and safe Git operations** — Exactly One Next Task
 - [ ] Backup and restore workflow
 
 ## M2-S — Secret management subsystem

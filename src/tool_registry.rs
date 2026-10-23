@@ -5,6 +5,7 @@ pub enum ToolId {
     HashVerify,
     TextJson,
     Compare,
+    Search,
     Repositories,
     Backup,
 }
@@ -99,6 +100,14 @@ const TOOLS: &[ToolDefinition] = &[
         status: ToolStatus::Ready,
     },
     ToolDefinition {
+        id: ToolId::Search,
+        key: "search",
+        label: "SEARCH",
+        category: ToolCategory::Utility,
+        description: "Search UTF-8 documents under data/documents entirely on this device.",
+        status: ToolStatus::Ready,
+    },
+    ToolDefinition {
         id: ToolId::Repositories,
         key: "repositories",
         label: "REPOSITORIES",
@@ -165,6 +174,10 @@ mod tests {
             by_key("compare").map(|tool| tool.status),
             Some(ToolStatus::Ready)
         );
+        assert_eq!(
+            by_key("search").map(|tool| tool.status),
+            Some(ToolStatus::Ready)
+        );
     }
 
     #[test]
@@ -180,6 +193,10 @@ mod tests {
         assert_eq!(
             by_key("compare").map(|tool| tool.id),
             Some(ToolId::Compare)
+        );
+        assert_eq!(
+            by_key("search").map(|tool| tool.id),
+            Some(ToolId::Search)
         );
         assert!(by_key("missing-tool").is_none());
     }

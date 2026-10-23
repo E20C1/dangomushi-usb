@@ -92,7 +92,8 @@ fn secret_boundary_excludes_text_json_and_roadmap_keeps_it_complete() {
     ));
     assert!(ROADMAP.contains("- [x] **Text / JSON utilities**"));
     assert!(ROADMAP.contains("- [x] **File comparison**"));
+    assert!(ROADMAP.contains("- [x] **Local document search**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Local document search** — Exactly One Next Task"
+        "- [ ] **Repository status and safe Git operations** — Exactly One Next Task"
     ));
 }
