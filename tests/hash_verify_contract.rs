@@ -61,7 +61,7 @@ fn native_ui_dispatches_ready_hash_verify_without_persisting_tool_inputs() {
     assert!(UI.contains("[VERIFY]"));
 
     assert!(SESSION.contains("HashVerify"));
-    assert!(SESSION.contains(""hash-verify""));
+    assert!(SESSION.contains("hash-verify"));
 
     for forbidden in ["hash_target=", "expected_digest=", "actual_digest="] {
         assert!(
