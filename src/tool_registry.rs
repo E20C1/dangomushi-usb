@@ -1,5 +1,3 @@
-use std::collections::BTreeSet;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ToolId {
     Files,
@@ -120,6 +118,7 @@ pub fn by_key(key: &str) -> Option<&'static ToolDefinition> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeSet;
 
     #[test]
     fn registry_keys_are_non_empty_and_unique() {

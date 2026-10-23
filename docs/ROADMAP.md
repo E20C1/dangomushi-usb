@@ -18,7 +18,7 @@ This roadmap records implementation order, not release dates.
 - [x] Bootstrap the native desktop shell
 - [x] File browser rooted in the configured workspace
 - [x] Text editor with explicit save and autosave recovery
-- [ ] Tool launcher
+- [x] Tool launcher
 - [ ] Workspace/session restoration
 - [ ] Pixel-oriented UI system and original icon set
 

@@ -1,5 +1,6 @@
 use crate::file_browser::{self, EntryKind, FileEntry};
 use crate::text_editor;
+use crate::tool_registry::{self, ToolId, ToolStatus};
 use crate::workspace;
 use eframe::egui;
 use std::io;
@@ -36,6 +37,7 @@ pub fn run() -> eframe::Result {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum View {
     Home,
+    Tools,
     Files,
     Editor,
     Workspace,
@@ -342,11 +344,12 @@ impl NativeApp {
             .show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     ui.selectable_value(&mut self.view, View::Home, "[01] HOME");
-                    ui.selectable_value(&mut self.view, View::Files, "[02] FILES");
-                    ui.selectable_value(&mut self.view, View::Editor, "[03] EDITOR");
-                    ui.selectable_value(&mut self.view, View::Workspace, "[04] WORKSPACE");
-                    ui.selectable_value(&mut self.view, View::Mobile, "[05] MOBILE");
-                    ui.selectable_value(&mut self.view, View::System, "[06] SYSTEM");
+                    ui.selectable_value(&mut self.view, View::Tools, "[02] TOOLS");
+                    ui.selectable_value(&mut self.view, View::Files, "[03] FILES");
+                    ui.selectable_value(&mut self.view, View::Editor, "[04] EDITOR");
+                    ui.selectable_value(&mut self.view, View::Workspace, "[05] WORKSPACE");
+                    ui.selectable_value(&mut self.view, View::Mobile, "[06] MOBILE");
+                    ui.selectable_value(&mut self.view, View::System, "[07] SYSTEM");
                 });
             });
     }
@@ -384,53 +387,116 @@ impl NativeApp {
             small_label(ui, "TOOLS");
             ui.add_space(4.0);
 
-            ui.horizontal(|ui| {
-                if ui
-                    .add(egui::Button::new("FILES").min_size(egui::vec2(180.0, 28.0)))
-                    .clicked()
-                {
-                    self.browser.refresh(&self.workspace_root);
-                    self.view = View::Files;
-                }
-                ui.label(egui::RichText::new("ready").color(OK).monospace());
-            });
-
-            ui.horizontal(|ui| {
-                if ui
-                    .add(egui::Button::new("EDITOR").min_size(egui::vec2(180.0, 28.0)))
-                    .clicked()
-                {
-                    self.view = View::Editor;
-                }
-                ui.label(
-                    egui::RichText::new(if self.editor.path.is_some() {
-                        "ready"
-                    } else {
-                        "choose a file"
-                    })
-                    .color(if self.editor.path.is_some() { OK } else { MUTED })
-                    .monospace(),
-                );
-            });
-
-            for (name, state) in [
-                ("HASH / VERIFY", "planned"),
-                ("COMPARE", "planned"),
-                ("REPOSITORIES", "planned"),
-                ("BACKUP", "planned"),
-            ] {
+            for tool in tool_registry::all() {
                 ui.horizontal(|ui| {
-                    ui.add_enabled(
-                        false,
-                        egui::Button::new(name).min_size(egui::vec2(180.0, 28.0)),
+                    let enabled = tool.status.is_ready();
+                    if ui
+                        .add_enabled(
+                            enabled,
+                            egui::Button::new(tool.label).min_size(egui::vec2(180.0, 28.0)),
+                        )
+                        .clicked()
+                    {
+                        self.launch_tool(tool.id);
+                    }
+
+                    ui.label(
+                        egui::RichText::new(tool.status.label())
+                            .color(if enabled { OK } else { MUTED })
+                            .monospace(),
                     );
-                    ui.label(egui::RichText::new(state).color(MUTED).monospace());
                 });
+            }
+
+            ui.add_space(4.0);
+            if ui.button("OPEN TOOL LAUNCHER").clicked() {
+                self.view = View::Tools;
             }
         });
     }
 
-    fn files(&mut self, ui: &mut egui::Ui) {
+    fn tools(&mut self, ui: &mut egui::Ui) {
+        section_title(ui, "TOOLS");
+        ui.label(
+            egui::RichText::new(
+                "Central registry for built-in DANGOMUSHI tools. Registry entries describe tools; explicit Rust dispatch decides what can run.",
+            )
+            .color(MUTED),
+        );
+        ui.add_space(10.0);
+
+        for category in [
+            crate::tool_registry::ToolCategory::Workspace,
+            crate::tool_registry::ToolCategory::Utility,
+            crate::tool_registry::ToolCategory::VersionControl,
+            crate::tool_registry::ToolCategory::Recovery,
+        ] {
+            panel(ui, |ui| {
+                small_label(ui, category.label());
+                ui.add_space(4.0);
+
+                for tool in tool_registry::all()
+                    .iter()
+                    .filter(|tool| tool.category == category)
+                {
+                    ui.horizontal(|ui| {
+                        let ready = tool.status == ToolStatus::Ready;
+                        if ui
+                            .add_enabled(
+                                ready,
+                                egui::Button::new(tool.label)
+                                    .min_size(egui::vec2(190.0, 30.0)),
+                            )
+                            .clicked()
+                        {
+                            self.launch_tool(tool.id);
+                        }
+
+                        ui.vertical(|ui| {
+                            ui.label(
+                                egui::RichText::new(tool.status.label())
+                                    .color(if ready { OK } else { MUTED })
+                                    .monospace(),
+                            );
+                            ui.label(
+                                egui::RichText::new(tool.description)
+                                    .color(MUTED)
+                                    .size(12.0),
+                            );
+                        });
+                    });
+                    ui.add_space(4.0);
+                }
+            });
+            ui.add_space(8.0);
+        }
+    }
+
+    fn launch_tool(&mut self, tool: ToolId) {
+        match tool {
+            ToolId::Files => {
+                self.browser.refresh(&self.workspace_root);
+                self.view = View::Files;
+                self.notice = "FILES READY".to_string();
+            }
+            ToolId::Editor => {
+                self.view = View::Editor;
+                self.notice = if self.editor.path.is_some() {
+                    "EDITOR READY".to_string()
+                } else {
+                    "EDITOR: CHOOSE A FILE".to_string()
+                };
+            }
+            ToolId::HashVerify
+            | ToolId::Compare
+            | ToolId::Repositories
+            | ToolId::Backup => {
+                self.notice = "TOOL NOT IMPLEMENTED".to_string();
+            }
+        }
+    }
+
+    fn files(&mut self, ui: &mut egui::Ui) {    fn files(&mut self, ui: &mut egui::Ui) {
         section_title(ui, "FILES");
         ui.label(
             egui::RichText::new(
@@ -866,6 +932,7 @@ impl eframe::App for NativeApp {
 
                 match self.view {
                     View::Home => self.home(ui),
+                    View::Tools => self.tools(ui),
                     View::Files => self.files(ui),
                     View::Editor => self.editor(ui),
                     View::Workspace => self.workspace(ui),

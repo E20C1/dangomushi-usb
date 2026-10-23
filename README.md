@@ -13,6 +13,7 @@ The current implementation includes:
 - A native desktop shell using feature-gated eframe/egui.
 - A read-only native file browser constrained to the configured workspace root.
 - A workspace-rooted UTF-8 text editor with explicit save, dirty tracking and recovery autosave.
+- A central built-in tool registry and native Tool Launcher.
 - A portable workspace path that remains separate from replaceable application binaries.
 - Embedded loopback-only status UI served from the Rust core.
 - No public bind, LAN bind, UPnP, NAT-PMP, reverse tunnel, CDN or external web request.
@@ -101,6 +102,7 @@ dangomushi-usb/
 │  ├─ workspace.rs
 │  ├─ file_browser.rs
 │  ├─ text_editor.rs
+│  ├─ tool_registry.rs
 │  ├─ server.rs
 │  ├─ native_ui.rs
 │  └─ bin/dangomushi-desktop.rs
