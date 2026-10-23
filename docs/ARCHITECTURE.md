@@ -43,6 +43,20 @@ The text editor applies a stricter file boundary:
 - files are limited to 4 MiB in the initial editor,
 - the editor does not create, rename or delete user files.
 
+## Integrity verification boundary
+
+The M2 HASH / VERIFY core is implemented in src/hash_verify.rs. It accepts only non-empty relative Workspace paths composed of normal path components, rejects symlink components, canonicalizes the target, requires the resolved file to remain below the canonical Workspace root, and requires a regular file.
+
+Hashing is read-only and streaming. Files are read in 64 KiB chunks and are not copied into the Text Editor, autosave, session state, Vault, network gateway, or generic Backup path. The core returns the SHA-256 digest and the number of bytes actually read.
+
+Expected SHA-256 values are accepted only as exactly 64 hexadecimal characters after surrounding whitespace is trimmed. Verification returns the calculated digest plus match/mismatch state; a mismatch is not treated as an I/O failure.
+
+SHA-256 comparison provides integrity only relative to a trusted expected digest. It does not authenticate the producer of a file when an attacker can replace both the file and its expected digest.
+
+The portable path validation does not claim an operating-system-level atomic no-follow guarantee if another process replaces filesystem entries concurrently between validation and open.
+
+Native HASH / VERIFY UI activation remains separate from this core boundary.
+
 ## Save and recovery model
 
 Typing never automatically overwrites the source file.
@@ -199,6 +213,8 @@ The native navigation, Tool Launcher and FILES entry types use the shared icon v
 
 
 ## Dependency policy
+
+The HASH / VERIFY core uses RustCrypto sha2 0.11.1 with default features disabled for SHA-256. The file/path boundary and streaming I/O remain in DANGOMUSHI; the cryptographic hash primitive is not reimplemented locally.
 
 The core CLI, workspace model, filesystem browser, text editor storage layer and loopback server remain standard-library based.
 
