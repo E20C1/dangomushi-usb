@@ -195,12 +195,14 @@ COMPARE remains an ordinary generic file utility. Passwords, Master Passphrases,
 
 SEARCH remains an ordinary generic document utility. Passwords, Master Passphrases, Recovery Codes, decrypted Vault data, and similar secret values MUST NOT be routed through its generic document-search path or result previews.
 
+REPOSITORIES remains an ordinary generic version-control utility. Passwords, Master Passphrases, Recovery Codes, decrypted Vault data, and similar secret values MUST NOT be intentionally routed through repository files, commit messages, Git output, or the generic REPOSITORIES UI.
+
 ## Exactly One Next Task
 
-M2-S core work remains complete. HASH / VERIFY, TEXT / JSON, COMPARE, and SEARCH are now complete without crossing the secret-data boundary.
+M2-S core work remains complete. HASH / VERIFY, TEXT / JSON, COMPARE, SEARCH, and REPOSITORIES are now complete without crossing the secret-data boundary.
 
 The repository-wide Exactly One Next Task is:
 
-**Repository status and safe Git operations**
+**Backup and restore workflow**
 
-That task must remain bounded to local repository inspection and explicitly safe Git actions. It must not advance generic Backup, PASSWORDS UI, or M3 LAN work.
+That task is the normal M2 generic Workspace backup path and must remain separate from the already-complete M2-S Secret Backup / Restore subsystem. It must not advance PASSWORDS UI or M3 LAN work.

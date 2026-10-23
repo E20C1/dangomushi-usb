@@ -3,6 +3,7 @@ use crate::file_browser::{self, EntryKind, FileEntry};
 use crate::file_compare;
 use crate::hash_verify;
 use crate::native_ui_theme::{self as theme, PixelIcon, BAD, BG, LINE, MUTED, OK, PANEL, TEXT, WARN};
+use crate::repository_git;
 use crate::session_state::{self, SessionState, SessionView};
 use crate::text_editor;
 use crate::text_json;
@@ -41,6 +42,7 @@ enum View {
     TextJson,
     Compare,
     Search,
+    Repositories,
     Workspace,
     Mobile,
     System,
@@ -57,6 +59,7 @@ impl View {
             Self::TextJson => SessionView::TextJson,
             Self::Compare => SessionView::Compare,
             Self::Search => SessionView::Search,
+            Self::Repositories => SessionView::Repositories,
             Self::Workspace => SessionView::Workspace,
             Self::Mobile => SessionView::Mobile,
             Self::System => SessionView::System,
@@ -73,6 +76,7 @@ impl View {
             SessionView::TextJson => Self::TextJson,
             SessionView::Compare => Self::Compare,
             SessionView::Search => Self::Search,
+            SessionView::Repositories => Self::Repositories,
             SessionView::Workspace => Self::Workspace,
             SessionView::Mobile => Self::Mobile,
             SessionView::System => Self::System,
@@ -573,6 +577,133 @@ impl DocumentSearchState {
     }
 }
 
+struct RepositoryUiState {
+    repositories: Vec<repository_git::RepositoryEntry>,
+    selected: Option<PathBuf>,
+    status: Option<repository_git::RepositoryStatus>,
+    output_label: Option<&'static str>,
+    output: Option<repository_git::GitTextOutput>,
+    error: Option<String>,
+}
+
+impl RepositoryUiState {
+    fn new(root: &Path) -> Self {
+        let mut state = Self {
+            repositories: Vec::new(),
+            selected: None,
+            status: None,
+            output_label: None,
+            output: None,
+            error: None,
+        };
+        let _ = state.refresh_list(root);
+        state
+    }
+
+    fn refresh_list(
+        &mut self,
+        root: &Path,
+    ) -> Result<usize, repository_git::RepositoryGitError> {
+        match repository_git::list_repositories(root) {
+            Ok(repositories) => {
+                if self
+                    .selected
+                    .as_ref()
+                    .is_some_and(|selected| {
+                        !repositories
+                            .iter()
+                            .any(|repo| &repo.relative_path == selected)
+                    })
+                {
+                    self.selected = None;
+                    self.clear_result();
+                }
+
+                let count = repositories.len();
+                self.repositories = repositories;
+                self.error = None;
+                Ok(count)
+            }
+            Err(error) => {
+                self.repositories.clear();
+                self.selected = None;
+                self.clear_result();
+                self.error = Some(error.to_string());
+                Err(error)
+            }
+        }
+    }
+
+    fn select(&mut self, path: PathBuf) {
+        self.selected = Some(path);
+        self.clear_result();
+    }
+
+    fn clear_result(&mut self) {
+        self.status = None;
+        self.output_label = None;
+        self.output = None;
+        self.error = None;
+    }
+
+    fn refresh_status(
+        &mut self,
+        root: &Path,
+    ) -> Result<(), repository_git::RepositoryGitError> {
+        let selected = self
+            .selected
+            .as_deref()
+            .ok_or(repository_git::RepositoryGitError::InvalidRepositoryPath)?;
+
+        match repository_git::repository_status(root, selected) {
+            Ok(status) => {
+                self.status = Some(status);
+                self.output_label = None;
+                self.output = None;
+                self.error = None;
+                Ok(())
+            }
+            Err(error) => {
+                self.status = None;
+                self.output_label = None;
+                self.output = None;
+                self.error = Some(error.to_string());
+                Err(error)
+            }
+        }
+    }
+
+    fn run_output(
+        &mut self,
+        root: &Path,
+        label: &'static str,
+        operation: fn(
+            &Path,
+            &Path,
+        ) -> Result<repository_git::GitTextOutput, repository_git::RepositoryGitError>,
+    ) -> Result<(), repository_git::RepositoryGitError> {
+        let selected = self
+            .selected
+            .as_deref()
+            .ok_or(repository_git::RepositoryGitError::InvalidRepositoryPath)?;
+
+        match operation(root, selected) {
+            Ok(output) => {
+                self.output_label = Some(label);
+                self.output = Some(output);
+                self.error = None;
+                Ok(())
+            }
+            Err(error) => {
+                self.output_label = Some(label);
+                self.output = None;
+                self.error = Some(error.to_string());
+                Err(error)
+            }
+        }
+    }
+}
+
 struct NativeApp {
     view: View,
     workspace_root: PathBuf,
@@ -582,6 +713,7 @@ struct NativeApp {
     text_json: TextJsonState,
     file_compare: FileCompareState,
     document_search: DocumentSearchState,
+    repository_git: RepositoryUiState,
     notice: String,
     session_saved: SessionState,
     session_failed: Option<SessionState>,
@@ -593,6 +725,7 @@ impl NativeApp {
 
         let workspace_root = workspace::default_workspace_root();
         let browser = FileBrowserState::new(&workspace_root);
+        let repository_git = RepositoryUiState::new(&workspace_root);
 
         let mut app = Self {
             view: View::Home,
@@ -603,6 +736,7 @@ impl NativeApp {
             text_json: TextJsonState::new(),
             file_compare: FileCompareState::new(),
             document_search: DocumentSearchState::new(),
+            repository_git,
             notice: "READY".to_string(),
             session_saved: SessionState::default(),
             session_failed: None,
@@ -926,7 +1060,18 @@ impl NativeApp {
                 self.view = View::Search;
                 self.notice = "SEARCH READY".to_string();
             }
-            ToolId::Repositories | ToolId::Backup => {
+            ToolId::Repositories => {
+                match self.repository_git.refresh_list(&self.workspace_root) {
+                    Ok(count) => {
+                        self.notice = format!("REPOSITORIES READY / {count} FOUND");
+                    }
+                    Err(error) => {
+                        self.notice = format!("REPOSITORIES FAILED: {error}");
+                    }
+                }
+                self.view = View::Repositories;
+            }
+            ToolId::Backup => {
                 self.notice = "TOOL NOT IMPLEMENTED".to_string();
             }
         }
@@ -2058,6 +2203,280 @@ impl NativeApp {
         );
     }
 
+    fn repositories_view(&mut self, ui: &mut egui::Ui) {
+        theme::section_title(ui, PixelIcon::Repository, "REPOSITORIES");
+        ui.label(
+            egui::RichText::new(
+                "Bounded read-only Git inspection under workspace:/repositories. No network, shell, arbitrary argv, staging, commits, checkout, reset, clean, stash, fetch, pull or push.",
+            )
+            .color(MUTED),
+        );
+        ui.add_space(10.0);
+
+        let mut select_repository: Option<PathBuf> = None;
+        theme::panel(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                if ui.button("[REFRESH LIST]").clicked() {
+                    match self.repository_git.refresh_list(&self.workspace_root) {
+                        Ok(count) => {
+                            self.notice = format!("REPOSITORY LIST REFRESHED / {count} FOUND");
+                        }
+                        Err(error) => {
+                            self.notice = format!("REPOSITORY LIST FAILED: {error}");
+                        }
+                    }
+                }
+
+                theme::key_value(
+                    ui,
+                    "FOUND",
+                    &self.repository_git.repositories.len().to_string(),
+                );
+            });
+
+            ui.add_space(6.0);
+            egui::ScrollArea::vertical()
+                .max_height(180.0)
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    if self.repository_git.repositories.is_empty() {
+                        ui.label(
+                            egui::RichText::new("(no supported repositories found)")
+                                .color(MUTED)
+                                .monospace(),
+                        );
+                    }
+
+                    for repo in self.repository_git.repositories.clone() {
+                        let selected = self.repository_git.selected.as_ref()
+                            == Some(&repo.relative_path);
+                        ui.horizontal_wrapped(|ui| {
+                            if ui
+                                .selectable_label(selected, format!("[{}]", repo.name))
+                                .clicked()
+                            {
+                                select_repository = Some(repo.relative_path.clone());
+                            }
+                            ui.label(
+                                egui::RichText::new(file_browser::display_path(
+                                    &repo.relative_path,
+                                ))
+                                .color(MUTED)
+                                .monospace()
+                                .size(11.0),
+                            );
+                        });
+                    }
+                });
+        });
+
+        if let Some(path) = select_repository {
+            self.repository_git.select(path);
+            self.notice = "REPOSITORY SELECTED".to_string();
+        }
+
+        ui.add_space(8.0);
+        let selected = self.repository_git.selected.clone();
+
+        theme::panel(ui, |ui| {
+            theme::small_label(ui, "SELECTED REPOSITORY");
+            match &selected {
+                Some(path) => {
+                    ui.label(
+                        egui::RichText::new(file_browser::display_path(path))
+                            .color(TEXT)
+                            .monospace(),
+                    );
+                }
+                None => {
+                    ui.label(egui::RichText::new("(none)").color(MUTED).monospace());
+                }
+            }
+
+            ui.add_space(6.0);
+            ui.horizontal_wrapped(|ui| {
+                let enabled = selected.is_some();
+
+                if ui
+                    .add_enabled(enabled, egui::Button::new("[STATUS]"))
+                    .clicked()
+                {
+                    match self.repository_git.refresh_status(&self.workspace_root) {
+                        Ok(()) => self.notice = "GIT STATUS COMPLETE".to_string(),
+                        Err(error) => self.notice = format!("GIT STATUS FAILED: {error}"),
+                    }
+                }
+
+                if ui
+                    .add_enabled(enabled, egui::Button::new("[RECENT COMMITS]"))
+                    .clicked()
+                {
+                    match self.repository_git.run_output(
+                        &self.workspace_root,
+                        "RECENT COMMITS",
+                        repository_git::recent_commits,
+                    ) {
+                        Ok(()) => self.notice = "GIT LOG COMPLETE".to_string(),
+                        Err(error) => self.notice = format!("GIT LOG FAILED: {error}"),
+                    }
+                }
+
+                if ui
+                    .add_enabled(enabled, egui::Button::new("[WORKTREE DIFF STAT]"))
+                    .clicked()
+                {
+                    match self.repository_git.run_output(
+                        &self.workspace_root,
+                        "WORKTREE DIFF STAT",
+                        repository_git::worktree_diff_stat,
+                    ) {
+                        Ok(()) => self.notice = "WORKTREE DIFF COMPLETE".to_string(),
+                        Err(error) => {
+                            self.notice = format!("WORKTREE DIFF FAILED: {error}")
+                        }
+                    }
+                }
+
+                if ui
+                    .add_enabled(enabled, egui::Button::new("[STAGED DIFF STAT]"))
+                    .clicked()
+                {
+                    match self.repository_git.run_output(
+                        &self.workspace_root,
+                        "STAGED DIFF STAT",
+                        repository_git::staged_diff_stat,
+                    ) {
+                        Ok(()) => self.notice = "STAGED DIFF COMPLETE".to_string(),
+                        Err(error) => self.notice = format!("STAGED DIFF FAILED: {error}"),
+                    }
+                }
+            });
+
+            ui.add_space(4.0);
+            ui.label(
+                egui::RichText::new(format!(
+                    "Limits: {} repositories · {} status rows · {} KiB retained Git output · {}s runtime",
+                    repository_git::MAX_REPOSITORIES,
+                    repository_git::MAX_STATUS_ENTRIES,
+                    repository_git::MAX_GIT_OUTPUT_BYTES / 1024,
+                    repository_git::MAX_GIT_RUNTIME.as_secs()
+                ))
+                .color(MUTED)
+                .monospace()
+                .size(11.0),
+            );
+        });
+
+        ui.add_space(8.0);
+
+        if let Some(error) = &self.repository_git.error {
+            theme::panel(ui, |ui| {
+                ui.label(
+                    egui::RichText::new("GIT ERROR")
+                        .color(BAD)
+                        .strong()
+                        .monospace(),
+                );
+                ui.label(egui::RichText::new(error).color(MUTED).monospace());
+            });
+            ui.add_space(8.0);
+        }
+
+        if let Some(status) = &self.repository_git.status {
+            theme::panel(ui, |ui| {
+                theme::small_label(ui, "STATUS");
+                theme::key_value(ui, "BRANCH", &status.branch);
+                theme::key_value(ui, "STAGED", &status.staged.to_string());
+                theme::key_value(ui, "UNSTAGED", &status.unstaged.to_string());
+                theme::key_value(ui, "UNTRACKED", &status.untracked.to_string());
+                theme::key_value(ui, "CONFLICTED", &status.conflicted.to_string());
+
+                if status.output_truncated || status.entry_limit_reached {
+                    ui.label(
+                        egui::RichText::new("STATUS OUTPUT TRUNCATED BY LOCAL LIMIT")
+                            .color(WARN)
+                            .strong()
+                            .monospace(),
+                    );
+                }
+
+                ui.add_space(6.0);
+                egui::ScrollArea::vertical()
+                    .max_height(280.0)
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        if status.entries.is_empty() {
+                            ui.label(
+                                egui::RichText::new("(working tree clean)")
+                                    .color(OK)
+                                    .monospace(),
+                            );
+                        }
+
+                        for entry in &status.entries {
+                            ui.horizontal_wrapped(|ui| {
+                                ui.label(
+                                    egui::RichText::new(&entry.code)
+                                        .color(if entry.code == "??" { WARN } else { TEXT })
+                                        .monospace()
+                                        .strong(),
+                                );
+                                ui.label(
+                                    egui::RichText::new(&entry.path)
+                                        .color(MUTED)
+                                        .monospace(),
+                                );
+                            });
+                        }
+                    });
+            });
+            ui.add_space(8.0);
+        }
+
+        if let (Some(label), Some(output)) = (
+            self.repository_git.output_label,
+            self.repository_git.output.as_ref(),
+        ) {
+            theme::panel(ui, |ui| {
+                theme::small_label(ui, label);
+                if output.truncated {
+                    ui.label(
+                        egui::RichText::new("OUTPUT TRUNCATED BY LOCAL 1 MiB LIMIT")
+                            .color(WARN)
+                            .strong()
+                            .monospace(),
+                    );
+                }
+
+                let text = if output.text.trim().is_empty() {
+                    "(no output)"
+                } else {
+                    output.text.as_str()
+                };
+
+                egui::ScrollArea::vertical()
+                    .max_height(320.0)
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        ui.label(
+                            egui::RichText::new(text)
+                                .color(TEXT)
+                                .monospace(),
+                        );
+                    });
+            });
+        }
+
+        ui.add_space(8.0);
+        ui.label(
+            egui::RichText::new(
+                "Repository selection and Git output are ephemeral. Generic session state stores only the REPOSITORIES navigation view.",
+            )
+            .color(MUTED)
+            .size(11.0),
+        );
+    }
+
     fn workspace(&mut self, ui: &mut egui::Ui) {
         let summary = workspace::summary(&self.workspace_root);
 
@@ -2151,6 +2570,7 @@ impl eframe::App for NativeApp {
                     View::TextJson => self.text_json_view(ui),
                     View::Compare => self.compare_view(ui),
                     View::Search => self.search_view(ui),
+                    View::Repositories => self.repositories_view(ui),
                     View::Workspace => self.workspace(ui),
                     View::Mobile => self.mobile(ui),
                     View::System => self.system(ui),
@@ -2335,6 +2755,18 @@ mod tests {
         assert_eq!(fs::read(&path).expect("after"), before);
 
         fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn repositories_view_maps_to_navigation_only_session_state() {
+        assert_eq!(
+            View::Repositories.session_view(),
+            SessionView::Repositories
+        );
+        assert_eq!(
+            View::from_session(SessionView::Repositories),
+            View::Repositories
+        );
     }
 
     #[test]

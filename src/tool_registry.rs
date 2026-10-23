@@ -112,8 +112,8 @@ const TOOLS: &[ToolDefinition] = &[
         key: "repositories",
         label: "REPOSITORIES",
         category: ToolCategory::VersionControl,
-        description: "Inspect repository state and expose bounded Git operations.",
-        status: ToolStatus::Planned,
+        description: "Inspect local repositories with bounded read-only Git status, log and diff views.",
+        status: ToolStatus::Ready,
     },
     ToolDefinition {
         id: ToolId::Backup,
@@ -178,6 +178,10 @@ mod tests {
             by_key("search").map(|tool| tool.status),
             Some(ToolStatus::Ready)
         );
+        assert_eq!(
+            by_key("repositories").map(|tool| tool.status),
+            Some(ToolStatus::Ready)
+        );
     }
 
     #[test]
@@ -197,6 +201,10 @@ mod tests {
         assert_eq!(
             by_key("search").map(|tool| tool.id),
             Some(ToolId::Search)
+        );
+        assert_eq!(
+            by_key("repositories").map(|tool| tool.id),
+            Some(ToolId::Repositories)
         );
         assert!(by_key("missing-tool").is_none());
     }
