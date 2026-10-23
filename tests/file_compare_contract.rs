@@ -83,12 +83,13 @@ fn native_ui_dispatches_ready_compare_without_session_payload_content() {
 }
 
 #[test]
-fn compare_stays_outside_secret_boundary_and_advances_only_to_search() {
+fn compare_stays_outside_secret_boundary_after_search_advances() {
     assert!(SECRET_BOUNDARY.contains(
         "MUST NOT be routed through its generic file-comparison path"
     ));
     assert!(ROADMAP.contains("- [x] **File comparison**"));
+    assert!(ROADMAP.contains("- [x] **Local document search**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Local document search** — Exactly One Next Task"
+        "- [ ] **Repository status and safe Git operations** — Exactly One Next Task"
     ));
 }
