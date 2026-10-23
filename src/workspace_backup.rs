@@ -625,10 +625,11 @@ impl HashingReader {
         self.file
             .read_exact(bytes)
             .map_err(|_| WorkspaceBackupError::InvalidBackupFormat)?;
-        self.archive_hasher.update(bytes);
+        let count = bytes.len() as u64;
+        self.archive_hasher.update(&*bytes);
         self.bytes_hashed = self
             .bytes_hashed
-            .checked_add(bytes.len() as u64)
+            .checked_add(count)
             .ok_or(WorkspaceBackupError::InvalidBackupFormat)?;
         Ok(())
     }
