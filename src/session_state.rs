@@ -16,6 +16,7 @@ pub enum SessionView {
     HashVerify,
     TextJson,
     Compare,
+    Search,
     Workspace,
     Mobile,
     System,
@@ -31,6 +32,7 @@ impl SessionView {
             Self::HashVerify => "hash-verify",
             Self::TextJson => "text-json",
             Self::Compare => "compare",
+            Self::Search => "search",
             Self::Workspace => "workspace",
             Self::Mobile => "mobile",
             Self::System => "system",
@@ -46,6 +48,7 @@ impl SessionView {
             "hash-verify" => Ok(Self::HashVerify),
             "text-json" => Ok(Self::TextJson),
             "compare" => Ok(Self::Compare),
+            "search" => Ok(Self::Search),
             "workspace" => Ok(Self::Workspace),
             "mobile" => Ok(Self::Mobile),
             "system" => Ok(Self::System),
@@ -451,6 +454,33 @@ mod tests {
             "first_difference",
             "left_bytes",
             "right_bytes",
+        ] {
+            assert!(!payload.contains(forbidden));
+        }
+
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn search_view_round_trips_without_persisting_query_or_results() {
+        let root = temporary_workspace("search-view");
+        let expected = SessionState {
+            view: SessionView::Search,
+            ..SessionState::default()
+        };
+
+        save(&root, &expected).expect("save");
+        let actual = load(&root).expect("load").expect("session");
+        assert_eq!(actual, expected);
+
+        let payload = serialize(&actual).expect("serialize");
+        assert!(payload.contains("view=search"));
+        for forbidden in [
+            "search_query",
+            "search_results",
+            "search_preview",
+            "search_line",
+            "search_column",
         ] {
             assert!(!payload.contains(forbidden));
         }
