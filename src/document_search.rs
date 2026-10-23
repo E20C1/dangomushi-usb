@@ -3,7 +3,7 @@ use std::error::Error;
 use std::fmt;
 use std::fs::{self, File};
 use std::io::Read;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 pub const MAX_SEARCH_QUERY_BYTES: usize = 4 * 1024;
 pub const MAX_DOCUMENT_BYTES: u64 = 4 * 1024 * 1024;
