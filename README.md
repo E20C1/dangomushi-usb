@@ -19,6 +19,7 @@ The current implementation includes:
 - A READY native COMPARE tool for binary-safe streaming comparison of two Workspace files, with first-difference byte reporting and optional UTF-8 line detail.
 - A READY native SEARCH tool for bounded literal UTF-8 search under `workspace/data/documents`, with line/column previews and direct OPEN into the existing Editor boundary.
 - A READY native REPOSITORIES tool for bounded read-only Git status, recent log, and worktree/staged diff-stat inspection under `workspace/repositories`, with no shell, network, or mutating Git commands.
+- A READY native BACKUP / RESTORE tool for verified generic Workspace snapshots under `workspace/backups`, with per-file/archive SHA-256, hidden staging, in-process rollback, explicit RESTORE confirmation, and no Vault-secret export path.
 - Restores the previous native view, FILES location/selection and open editor file from workspace-local session state.
 - A reusable square-edged pixel UI system with original 5x5 vector-drawn icons and no external icon/font assets.
 - An M2-S Password Generator Core with OS CSPRNG input, configurable character groups, rejection-sampled selection, deterministic injected-source tests, and no UI/Vault persistence.
@@ -135,6 +136,7 @@ dangomushi-usb/
 │  ├─ hash_verify.rs
 │  ├─ lib.rs
 │  ├─ workspace.rs
+│  ├─ workspace_backup.rs
 │  ├─ file_browser.rs
 │  ├─ document_search.rs
 │  ├─ file_compare.rs
