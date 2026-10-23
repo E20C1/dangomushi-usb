@@ -1,4 +1,5 @@
 use crate::file_browser::{self, EntryKind, FileEntry};
+use crate::file_compare;
 use crate::hash_verify;
 use crate::native_ui_theme::{self as theme, PixelIcon, BAD, BG, LINE, MUTED, OK, PANEL, TEXT, WARN};
 use crate::session_state::{self, SessionState, SessionView};
@@ -37,6 +38,7 @@ enum View {
     Editor,
     HashVerify,
     TextJson,
+    Compare,
     Workspace,
     Mobile,
     System,
@@ -51,6 +53,7 @@ impl View {
             Self::Editor => SessionView::Editor,
             Self::HashVerify => SessionView::HashVerify,
             Self::TextJson => SessionView::TextJson,
+            Self::Compare => SessionView::Compare,
             Self::Workspace => SessionView::Workspace,
             Self::Mobile => SessionView::Mobile,
             Self::System => SessionView::System,
@@ -65,6 +68,7 @@ impl View {
             SessionView::Editor => Self::Editor,
             SessionView::HashVerify => Self::HashVerify,
             SessionView::TextJson => Self::TextJson,
+            SessionView::Compare => Self::Compare,
             SessionView::Workspace => Self::Workspace,
             SessionView::Mobile => Self::Mobile,
             SessionView::System => Self::System,
@@ -472,6 +476,59 @@ impl TextJsonState {
     }
 }
 
+struct FileCompareState {
+    left: String,
+    right: String,
+    result: Option<file_compare::FileComparison>,
+    error: Option<String>,
+}
+
+impl FileCompareState {
+    fn new() -> Self {
+        Self {
+            left: String::new(),
+            right: String::new(),
+            result: None,
+            error: None,
+        }
+    }
+
+    fn set_left_path(&mut self, path: &Path) {
+        self.left = path.to_string_lossy().into_owned();
+        self.clear_result();
+    }
+
+    fn set_right_path(&mut self, path: &Path) {
+        self.right = path.to_string_lossy().into_owned();
+        self.clear_result();
+    }
+
+    fn clear_result(&mut self) {
+        self.result = None;
+        self.error = None;
+    }
+
+    fn compare(&mut self, root: &Path) -> Result<bool, file_compare::FileCompareError> {
+        self.error = None;
+        match file_compare::compare_workspace_files(
+            root,
+            Path::new(self.left.trim()),
+            Path::new(self.right.trim()),
+        ) {
+            Ok(result) => {
+                let equal = result.equal;
+                self.result = Some(result);
+                Ok(equal)
+            }
+            Err(error) => {
+                self.result = None;
+                self.error = Some(error.to_string());
+                Err(error)
+            }
+        }
+    }
+}
+
 struct NativeApp {
     view: View,
     workspace_root: PathBuf,
@@ -479,6 +536,7 @@ struct NativeApp {
     editor: EditorState,
     hash_verify: HashVerifyState,
     text_json: TextJsonState,
+    file_compare: FileCompareState,
     notice: String,
     session_saved: SessionState,
     session_failed: Option<SessionState>,
@@ -498,6 +556,7 @@ impl NativeApp {
             editor: EditorState::new(),
             hash_verify: HashVerifyState::new(),
             text_json: TextJsonState::new(),
+            file_compare: FileCompareState::new(),
             notice: "READY".to_string(),
             session_saved: SessionState::default(),
             session_failed: None,
@@ -608,6 +667,7 @@ impl NativeApp {
                         |ui| {
                             let color = if self.notice.contains("FAILED")
                                 || self.notice.contains("MISMATCH")
+                                || self.notice.contains("DIFFERENT")
                             {
                                 BAD
                             } else {
@@ -812,7 +872,11 @@ impl NativeApp {
                 self.view = View::TextJson;
                 self.notice = "TEXT / JSON READY".to_string();
             }
-            ToolId::Compare | ToolId::Repositories | ToolId::Backup => {
+            ToolId::Compare => {
+                self.view = View::Compare;
+                self.notice = "COMPARE READY".to_string();
+            }
+            ToolId::Repositories | ToolId::Backup => {
                 self.notice = "TOOL NOT IMPLEMENTED".to_string();
             }
         }
@@ -978,6 +1042,8 @@ impl NativeApp {
         let mut open_selected: Option<PathBuf> = None;
         let mut hash_selected: Option<PathBuf> = None;
         let mut text_json_selected: Option<PathBuf> = None;
+        let mut compare_left_selected: Option<PathBuf> = None;
+        let mut compare_right_selected: Option<PathBuf> = None;
 
         theme::panel(ui, |ui| {
             if let Some(selected) = &selected_path {
@@ -993,7 +1059,7 @@ impl NativeApp {
                             }
                         }
                         EntryKind::File => {
-                            ui.horizontal(|ui| {
+                            ui.horizontal_wrapped(|ui| {
                                 if ui.button("OPEN IN EDITOR").clicked() {
                                     edit_path = Some(entry.relative_path.clone());
                                 }
@@ -1002,6 +1068,12 @@ impl NativeApp {
                                 }
                                 if ui.button("TEXT / JSON").clicked() {
                                     text_json_selected = Some(entry.relative_path.clone());
+                                }
+                                if ui.button("COMPARE AS A").clicked() {
+                                    compare_left_selected = Some(entry.relative_path.clone());
+                                }
+                                if ui.button("COMPARE AS B").clicked() {
+                                    compare_right_selected = Some(entry.relative_path.clone());
                                 }
                             });
                         }
@@ -1046,6 +1118,16 @@ impl NativeApp {
                     self.notice = format!("TEXT / JSON LOAD FAILED: {error}");
                 }
             }
+        }
+        if let Some(path) = compare_left_selected {
+            self.file_compare.set_left_path(&path);
+            self.view = View::Compare;
+            self.notice = "COMPARE A SET".to_string();
+        }
+        if let Some(path) = compare_right_selected {
+            self.file_compare.set_right_path(&path);
+            self.view = View::Compare;
+            self.notice = "COMPARE B SET".to_string();
         }
     }
 
@@ -1558,6 +1640,183 @@ impl NativeApp {
         });
     }
 
+    fn compare_view(&mut self, ui: &mut egui::Ui) {
+        theme::section_title(ui, PixelIcon::Compare, "COMPARE");
+        ui.label(
+            egui::RichText::new(
+                "Read-only binary-safe comparison for two regular files inside the Workspace.",
+            )
+            .color(MUTED),
+        );
+        ui.add_space(10.0);
+
+        let selected_file = self.browser.selected.as_ref().and_then(|selected| {
+            self.browser
+                .entries
+                .iter()
+                .find(|entry| {
+                    entry.kind == EntryKind::File && &entry.relative_path == selected
+                })
+                .map(|entry| entry.relative_path.clone())
+        });
+
+        theme::panel(ui, |ui| {
+            theme::small_label(ui, "FILE A / WORKSPACE-RELATIVE PATH");
+            let left_response = ui.add(
+                egui::TextEdit::singleline(&mut self.file_compare.left)
+                    .font(egui::TextStyle::Monospace)
+                    .desired_width(f32::INFINITY)
+                    .hint_text("data/a.bin"),
+            );
+            if left_response.changed() {
+                self.file_compare.clear_result();
+            }
+
+            ui.horizontal_wrapped(|ui| {
+                if ui
+                    .add_enabled(
+                        selected_file.is_some(),
+                        egui::Button::new("[USE FILES SELECTION AS A]"),
+                    )
+                    .clicked()
+                {
+                    if let Some(path) = &selected_file {
+                        self.file_compare.set_left_path(path);
+                    }
+                }
+
+                if ui.button("[GO TO FILES]").clicked() {
+                    self.view = View::Files;
+                }
+            });
+
+            ui.add_space(8.0);
+            theme::small_label(ui, "FILE B / WORKSPACE-RELATIVE PATH");
+            let right_response = ui.add(
+                egui::TextEdit::singleline(&mut self.file_compare.right)
+                    .font(egui::TextStyle::Monospace)
+                    .desired_width(f32::INFINITY)
+                    .hint_text("data/b.bin"),
+            );
+            if right_response.changed() {
+                self.file_compare.clear_result();
+            }
+
+            ui.horizontal_wrapped(|ui| {
+                if ui
+                    .add_enabled(
+                        selected_file.is_some(),
+                        egui::Button::new("[USE FILES SELECTION AS B]"),
+                    )
+                    .clicked()
+                {
+                    if let Some(path) = &selected_file {
+                        self.file_compare.set_right_path(path);
+                    }
+                }
+
+                if ui.button("[SWAP A / B]").clicked() {
+                    std::mem::swap(
+                        &mut self.file_compare.left,
+                        &mut self.file_compare.right,
+                    );
+                    self.file_compare.clear_result();
+                }
+
+                if ui.button("[CLEAR]").clicked() {
+                    self.file_compare = FileCompareState::new();
+                    self.notice = "COMPARE CLEARED".to_string();
+                }
+            });
+
+            ui.add_space(8.0);
+            let can_compare = !self.file_compare.left.trim().is_empty()
+                && !self.file_compare.right.trim().is_empty();
+
+            if ui
+                .add_enabled(can_compare, egui::Button::new("[COMPARE FILES]"))
+                .clicked()
+            {
+                match self.file_compare.compare(&self.workspace_root) {
+                    Ok(true) => self.notice = "FILES EQUAL".to_string(),
+                    Ok(false) => self.notice = "FILES DIFFERENT".to_string(),
+                    Err(error) => self.notice = format!("COMPARE FAILED: {error}"),
+                }
+            }
+        });
+
+        ui.add_space(8.0);
+
+        theme::panel(ui, |ui| {
+            theme::small_label(ui, "RESULT");
+
+            if let Some(error) = &self.file_compare.error {
+                ui.label(
+                    egui::RichText::new("COMPARE ERROR")
+                        .color(BAD)
+                        .strong()
+                        .monospace(),
+                );
+                ui.label(egui::RichText::new(error).color(MUTED).monospace());
+                return;
+            }
+
+            let Some(result) = self.file_compare.result else {
+                ui.label(
+                    egui::RichText::new("NO RESULT")
+                        .color(MUTED)
+                        .monospace(),
+                );
+                return;
+            };
+
+            theme::status_badge(
+                ui,
+                if result.equal { "EQUAL" } else { "DIFFERENT" },
+                if result.equal { OK } else { BAD },
+            );
+            ui.add_space(6.0);
+            theme::key_value(ui, "FILE A BYTES", &result.left_bytes.to_string());
+            theme::key_value(ui, "FILE B BYTES", &result.right_bytes.to_string());
+
+            let first_difference = result
+                .first_difference_byte
+                .map(|offset| offset.to_string())
+                .unwrap_or_else(|| "NONE".to_string());
+            theme::key_value(ui, "FIRST DIFFERENCE BYTE / 0-BASED", &first_difference);
+
+            if let Some(text) = result.text {
+                ui.add_space(6.0);
+                theme::small_label(ui, "UTF-8 TEXT DETAIL");
+                theme::key_value(ui, "FILE A LINES", &text.left_lines.to_string());
+                theme::key_value(ui, "FILE B LINES", &text.right_lines.to_string());
+                let line = text
+                    .first_differing_line
+                    .map(|line| line.to_string())
+                    .unwrap_or_else(|| "NONE".to_string());
+                theme::key_value(ui, "FIRST DIFFERING LINE / 1-BASED", &line);
+            } else {
+                ui.add_space(6.0);
+                ui.label(
+                    egui::RichText::new(
+                        "Text detail unavailable: one file is binary/non-UTF-8 or exceeds the 4 MiB text-detail limit.",
+                    )
+                    .color(MUTED)
+                    .size(11.0),
+                );
+            }
+        });
+
+        ui.add_space(8.0);
+        ui.label(
+            egui::RichText::new(
+                "Comparison is read-only. Paths, results and file contents are not stored in generic session state.",
+            )
+            .color(MUTED)
+            .size(11.0),
+        );
+    }
+
     fn workspace(&mut self, ui: &mut egui::Ui) {
         let summary = workspace::summary(&self.workspace_root);
 
@@ -1649,6 +1908,7 @@ impl eframe::App for NativeApp {
                     View::Editor => self.editor(ui),
                     View::HashVerify => self.hash_verify_view(ui),
                     View::TextJson => self.text_json_view(ui),
+                    View::Compare => self.compare_view(ui),
                     View::Workspace => self.workspace(ui),
                     View::Mobile => self.mobile(ui),
                     View::System => self.system(ui),
@@ -1783,6 +2043,41 @@ mod tests {
         assert!(state.output.is_empty());
 
         fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn compare_ui_state_compares_files_without_writing_them() {
+        let root = temporary_workspace("compare");
+        let left = root.join("left.txt");
+        let right = root.join("right.txt");
+        fs::write(&left, "one\ntwo\n").expect("left");
+        fs::write(&right, "one\nTWO\n").expect("right");
+
+        let left_before = fs::read(&left).expect("left before");
+        let right_before = fs::read(&right).expect("right before");
+
+        let mut state = FileCompareState::new();
+        state.set_left_path(Path::new("left.txt"));
+        state.set_right_path(Path::new("right.txt"));
+
+        assert!(!state.compare(&root).expect("compare"));
+        let result = state.result.expect("result");
+        assert_eq!(result.first_difference_byte, Some(4));
+        assert_eq!(
+            result.text.and_then(|text| text.first_differing_line),
+            Some(2)
+        );
+
+        assert_eq!(fs::read(&left).expect("left after"), left_before);
+        assert_eq!(fs::read(&right).expect("right after"), right_before);
+
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn compare_view_maps_to_navigation_only_session_state() {
+        assert_eq!(View::Compare.session_view(), SessionView::Compare);
+        assert_eq!(View::from_session(SessionView::Compare), View::Compare);
     }
 
     #[test]
