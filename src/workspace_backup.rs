@@ -299,7 +299,9 @@ fn resolve_managed_sources(
                 }
                 Err(error)
                     if error.kind() == io::ErrorKind::NotFound
-                        && root == &["state", "autosave"]
+                        && root.len() == 2
+                        && root[0] == "state"
+                        && root[1] == "autosave"
                         && index == root.len() - 1 =>
                 {
                     missing_optional = true;
@@ -1050,7 +1052,8 @@ fn validate_restore_targets(
         }
 
         let current = join_components(workspace_root, &components)?;
-        validate_current_target(workspace_root, &current, root == &["state", "autosave"])?;
+        let optional = root.len() == 2 && root[0] == "state" && root[1] == "autosave";
+        validate_current_target(workspace_root, &current, optional)?;
     }
 
     Ok(())
