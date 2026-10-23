@@ -13,6 +13,7 @@ pub enum SessionView {
     Tools,
     Files,
     Editor,
+    HashVerify,
     Workspace,
     Mobile,
     System,
@@ -25,6 +26,7 @@ impl SessionView {
             Self::Tools => "tools",
             Self::Files => "files",
             Self::Editor => "editor",
+            Self::HashVerify => "hash-verify",
             Self::Workspace => "workspace",
             Self::Mobile => "mobile",
             Self::System => "system",
@@ -37,6 +39,7 @@ impl SessionView {
             "tools" => Ok(Self::Tools),
             "files" => Ok(Self::Files),
             "editor" => Ok(Self::Editor),
+            "hash-verify" => Ok(Self::HashVerify),
             "workspace" => Ok(Self::Workspace),
             "mobile" => Ok(Self::Mobile),
             "system" => Ok(Self::System),
@@ -372,6 +375,27 @@ mod tests {
         );
         let error = parse(&content).expect_err("reject traversal");
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn hash_verify_view_round_trips_without_adding_payload_fields() {
+        let root = temporary_workspace("hash-view");
+        let expected = SessionState {
+            view: SessionView::HashVerify,
+            ..SessionState::default()
+        };
+
+        save(&root, &expected).expect("save");
+        let actual = load(&root).expect("load").expect("session");
+        assert_eq!(actual, expected);
+
+        let payload = serialize(&actual).expect("serialize");
+        assert!(payload.contains("view=hash-verify"));
+        assert!(!payload.contains("expected_digest"));
+        assert!(!payload.contains("actual_digest"));
+        assert!(!payload.contains("hash_target"));
+
+        fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[test]
