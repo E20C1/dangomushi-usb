@@ -725,6 +725,7 @@ impl NativeApp {
 
         let workspace_root = workspace::default_workspace_root();
         let browser = FileBrowserState::new(&workspace_root);
+        let repository_git = RepositoryUiState::new(&workspace_root);
 
         let mut app = Self {
             view: View::Home,
@@ -735,7 +736,7 @@ impl NativeApp {
             text_json: TextJsonState::new(),
             file_compare: FileCompareState::new(),
             document_search: DocumentSearchState::new(),
-            repository_git: RepositoryUiState::new(&workspace_root),
+            repository_git,
             notice: "READY".to_string(),
             session_saved: SessionState::default(),
             session_failed: None,
