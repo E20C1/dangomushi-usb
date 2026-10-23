@@ -17,6 +17,7 @@ pub enum SessionView {
     TextJson,
     Compare,
     Search,
+    Repositories,
     Workspace,
     Mobile,
     System,
@@ -33,6 +34,7 @@ impl SessionView {
             Self::TextJson => "text-json",
             Self::Compare => "compare",
             Self::Search => "search",
+            Self::Repositories => "repositories",
             Self::Workspace => "workspace",
             Self::Mobile => "mobile",
             Self::System => "system",
@@ -49,6 +51,7 @@ impl SessionView {
             "text-json" => Ok(Self::TextJson),
             "compare" => Ok(Self::Compare),
             "search" => Ok(Self::Search),
+            "repositories" => Ok(Self::Repositories),
             "workspace" => Ok(Self::Workspace),
             "mobile" => Ok(Self::Mobile),
             "system" => Ok(Self::System),
@@ -481,6 +484,34 @@ mod tests {
             "search_preview",
             "search_line",
             "search_column",
+        ] {
+            assert!(!payload.contains(forbidden));
+        }
+
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn repositories_view_round_trips_without_persisting_repo_or_git_output() {
+        let root = temporary_workspace("repositories-view");
+        let expected = SessionState {
+            view: SessionView::Repositories,
+            ..SessionState::default()
+        };
+
+        save(&root, &expected).expect("save");
+        let actual = load(&root).expect("load").expect("session");
+        assert_eq!(actual, expected);
+
+        let payload = serialize(&actual).expect("serialize");
+        assert!(payload.contains("view=repositories"));
+        for forbidden in [
+            "repository_path",
+            "git_status",
+            "git_diff",
+            "git_log",
+            "branch_name",
+            "commit_subject",
         ] {
             assert!(!payload.contains(forbidden));
         }
