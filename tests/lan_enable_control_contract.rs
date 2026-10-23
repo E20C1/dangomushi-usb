@@ -89,7 +89,7 @@ fn architecture_and_roadmap_keep_listener_blocked_and_advance_to_pairing() {
     for required in [
         "operator-intent gate, not a network-listener authorization",
         "not written to `workspace/state/session.v1`",
-        "gateway remains bound to `127.0.0.1`",
+        "src/server.rs remains bound to `127.0.0.1`",
         "A future LAN listener must treat this explicit control as necessary operator intent",
     ] {
         assert!(
