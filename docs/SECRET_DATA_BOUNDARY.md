@@ -187,11 +187,15 @@ Backup creation requires the source Vault to be unlocked so its current cipherte
 
 Restore derives the Vault key from the backup's Vault-format KDF metadata and the supplied Master Passphrase. The backup ciphertext must authenticate before any destination Vault mutation. Restore refuses ambiguous target states containing pending/previous Vault files and uses the existing Vault replacement/rollback mechanism for a stable target.
 
+## Generic M2 utility boundary
+
+TEXT / JSON remains an ordinary generic utility. Passwords, Master Passphrases, Recovery Codes, decrypted Vault data, and similar secret values MUST NOT be routed through its generic String buffers or formatting transforms.
+
+COMPARE remains an ordinary generic file utility. Passwords, Master Passphrases, Recovery Codes, decrypted Vault data, and similar secret values MUST NOT be routed through its generic file-comparison path.
+
 ## Exactly One Next Task
 
 M2-S core work remains complete. HASH / VERIFY, TEXT / JSON, and COMPARE are now complete without crossing the secret-data boundary.
-
-COMPARE remains an ordinary generic file utility. Passwords, Master Passphrases, Recovery Codes, decrypted Vault data, and similar secret values MUST NOT be routed through its generic file-comparison path.
 
 The repository-wide Exactly One Next Task is:
 
