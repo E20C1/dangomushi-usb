@@ -44,11 +44,11 @@ This is a security-sensitive subsystem separate from ordinary M2 Local Tools. No
   - sampling that avoids modulo bias
   - injectable randomness source for deterministic core tests
   - no UI or Vault dependency
-- [ ] **Credential model** — Exactly One Next Task
+- [x] **Credential model**
   - Service / Username or Email / URL / Password / Notes
   - secret-aware ownership and redacted formatting
-  - no Vault persistence yet
-- [ ] Add Existing Credential input boundary
+  - no Vault persistence
+- [ ] **Add Existing Credential input boundary** — Exactly One Next Task
 - [ ] Encrypted Vault storage
 - [ ] Vault unlock / lock
 - [ ] Generator -> Credential integration

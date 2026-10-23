@@ -17,6 +17,7 @@ The current implementation includes:
 - Restores the previous native view, FILES location/selection and open editor file from workspace-local session state.
 - A reusable square-edged pixel UI system with original 5x5 vector-drawn icons and no external icon/font assets.
 - An M2-S Password Generator Core with OS CSPRNG input, configurable character groups, rejection-sampled selection, deterministic injected-source tests, and no UI/Vault persistence.
+- An M2-S in-memory Credential model with redacted secret-aware ownership and no persistence/UI integration.
 - A portable workspace path that remains separate from replaceable application binaries.
 - Embedded loopback-only status UI served from the Rust core.
 - No public bind, LAN bind, UPnP, NAT-PMP, reverse tunnel, CDN or external web request.
@@ -51,7 +52,7 @@ All restored paths are relative and are validated again before use. Missing or i
 
 ## Secret subsystem
 
-The secret-management roadmap is intentionally separate from ordinary M2 Local Tools. The current implemented step is the Password Generator Core only.
+The secret-management roadmap is intentionally separate from ordinary M2 Local Tools. The current implemented steps are the Password Generator Core and source-agnostic in-memory Credential model.
 
 Generated values are not persisted, are not routed through the Text Editor, generic autosave or session restoration, and are not exposed through the native UI yet. See docs/SECRET_DATA_BOUNDARY.md and docs/PASSWORD_GENERATOR_CORE.md.
 
@@ -115,6 +116,7 @@ dangomushi-usb/
 ├─ UPDATE_TOOLBOX.cmd
 ├─ src/
 │  ├─ main.rs
+│  ├─ credential.rs
 │  ├─ lib.rs
 │  ├─ workspace.rs
 │  ├─ file_browser.rs

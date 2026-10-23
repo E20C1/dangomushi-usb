@@ -90,6 +90,9 @@ The generic Text Editor, `workspace/state/autosave/`, `workspace/state/session.v
 
 Future encrypted Vault persistence must use a dedicated API boundary that is not exposed through the normal File Browser or Text Editor. Its persistence design must support durable temporary ciphertext, sync, verification, replacement and rollback suitable for removable storage.
 
+The in-memory Credential model is source-agnostic and owns Service, Username or Email, URL, Password and Notes through a redacted `SecretString` wrapper. Neither `SecretString` nor `Credential` implements value-revealing Display/Debug behavior, generic dereference helpers, Clone, or serialization. This is an accidental-disclosure reduction boundary, not a guarantee of complete memory erasure.
+
+
 Cryptographic primitives must come from maintained existing Rust crates selected after an implementation-time review of official documentation and security/maintenance properties. DANGOMUSHI does not claim guaranteed complete memory erasure of secret values, especially across GUI toolkit, allocator, OS clipboard and operating-system boundaries.
 
 
