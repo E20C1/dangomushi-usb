@@ -37,8 +37,16 @@ This roadmap records implementation order, not release dates.
   - calculate-only and expected-digest verification flows both reuse the read-only SHA-256 core
   - match, mismatch, bytes hashed and calculated digest are shown without persisting result/input content
   - session restoration stores only the HASH / VERIFY navigation view, not target/digest/result values
-- [ ] **Text / JSON utilities** — Exactly One Next Task
-- [ ] File comparison
+- [x] **Text / JSON utilities**
+  - in-memory non-secret utility with no automatic source-file writes
+  - LF normalization and trailing ASCII space/tab cleanup
+  - JSON syntax validation with line/column-only errors
+  - pretty/compact JSON formatting changes only insignificant whitespace outside strings
+  - formatting preserves key order, duplicate keys, numeric spellings and string escape content
+  - 4 MiB input and 16 MiB output bounds
+  - Tool Launcher entry is READY; FILES selection can be loaded through the existing UTF-8 read boundary
+  - session restoration stores only the active TEXT / JSON view, not utility input/output
+- [ ] **File comparison** — Exactly One Next Task
 - [ ] Local document search
 - [ ] Repository status and safe Git operations
 - [ ] Backup and restore workflow
