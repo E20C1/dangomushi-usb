@@ -152,13 +152,14 @@ fn native_ui_dispatches_ready_repositories_without_session_git_payload() {
 }
 
 #[test]
-fn repositories_stay_outside_secret_boundary_and_advance_only_to_backup() {
+fn repositories_stay_outside_secret_boundary_after_backup_advances() {
     assert!(SECRET_BOUNDARY.contains(
         "MUST NOT be intentionally routed through repository files, commit messages, Git output, or the generic REPOSITORIES UI"
     ));
     assert!(ROADMAP.contains("- [x] **Repository status and safe Git operations**"));
+    assert!(ROADMAP.contains("- [x] **Backup and restore workflow**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Backup and restore workflow** — Exactly One Next Task"
+        "- [ ] **Explicit LAN enable control** — Exactly One Next Task"
     ));
-    assert!(!ROADMAP.contains("- [x] **Backup and restore workflow**"));
+    assert!(ROADMAP.contains("- [x] **Backup and restore workflow**"));
 }
