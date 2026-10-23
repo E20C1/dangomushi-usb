@@ -57,6 +57,20 @@ The portable path validation does not claim an operating-system-level atomic no-
 
 The native HASH / VERIFY view now exposes this core through the Tool Launcher and selected regular files in FILES. Its target, expected digest, calculated digest and verification result remain ephemeral UI state; generic session restoration stores only the active HASH / VERIFY navigation view.
 
+## Text / JSON utility boundary
+
+The M2 TEXT / JSON utility core is implemented in src/text_json.rs and is intentionally in-memory and non-secret.
+
+The core accepts at most 4 MiB of UTF-8 input and bounds transform output to 16 MiB. Text operations normalize CRLF/bare-CR line endings to LF and can additionally remove only trailing ASCII space/tab characters from each line.
+
+JSON syntax validation uses serde_json 1.0.154. Validation errors expose line and column without echoing input content. Pretty/compact transforms first validate the complete document, then change only insignificant JSON whitespace outside string literals rather than deserializing and reserializing the document. This preserves object-key order, duplicate object keys, number spelling, escape spelling, and string content.
+
+The native TEXT / JSON view may load the currently selected regular FILES entry through the existing UTF-8 Text Editor read boundary. The utility does not automatically write output back to the source file, create recovery drafts, use Clipboard transport, or send content over the network.
+
+Utility input/output and validation state are ephemeral. Generic session restoration stores only the active TEXT / JSON navigation view.
+
+TEXT / JSON is a generic utility and is not a secret-processing surface. Passwords, Master Passphrases, Recovery Codes, decrypted Vault data, and similar secret values remain outside this boundary.
+
 ## Save and recovery model
 
 Typing never automatically overwrites the source file.
@@ -213,6 +227,8 @@ The native navigation, Tool Launcher and FILES entry types use the shared icon v
 
 
 ## Dependency policy
+
+The TEXT / JSON utility uses serde_json 1.0.154 for complete JSON syntax validation and root-type classification. Formatting remains DANGOMUSHI-owned whitespace transformation after validation so the tool does not silently rewrite JSON token content.
 
 The HASH / VERIFY core uses RustCrypto sha2 0.11.1 with default features disabled for SHA-256. The file/path boundary and streaming I/O remain in DANGOMUSHI; the cryptographic hash primitive is not reimplemented locally.
 
