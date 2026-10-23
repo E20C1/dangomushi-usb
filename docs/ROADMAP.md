@@ -156,8 +156,12 @@ Both `Generate new password` and `Enter existing password` must converge on the 
 
 ## M3 — Authenticated mobile LAN access
 
-- [ ] **Explicit LAN enable control** — Exactly One Next Task
-- [ ] Device pairing
+- [x] **Explicit LAN enable control**
+  - process-local operator-intent gate; every application launch starts disabled
+  - enable/disable requires an explicit native MOBILE action
+  - control state is intentionally absent from session.v1, Workspace config and generic backups
+  - enabling the control does not authorize or create a LAN listener; the gateway remains loopback-only
+- [ ] **Device pairing** — Exactly One Next Task
 - [ ] Persistent trusted-device public keys
 - [ ] Device revocation
 - [ ] Permission scopes

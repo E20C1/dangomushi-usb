@@ -2,6 +2,7 @@ use crate::document_search;
 use crate::file_browser::{self, EntryKind, FileEntry};
 use crate::file_compare;
 use crate::hash_verify;
+use crate::lan_access_control::LanEnableControl;
 use crate::native_ui_theme::{self as theme, PixelIcon, BAD, BG, LINE, MUTED, OK, PANEL, TEXT, WARN};
 use crate::repository_git;
 use crate::session_state::{self, SessionState, SessionView};
@@ -822,6 +823,7 @@ struct NativeApp {
     browser: FileBrowserState,
     editor: EditorState,
     hash_verify: HashVerifyState,
+    lan_access: LanEnableControl,
     text_json: TextJsonState,
     file_compare: FileCompareState,
     document_search: DocumentSearchState,
@@ -847,6 +849,7 @@ impl NativeApp {
             browser,
             editor: EditorState::new(),
             hash_verify: HashVerifyState::new(),
+            lan_access: LanEnableControl::default(),
             text_json: TextJsonState::new(),
             file_compare: FileCompareState::new(),
             document_search: DocumentSearchState::new(),
@@ -1038,7 +1041,11 @@ impl NativeApp {
                 PixelIcon::Mobile,
                 "NETWORK",
                 "LOCAL",
-                "no LAN listener",
+                if self.lan_access.is_enabled() {
+                    "LAN control ON / listener locked"
+                } else {
+                    "LAN control OFF / no LAN listener"
+                },
             );
             theme::metric(
                 &mut columns[2],
@@ -2923,16 +2930,53 @@ impl NativeApp {
     fn mobile(&mut self, ui: &mut egui::Ui) {
         theme::section_title(ui, PixelIcon::Mobile, "MOBILE ACCESS");
         theme::panel(ui, |ui| {
-            ui.label(
-                egui::RichText::new("NOT ENABLED IN M1")
-                    .color(WARN)
-                    .strong()
-                    .monospace(),
+            let enabled = self.lan_access.is_enabled();
+            theme::status_badge(
+                ui,
+                if enabled {
+                    "LAN CONTROL ON"
+                } else {
+                    "LAN CONTROL OFF"
+                },
+                if enabled { WARN } else { OK },
             );
             ui.add_space(6.0);
             ui.label(
-                "LAN listening remains deliberately absent until device pairing, persistent trusted-device identity, revocation and permission boundaries are implemented.",
+                "This control records explicit operator intent for this process only. It resets OFF on every launch and is not stored in session state, Workspace config, or backups.",
             );
+            ui.add_space(6.0);
+            ui.label(
+                "Enabling this control does not create a LAN listener. The gateway remains bound to 127.0.0.1 until device pairing, trusted-device identity, revocation, permission scopes, and public-network safeguards are implemented.",
+            );
+            ui.add_space(10.0);
+
+            if enabled {
+                if theme::pixel_button(
+                    ui,
+                    PixelIcon::Mobile,
+                    "DISABLE LAN CONTROL",
+                    false,
+                    true,
+                    230.0,
+                )
+                .clicked()
+                {
+                    self.lan_access.disable();
+                    self.notice = "LAN CONTROL OFF / LOOPBACK ONLY".to_string();
+                }
+            } else if theme::pixel_button(
+                ui,
+                PixelIcon::Mobile,
+                "ENABLE FOR THIS RUN",
+                false,
+                true,
+                230.0,
+            )
+            .clicked()
+            {
+                self.lan_access.enable_for_this_run();
+                self.notice = "LAN CONTROL ON / LISTENER STILL LOCKED".to_string();
+            }
         });
     }
 

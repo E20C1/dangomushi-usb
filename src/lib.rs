@@ -4,6 +4,7 @@ pub mod document_search;
 pub mod existing_credential_input;
 pub mod generated_credential_input;
 pub mod hash_verify;
+pub mod lan_access_control;
 pub mod file_browser;
 pub mod file_compare;
 pub mod password_generator;
