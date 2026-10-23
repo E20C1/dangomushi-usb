@@ -66,8 +66,11 @@ This is a security-sensitive subsystem separate from ordinary M2 Local Tools. No
   - explicit UnlockedVault lifetime and consuming lock()
   - wrong passphrase / AEAD failure maps to a generic unlock failure
   - no UI, session secret restoration, Credential payload format, Recovery Code, or Clipboard behavior
-- [ ] **Generator -> Credential integration** — Exactly One Next Task
-- [ ] Recovery Codes
+- [x] **Generator -> Credential integration**
+  - GeneratedPassword is consumed into SecretString without a required clone
+  - generated and existing password paths converge on the same Credential model
+  - integration remains in-memory and outside Text Editor/autosave/session/Vault serialization
+- [ ] **Recovery Codes** — Exactly One Next Task
 - [ ] Clipboard hygiene
 - [ ] Secret Backup / Restore
 

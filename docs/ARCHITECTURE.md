@@ -94,6 +94,9 @@ The in-memory Credential model is source-agnostic and owns Service, Username or 
 
 Existing credential input uses a separate in-memory boundary that accepts owned Strings and immediately wraps them in `SecretString`. Converting that input into `Credential` consumes the boundary object and moves its owned secret values without a required clone. The boundary has no filesystem, session, autosave, Clipboard, serialization, or Vault behavior.
 
+Generated credential input uses a parallel in-memory boundary. `GeneratedPassword` exposes a crate-private consuming ownership transfer that moves its owned String directly into `SecretString`, then into the same source-agnostic `Credential` model. The production path does not require a generated-password clone and does not route through generic persistence or formatting helpers.
+
+
 Encrypted Vault persistence is implemented by the dedicated `VaultStore` API in `src/vault_storage.rs`. It does not import the generic File Browser, Text Editor, autosave, or session modules. The store uses fixed filenames inside an explicitly supplied dedicated Vault directory and rejects symlink roots/fixed-file entries.
 
 Format v1 uses RustCrypto XChaCha20Poly1305 AEAD. The fixed cleartext header, including bounded future Argon2id KDF metadata and the 24-byte nonce, is authenticated as associated data. No unauthenticated plaintext is returned.

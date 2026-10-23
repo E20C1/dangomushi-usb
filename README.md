@@ -21,6 +21,7 @@ The current implementation includes:
 - An M2-S existing-Credential input boundary that consumes owned input into the same Credential model without persistence or UI integration.
 - An M2-S encrypted Vault storage core using XChaCha20Poly1305 AEAD, authenticated metadata, verified durable replacement, and interrupted-write recovery.
 - An M2-S Vault unlock/lock core using Argon2id-derived Vault keys, redacted Master Passphrase ownership, and an explicit unlocked-key lifetime.
+- An M2-S generated-Credential integration boundary that consumes GeneratedPassword into the same source-agnostic Credential model without a required secret clone.
 - A portable workspace path that remains separate from replaceable application binaries.
 - Embedded loopback-only status UI served from the Rust core.
 - No public bind, LAN bind, UPnP, NAT-PMP, reverse tunnel, CDN or external web request.
@@ -55,7 +56,7 @@ All restored paths are relative and are validated again before use. Missing or i
 
 ## Secret subsystem
 
-The secret-management roadmap is intentionally separate from ordinary M2 Local Tools. The current implemented steps are the Password Generator Core, source-agnostic in-memory Credential model, existing-Credential input boundary, encrypted Vault storage core, and Vault unlock/lock core.
+The secret-management roadmap is intentionally separate from ordinary M2 Local Tools. The current implemented steps are the Password Generator Core, source-agnostic in-memory Credential model, both existing/generated Credential input boundaries, encrypted Vault storage core, and Vault unlock/lock core.
 
 Secret values are not routed through the Text Editor, generic autosave or session restoration, and are not exposed through the native UI yet. Vault ciphertext uses a dedicated storage API and is not a normal Workspace file. See docs/SECRET_DATA_BOUNDARY.md, docs/PASSWORD_GENERATOR_CORE.md, and docs/VAULT_STORAGE.md.
 
@@ -121,6 +122,7 @@ dangomushi-usb/
 │  ├─ main.rs
 │  ├─ credential.rs
 │  ├─ existing_credential_input.rs
+│  ├─ generated_credential_input.rs
 │  ├─ lib.rs
 │  ├─ workspace.rs
 │  ├─ file_browser.rs

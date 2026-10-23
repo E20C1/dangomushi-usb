@@ -1,6 +1,6 @@
 # DANGOMUSHI Secret Data Boundary
 
-Status: **architectural contract established; Password Generator Core, Credential model, existing-credential input boundary, encrypted Vault storage, and Vault unlock/lock core implemented; UI integration remains unimplemented**
+Status: **architectural contract established; Password Generator Core, both Credential input paths, encrypted Vault storage, and Vault unlock/lock core implemented; Recovery Codes/UI integration remain unimplemented**
 
 This document defines the mandatory boundary for future password, credential, recovery-code and vault work.
 
@@ -104,7 +104,7 @@ Enter existing password --+
 
 The Vault must never be generator-only. An existing password entered or pasted by the user is a first-class input path and ultimately reaches the same Credential persistence flow as a generated password.
 
-The Password Generator Core, source-agnostic Credential model, and in-memory existing-password input boundary now exist. Vault persistence and Generator -> Credential integration remain future tasks.
+The Password Generator Core, source-agnostic Credential model, existing-password input boundary, and generated-password input boundary now converge in memory on the same Credential type. Credential payload serialization remains separate from these input boundaries.
 
 ## Error and diagnostic policy
 
@@ -178,6 +178,6 @@ Normal M2 tools such as HASH / VERIFY continue independently. The secret subsyst
 
 ## Exactly One Next Task
 
-**Generator -> Credential integration**
+**Recovery Codes**
 
-That next task must move a generated password into the existing source-agnostic Credential path without routing the generated secret through generic Text Editor/autosave/session persistence. It must not yet add Recovery Codes or Clipboard behavior.
+That next task must establish a separate secret-aware Recovery Code model and its encrypted-Vault payload boundary without routing recovery values through generic files, Text Editor, autosave, session restoration, logs, or Clipboard.

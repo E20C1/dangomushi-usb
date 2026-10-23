@@ -15,7 +15,7 @@ The generator is intentionally independent of:
 - Clipboard handling,
 - generic Text Editor/autosave/session persistence.
 
-Generated values exist only in the returned in-memory `GeneratedPassword` object.
+Generated values are returned in the in-memory `GeneratedPassword` object. A crate-private consuming ownership-transfer method now lets the dedicated generated-Credential integration boundary move the owned String into `SecretString` without requiring a clone.
 
 `GeneratedPassword` does not implement `Display`, and its `Debug` implementation is redacted. This reduces accidental diagnostic disclosure but is not a claim of complete memory erasure. The broader limitations in `SECRET_DATA_BOUNDARY.md` continue to apply.
 
@@ -66,8 +66,6 @@ The core currently accepts lengths from 1 through 4096 bytes/characters. Charact
 
 No generated value is persisted by this module.
 
-## Exactly One Next Task
+## Integration status
 
-**Credential model**
-
-That task should establish secret-aware in-memory ownership and redacted formatting for Service / Username or Email / URL / Password / Notes, without adding Vault persistence yet.
+The generator core remains UI/storage independent. Generated-password convergence on the source-agnostic Credential model is implemented separately in `GENERATED_CREDENTIAL_INTEGRATION.md`.

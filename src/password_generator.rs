@@ -78,6 +78,10 @@ impl GeneratedPassword {
     pub fn is_empty(&self) -> bool {
         self.value.is_empty()
     }
+
+    pub(crate) fn into_owned_secret(self) -> String {
+        self.value
+    }
 }
 
 impl fmt::Debug for GeneratedPassword {

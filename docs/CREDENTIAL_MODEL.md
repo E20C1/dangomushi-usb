@@ -16,7 +16,7 @@ Generate new password ----+
 Enter existing password --+
 ~~~
 
-The generator and existing-password entry path remain separate tasks. This model deliberately does not record which source produced the password.
+Both generated-password and existing-password input boundaries now converge on this same model. The Credential deliberately does not record which source produced the password.
 
 ## Fields
 
@@ -69,8 +69,6 @@ This module does not:
 - access Clipboard,
 - expose a native UI.
 
-## Exactly One Next Task
+## Input convergence status
 
-**Add Existing Credential input boundary**
-
-That task should establish an explicit in-memory entry/paste boundary for an existing password and produce this same Credential model without adding Vault persistence yet.
+Both `ExistingCredentialInput` and `GeneratedCredentialInput` consume their source-specific inputs into this same Credential model. Persistence-format work remains separate from the model.
