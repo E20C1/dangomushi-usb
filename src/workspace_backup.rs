@@ -152,7 +152,10 @@ pub fn create_backup(
         return Err(error);
     }
 
-    verify_archive_path(&pending_path, None)?;
+    if let Err(error) = verify_archive_path(&pending_path, None) {
+        let _ = fs::remove_file(&pending_path);
+        return Err(error);
+    }
 
     if backup_file_state(&final_path)? != BackupFileState::Missing {
         let _ = fs::remove_file(&pending_path);
@@ -160,6 +163,7 @@ pub fn create_backup(
     }
 
     if let Err(error) = copy_file_create_new(&pending_path, &final_path) {
+        let _ = fs::remove_file(&final_path);
         let _ = fs::remove_file(&pending_path);
         return Err(error);
     }
@@ -232,6 +236,7 @@ pub fn restore_backup(
         &backups_root,
     ) {
         let _ = fs::remove_dir_all(&staging_root);
+        let _ = fs::remove_dir_all(&rollback_root);
         return Err(error);
     }
 
@@ -363,7 +368,7 @@ impl ArchiveWriter {
     }
 
     fn finish(mut self) -> Result<u64, WorkspaceBackupError> {
-        let digest = self.archive_hasher.finalize();
+        let digest = self.archive_hasher.clone().finalize();
         self.raw(FOOTER_MAGIC)?;
         self.raw(digest.as_slice())?;
         self.file.sync_all().map_err(|_| WorkspaceBackupError::Io)?;
@@ -712,6 +717,11 @@ fn verify_archive_path(
         if tag[0] == RECORD_DIRECTORY {
             if let Some(root) = extraction_root {
                 let target = join_components(root, &components)?;
+                if let Some(parent) = target.parent() {
+                    if parent != root && !parent.exists() {
+                        fs::create_dir_all(parent).map_err(|_| WorkspaceBackupError::Io)?;
+                    }
+                }
                 fs::create_dir(&target).map_err(|_| WorkspaceBackupError::Io)?;
             }
             directories.insert(components);
