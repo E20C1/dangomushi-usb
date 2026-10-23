@@ -1,7 +1,10 @@
 use crate::file_browser::{self, EntryKind, FileEntry};
+use crate::text_editor;
 use crate::workspace;
 use eframe::egui;
+use std::io;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 const BG: egui::Color32 = egui::Color32::from_rgb(8, 10, 8);
 const PANEL: egui::Color32 = egui::Color32::from_rgb(14, 17, 14);
@@ -12,13 +15,14 @@ const MUTED: egui::Color32 = egui::Color32::from_rgb(155, 164, 155);
 const OK: egui::Color32 = egui::Color32::from_rgb(184, 216, 184);
 const WARN: egui::Color32 = egui::Color32::from_rgb(216, 197, 143);
 const BAD: egui::Color32 = egui::Color32::from_rgb(215, 162, 162);
+const AUTOSAVE_DELAY: Duration = Duration::from_secs(2);
 
 pub fn run() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("DANGOMUSHI")
-            .with_inner_size([960.0, 640.0])
-            .with_min_inner_size([720.0, 480.0]),
+            .with_inner_size([1040.0, 700.0])
+            .with_min_inner_size([760.0, 520.0]),
         ..Default::default()
     };
 
@@ -33,6 +37,7 @@ pub fn run() -> eframe::Result {
 enum View {
     Home,
     Files,
+    Editor,
     Workspace,
     Mobile,
     System,
@@ -93,10 +98,168 @@ impl FileBrowserState {
     }
 }
 
+struct EditorState {
+    path: Option<PathBuf>,
+    buffer: String,
+    saved_text: String,
+    dirty: bool,
+    pending_recovery: Option<String>,
+    last_change: Option<Instant>,
+    recovery_status: String,
+    confirm_discard: bool,
+}
+
+impl EditorState {
+    fn new() -> Self {
+        Self {
+            path: None,
+            buffer: String::new(),
+            saved_text: String::new(),
+            dirty: false,
+            pending_recovery: None,
+            last_change: None,
+            recovery_status: "NO FILE".to_string(),
+            confirm_discard: false,
+        }
+    }
+
+    fn open(&mut self, root: &Path, path: PathBuf) -> io::Result<()> {
+        if self.path.as_ref() == Some(&path) {
+            return Ok(());
+        }
+
+        if self.dirty {
+            if let Some(current) = self.path.clone() {
+                text_editor::write_recovery(root, &current, &self.buffer)?;
+            }
+        }
+
+        let disk_text = text_editor::read_text(root, &path)?;
+        let recovery = text_editor::latest_recovery(root, &path)?;
+        let pending_recovery = match recovery {
+            Some(draft) if draft.text != disk_text => Some(draft.text),
+            Some(_) => {
+                let _ = text_editor::clear_recovery(root, &path);
+                None
+            }
+            None => None,
+        };
+
+        self.path = Some(path);
+        self.buffer = disk_text.clone();
+        self.saved_text = disk_text;
+        self.dirty = false;
+        self.pending_recovery = pending_recovery;
+        self.last_change = None;
+        self.confirm_discard = false;
+        self.recovery_status = if self.pending_recovery.is_some() {
+            "RECOVERY AVAILABLE".to_string()
+        } else {
+            "CLEAN".to_string()
+        };
+        Ok(())
+    }
+
+    fn mark_changed(&mut self) {
+        self.dirty = self.buffer != self.saved_text;
+        self.confirm_discard = false;
+        self.last_change = self.dirty.then(Instant::now);
+        if self.dirty {
+            self.recovery_status = "RECOVERY PENDING".to_string();
+        } else {
+            self.recovery_status = "CLEAN".to_string();
+        }
+    }
+
+    fn maybe_autosave(&mut self, root: &Path) -> io::Result<bool> {
+        if !self.dirty || self.pending_recovery.is_some() {
+            return Ok(false);
+        }
+
+        let Some(changed_at) = self.last_change else {
+            return Ok(false);
+        };
+
+        if changed_at.elapsed() < AUTOSAVE_DELAY {
+            return Ok(false);
+        }
+
+        let path = self.path.as_ref().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::NotFound, "no editor file is open")
+        })?;
+
+        text_editor::write_recovery(root, path, &self.buffer)?;
+        self.last_change = None;
+        self.recovery_status = "RECOVERY STORED".to_string();
+        Ok(true)
+    }
+
+    fn save(&mut self, root: &Path) -> io::Result<()> {
+        let path = self.path.as_ref().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::NotFound, "no editor file is open")
+        })?;
+
+        let disk_now = text_editor::read_text(root, path)?;
+        if disk_now != self.saved_text {
+            text_editor::write_recovery(root, path, &self.buffer)?;
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "file changed on disk after it was opened; recovery was stored instead of overwriting external changes",
+            ));
+        }
+
+        text_editor::save_text(root, path, &self.buffer)?;
+        self.saved_text = self.buffer.clone();
+        self.dirty = false;
+        self.pending_recovery = None;
+        self.last_change = None;
+        self.confirm_discard = false;
+        self.recovery_status = "SAVED".to_string();
+        Ok(())
+    }
+
+    fn restore_pending_recovery(&mut self) {
+        if let Some(recovery) = self.pending_recovery.take() {
+            self.buffer = recovery;
+            self.dirty = self.buffer != self.saved_text;
+            self.last_change = None;
+            self.confirm_discard = false;
+            self.recovery_status = "RECOVERY RESTORED".to_string();
+        }
+    }
+
+    fn discard_pending_recovery(&mut self, root: &Path) -> io::Result<()> {
+        if let Some(path) = &self.path {
+            text_editor::clear_recovery(root, path)?;
+        }
+        self.pending_recovery = None;
+        self.recovery_status = "RECOVERY DISCARDED".to_string();
+        Ok(())
+    }
+
+    fn discard_changes(&mut self, root: &Path) -> io::Result<()> {
+        let path = self.path.as_ref().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::NotFound, "no editor file is open")
+        })?;
+
+        let disk_text = text_editor::read_text(root, path)?;
+        let _ = text_editor::clear_recovery(root, path);
+        self.buffer = disk_text.clone();
+        self.saved_text = disk_text;
+        self.dirty = false;
+        self.pending_recovery = None;
+        self.last_change = None;
+        self.confirm_discard = false;
+        self.recovery_status = "RELOADED FROM DISK".to_string();
+        Ok(())
+    }
+}
+
 struct NativeApp {
     view: View,
     workspace_root: PathBuf,
     browser: FileBrowserState,
+    editor: EditorState,
     notice: String,
 }
 
@@ -120,7 +283,20 @@ impl NativeApp {
             view: View::Home,
             workspace_root,
             browser,
+            editor: EditorState::new(),
             notice: "READY".to_string(),
+        }
+    }
+
+    fn open_in_editor(&mut self, path: PathBuf) {
+        match self.editor.open(&self.workspace_root, path) {
+            Ok(()) => {
+                self.notice = "EDITOR READY".to_string();
+                self.view = View::Editor;
+            }
+            Err(error) => {
+                self.notice = format!("OPEN FAILED: {error}");
+            }
         }
     }
 
@@ -142,7 +318,16 @@ impl NativeApp {
                     ui.with_layout(
                         egui::Layout::right_to_left(egui::Align::Center),
                         |ui| {
-                            ui.label(egui::RichText::new(&self.notice).color(OK).monospace());
+                            let color = if self.notice.contains("FAILED") {
+                                BAD
+                            } else {
+                                OK
+                            };
+                            ui.label(
+                                egui::RichText::new(&self.notice)
+                                    .color(color)
+                                    .monospace(),
+                            );
                         },
                     );
                 });
@@ -158,9 +343,10 @@ impl NativeApp {
                 ui.horizontal_wrapped(|ui| {
                     ui.selectable_value(&mut self.view, View::Home, "[01] HOME");
                     ui.selectable_value(&mut self.view, View::Files, "[02] FILES");
-                    ui.selectable_value(&mut self.view, View::Workspace, "[03] WORKSPACE");
-                    ui.selectable_value(&mut self.view, View::Mobile, "[04] MOBILE");
-                    ui.selectable_value(&mut self.view, View::System, "[05] SYSTEM");
+                    ui.selectable_value(&mut self.view, View::Editor, "[03] EDITOR");
+                    ui.selectable_value(&mut self.view, View::Workspace, "[04] WORKSPACE");
+                    ui.selectable_value(&mut self.view, View::Mobile, "[05] MOBILE");
+                    ui.selectable_value(&mut self.view, View::System, "[06] SYSTEM");
                 });
             });
     }
@@ -171,7 +357,7 @@ impl NativeApp {
         section_title(ui, "LOCAL CONTROL PANEL");
         ui.label(
             egui::RichText::new(
-                "Native Rust shell for files, tools, recovery and trusted local access.",
+                "Native Rust shell for files, editing, recovery and trusted local access.",
             )
             .color(MUTED),
         );
@@ -209,8 +395,25 @@ impl NativeApp {
                 ui.label(egui::RichText::new("ready").color(OK).monospace());
             });
 
+            ui.horizontal(|ui| {
+                if ui
+                    .add(egui::Button::new("EDITOR").min_size(egui::vec2(180.0, 28.0)))
+                    .clicked()
+                {
+                    self.view = View::Editor;
+                }
+                ui.label(
+                    egui::RichText::new(if self.editor.path.is_some() {
+                        "ready"
+                    } else {
+                        "choose a file"
+                    })
+                    .color(if self.editor.path.is_some() { OK } else { MUTED })
+                    .monospace(),
+                );
+            });
+
             for (name, state) in [
-                ("EDITOR", "planned"),
                 ("HASH / VERIFY", "planned"),
                 ("COMPARE", "planned"),
                 ("REPOSITORIES", "planned"),
@@ -230,8 +433,10 @@ impl NativeApp {
     fn files(&mut self, ui: &mut egui::Ui) {
         section_title(ui, "FILES");
         ui.label(
-            egui::RichText::new("Read-only browser constrained to the DANGOMUSHI workspace root.")
-                .color(MUTED),
+            egui::RichText::new(
+                "Read-only browser constrained to the DANGOMUSHI workspace root.",
+            )
+            .color(MUTED),
         );
         ui.add_space(10.0);
 
@@ -286,6 +491,7 @@ impl NativeApp {
 
         let entries = self.browser.entries.clone();
         let mut navigate_to: Option<PathBuf> = None;
+        let mut edit_path: Option<PathBuf> = None;
 
         egui::Frame::new()
             .fill(PANEL)
@@ -306,6 +512,7 @@ impl NativeApp {
                 ui.separator();
 
                 egui::ScrollArea::vertical()
+                    .max_height(330.0)
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         if entries.is_empty() {
@@ -341,8 +548,14 @@ impl NativeApp {
                                     self.browser.selected = Some(entry.relative_path.clone());
                                 }
 
-                                if response.double_clicked() && entry.kind == EntryKind::Directory {
-                                    navigate_to = Some(entry.relative_path.clone());
+                                if response.double_clicked() {
+                                    match entry.kind {
+                                        EntryKind::Directory => {
+                                            navigate_to = Some(entry.relative_path.clone())
+                                        }
+                                        EntryKind::File => edit_path = Some(entry.relative_path.clone()),
+                                        _ => {}
+                                    }
                                 }
 
                                 let size = if entry.kind == EntryKind::File {
@@ -379,24 +592,30 @@ impl NativeApp {
                 if let Some(entry) = &selected_entry {
                     key_value(ui, "TYPE", entry.kind.label());
 
-                    if entry.kind == EntryKind::Directory {
-                        if ui.button("OPEN DIRECTORY").clicked() {
-                            open_selected = Some(entry.relative_path.clone());
+                    match entry.kind {
+                        EntryKind::Directory => {
+                            if ui.button("OPEN DIRECTORY").clicked() {
+                                open_selected = Some(entry.relative_path.clone());
+                            }
                         }
-                    } else if entry.kind == EntryKind::Symlink {
-                        ui.label(
-                            egui::RichText::new(
-                                "Symlinks are visible but are never traversed by the browser.",
-                            )
-                            .color(WARN),
-                        );
-                    } else {
-                        ui.label(
-                            egui::RichText::new(
-                                "File opening/editing arrives with the editor milestone.",
-                            )
-                            .color(MUTED),
-                        );
+                        EntryKind::File => {
+                            if ui.button("OPEN IN EDITOR").clicked() {
+                                edit_path = Some(entry.relative_path.clone());
+                            }
+                        }
+                        EntryKind::Symlink => {
+                            ui.label(
+                                egui::RichText::new(
+                                    "Symlinks are visible but are never traversed or edited.",
+                                )
+                                .color(WARN),
+                            );
+                        }
+                        EntryKind::Other => {
+                            ui.label(
+                                egui::RichText::new("Unsupported file type.").color(MUTED),
+                            );
+                        }
                     }
                 }
             } else {
@@ -406,6 +625,159 @@ impl NativeApp {
 
         if let Some(destination) = open_selected {
             self.browser.navigate(&self.workspace_root, destination);
+        }
+        if let Some(path) = edit_path {
+            self.open_in_editor(path);
+        }
+    }
+
+    fn editor(&mut self, ui: &mut egui::Ui) {
+        section_title(ui, "EDITOR");
+
+        let Some(path) = self.editor.path.clone() else {
+            panel(ui, |ui| {
+                ui.label(
+                    egui::RichText::new("NO FILE OPEN")
+                        .color(WARN)
+                        .strong()
+                        .monospace(),
+                );
+                ui.add_space(6.0);
+                ui.label("Choose a regular UTF-8 text file from FILES.");
+                if ui.button("GO TO FILES").clicked() {
+                    self.view = View::Files;
+                }
+            });
+            return;
+        };
+
+        panel(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(
+                    egui::RichText::new(file_browser::display_path(&path))
+                        .monospace()
+                        .color(TEXT),
+                );
+                ui.separator();
+
+                let state = if self.editor.dirty { "MODIFIED" } else { "SAVED" };
+                ui.label(
+                    egui::RichText::new(state)
+                        .monospace()
+                        .strong()
+                        .color(if self.editor.dirty { WARN } else { OK }),
+                );
+                ui.separator();
+                ui.label(
+                    egui::RichText::new(&self.editor.recovery_status)
+                        .monospace()
+                        .color(MUTED),
+                );
+            });
+        });
+
+        ui.add_space(8.0);
+
+        if self.editor.pending_recovery.is_some() {
+            egui::Frame::new()
+                .fill(PANEL)
+                .stroke(egui::Stroke::new(1.0, WARN))
+                .inner_margin(egui::Margin::same(10))
+                .show(ui, |ui| {
+                    ui.label(
+                        egui::RichText::new("UNSAVED RECOVERY FOUND")
+                            .color(WARN)
+                            .strong()
+                            .monospace(),
+                    );
+                    ui.label(
+                        "A recovery draft differs from the file on disk. Choose which state to continue from before editing.",
+                    );
+                    ui.horizontal(|ui| {
+                        if ui.button("RESTORE RECOVERY").clicked() {
+                            self.editor.restore_pending_recovery();
+                            self.notice = "RECOVERY RESTORED".to_string();
+                        }
+                        if ui.button("DISCARD RECOVERY").clicked() {
+                            match self.editor.discard_pending_recovery(&self.workspace_root) {
+                                Ok(()) => self.notice = "RECOVERY DISCARDED".to_string(),
+                                Err(error) => {
+                                    self.notice = format!("RECOVERY ERROR: {error}")
+                                }
+                            }
+                        }
+                    });
+                });
+            ui.add_space(8.0);
+        }
+
+        let editing_enabled = self.editor.pending_recovery.is_none();
+
+        ui.horizontal(|ui| {
+            let save_enabled = editing_enabled && self.editor.dirty;
+            if ui
+                .add_enabled(save_enabled, egui::Button::new("[SAVE]"))
+                .clicked()
+            {
+                match self.editor.save(&self.workspace_root) {
+                    Ok(()) => {
+                        self.notice = "FILE SAVED".to_string();
+                        self.browser.refresh(&self.workspace_root);
+                    }
+                    Err(error) => self.notice = format!("SAVE FAILED: {error}"),
+                }
+            }
+
+            if self.editor.dirty {
+                if self.editor.confirm_discard {
+                    if ui.button("[CONFIRM DISCARD]").clicked() {
+                        match self.editor.discard_changes(&self.workspace_root) {
+                            Ok(()) => self.notice = "CHANGES DISCARDED".to_string(),
+                            Err(error) => self.notice = format!("RELOAD FAILED: {error}"),
+                        }
+                    }
+                } else if ui.button("[DISCARD CHANGES]").clicked() {
+                    self.editor.confirm_discard = true;
+                }
+            }
+
+            ui.label(
+                egui::RichText::new(format!(
+                    "{} / {} bytes",
+                    self.editor.buffer.len(),
+                    text_editor::MAX_TEXT_FILE_BYTES
+                ))
+                .color(MUTED)
+                .monospace(),
+            );
+        });
+
+        ui.add_space(6.0);
+
+        let response = ui.add_enabled(
+            editing_enabled,
+            egui::TextEdit::multiline(&mut self.editor.buffer)
+                .font(egui::TextStyle::Monospace)
+                .desired_width(f32::INFINITY)
+                .desired_rows(25),
+        );
+
+        if response.changed() {
+            self.editor.mark_changed();
+
+            if !self.editor.dirty {
+                let _ = text_editor::clear_recovery(&self.workspace_root, &path);
+            }
+        }
+
+        if self.editor.dirty && self.editor.last_change.is_some() {
+            ui.ctx().request_repaint_after(Duration::from_millis(250));
+        }
+
+        match self.editor.maybe_autosave(&self.workspace_root) {
+            Ok(true) => self.notice = "RECOVERY AUTOSAVED".to_string(),
+            Ok(false) => {}
+            Err(error) => self.notice = format!("AUTOSAVE FAILED: {error}"),
         }
     }
 
@@ -453,7 +825,7 @@ impl NativeApp {
         section_title(ui, "MOBILE ACCESS");
         panel(ui, |ui| {
             ui.label(
-                egui::RichText::new("NOT ENABLED IN v0.2")
+                egui::RichText::new("NOT ENABLED IN v0.3")
                     .color(WARN)
                     .strong()
                     .monospace(),
@@ -470,6 +842,8 @@ impl NativeApp {
         panel(ui, |ui| {
             key_value(ui, "DESKTOP UI", "eframe / egui 0.37");
             key_value(ui, "FILE BROWSER", "workspace-rooted / read-only");
+            key_value(ui, "TEXT EDITOR", "UTF-8 / explicit save / recovery");
+            key_value(ui, "EDITOR LIMIT", "4 MiB per file");
             key_value(ui, "WEB GATEWAY", "127.0.0.1 only");
             key_value(ui, "PUBLIC INTERNET", "not exposed");
             key_value(ui, "EXTERNAL CDN", "none");
@@ -493,6 +867,7 @@ impl eframe::App for NativeApp {
                 match self.view {
                     View::Home => self.home(ui),
                     View::Files => self.files(ui),
+                    View::Editor => self.editor(ui),
                     View::Workspace => self.workspace(ui),
                     View::Mobile => self.mobile(ui),
                     View::System => self.system(ui),

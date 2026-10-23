@@ -32,9 +32,34 @@ The native file browser accepts only relative paths composed of normal path comp
 
 Before a directory is traversed, both the workspace root and requested directory are canonicalized and the resolved directory must remain below the canonical workspace root.
 
-Symlinks are listed as links but are not treated as traversable directories. This keeps the first browser milestone read-only and prevents a link inside the workspace from becoming an implicit path outside the workspace.
+Symlinks are listed as links but are not treated as traversable directories.
 
-The file browser does not yet open, edit, rename, delete or create user files. Those mutations belong to later milestones with separate save and recovery semantics.
+The text editor applies a stricter file boundary:
+
+- only existing regular files can be opened,
+- the path must remain below the canonical workspace root,
+- symlinks in the edited path are rejected,
+- content must be valid UTF-8,
+- files are limited to 4 MiB in the initial editor,
+- the editor does not create, rename or delete user files.
+
+## Save and recovery model
+
+Typing never automatically overwrites the source file.
+
+After editing pauses for approximately two seconds, the current buffer is written to a recovery draft below:
+
+~~~text
+workspace/state/autosave/
+~~~
+
+Recovery filenames are unique per write. A newly durable recovery is created before older drafts for the same path are removed, avoiding in-place replacement of the only recovery copy.
+
+An explicit SAVE first persists a recovery draft, then truncates and writes the original file and calls sync_all. The recovery is cleared only after the explicit file write has completed successfully.
+
+If the original file changes outside DANGOMUSHI after opening, SAVE refuses to overwrite it and stores the current editor buffer as recovery instead.
+
+When a file is opened and a recovery differs from disk, the UI requires the user to choose RESTORE RECOVERY or DISCARD RECOVERY before editing continues.
 
 ## Network boundary
 
@@ -92,7 +117,7 @@ The embedded web UI remains a separate client surface for local status and futur
 
 ## Dependency policy
 
-The core CLI, workspace model, filesystem browser and loopback server use the Rust standard library only.
+The core CLI, workspace model, filesystem browser, text editor storage layer and loopback server use the Rust standard library only.
 
 The native desktop shell introduces eframe/egui as an optional feature-gated dependency. Building without the desktop feature does not require the desktop stack.
 

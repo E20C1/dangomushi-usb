@@ -17,7 +17,7 @@ This roadmap records implementation order, not release dates.
 - [x] Select the native Rust UI layer after a small prototype comparison
 - [x] Bootstrap the native desktop shell
 - [x] File browser rooted in the configured workspace
-- [ ] Text editor with explicit save and autosave recovery
+- [x] Text editor with explicit save and autosave recovery
 - [ ] Tool launcher
 - [ ] Workspace/session restoration
 - [ ] Pixel-oriented UI system and original icon set

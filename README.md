@@ -12,25 +12,30 @@ The current implementation includes:
 - Cross-platform CLI commands for workspace initialization and health checks.
 - A native desktop shell using feature-gated eframe/egui.
 - A read-only native file browser constrained to the configured workspace root.
+- A workspace-rooted UTF-8 text editor with explicit save, dirty tracking and recovery autosave.
 - A portable workspace path that remains separate from replaceable application binaries.
 - Embedded loopback-only status UI served from the Rust core.
 - No public bind, LAN bind, UPnP, NAT-PMP, reverse tunnel, CDN or external web request.
 - Windows double-click build/update entry point.
 - CI builds for Windows, macOS and Linux.
 
-The editor and authenticated mobile/LAN mode are later M1/M3 work. They are not faked as completed features.
+Authenticated mobile/LAN mode is later M3 work. It is not faked as a completed feature.
 
-## File browser boundary
+## Editor safety model
 
-The FILES view can navigate directories only below the DANGOMUSHI workspace root.
+The first editor intentionally supports existing UTF-8 regular files only.
 
-- Absolute paths and parent traversal are rejected.
-- Directory paths are canonicalized before traversal.
-- A resolved directory must stay inside the canonical workspace root.
-- Symlinks are shown but are not traversed.
-- The current browser is read-only.
+- The editor cannot escape the configured workspace root.
+- Symlink paths are rejected.
+- Files larger than 4 MiB are rejected.
+- Typing does not overwrite the original file.
+- After an editing pause, a recovery draft is stored under workspace/state/autosave.
+- SAVE is the operation that changes the source file.
+- SAVE refuses to overwrite a file that changed externally after it was opened.
+- A detected crash recovery must be restored or discarded explicitly.
+- Switching files preserves dirty content as a recovery draft first.
 
-This deliberately prevents the first desktop filesystem UI from becoming an unrestricted host filesystem browser.
+The editor does not yet create, rename or delete files.
 
 ## Windows quick start
 
@@ -95,6 +100,7 @@ dangomushi-usb/
 │  ├─ lib.rs
 │  ├─ workspace.rs
 │  ├─ file_browser.rs
+│  ├─ text_editor.rs
 │  ├─ server.rs
 │  ├─ native_ui.rs
 │  └─ bin/dangomushi-desktop.rs
@@ -105,7 +111,7 @@ dangomushi-usb/
 └─ workspace/           durable local user data
 ~~~
 
-See docs/ARCHITECTURE.md for the authority, filesystem, network and data boundaries.
+See docs/ARCHITECTURE.md for the authority, filesystem, editor, network and data boundaries.
 
 ## Security boundary
 
