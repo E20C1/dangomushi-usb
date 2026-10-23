@@ -40,5 +40,5 @@ fn unlock_layer_uses_argon2id_and_consuming_lock() {
 #[test]
 fn wrong_passphrase_maps_to_generic_unlock_failure() {
     assert!(SOURCE.contains("VaultAccessError::UnlockFailed"));
-    assert!(SOURCE.contains(""vault unlock failed""));
+    assert!(SOURCE.contains(r#""vault unlock failed""#));
 }
