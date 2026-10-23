@@ -15,6 +15,7 @@ The current implementation includes:
 - A workspace-rooted UTF-8 text editor with explicit save, dirty tracking and recovery autosave.
 - A central built-in tool registry and native Tool Launcher.
 - A READY native HASH / VERIFY tool that streams existing Workspace-rooted regular files through the SHA-256 core, accepts the current FILES selection or a relative target path, and reports calculated / MATCH / MISMATCH state without modifying the target.
+- A READY native TEXT / JSON utility for LF normalization, trailing-space cleanup, JSON validation, and whitespace-only pretty/compact formatting with no automatic source-file writes.
 - Restores the previous native view, FILES location/selection and open editor file from workspace-local session state.
 - A reusable square-edged pixel UI system with original 5x5 vector-drawn icons and no external icon/font assets.
 - An M2-S Password Generator Core with OS CSPRNG input, configurable character groups, rejection-sampled selection, deterministic injected-source tests, and no UI/Vault persistence.
@@ -136,6 +137,7 @@ dangomushi-usb/
 │  ├─ recovery_codes.rs
 │  ├─ secret_backup.rs
 │  ├─ text_editor.rs
+│  ├─ text_json.rs
 │  ├─ tool_registry.rs
 │  ├─ vault_storage.rs
 │  ├─ vault_unlock.rs
