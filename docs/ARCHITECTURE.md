@@ -85,6 +85,22 @@ The native COMPARE view accepts two Workspace-relative paths and can adopt the c
 
 COMPARE is a generic non-secret file utility and must not be used as a route for decrypted Vault data or other secret-subsystem plaintext.
 
+## Local document search boundary
+
+The M2 SEARCH core is implemented in src/document_search.rs and is read-only.
+
+Search is restricted to the fixed Workspace subtree data/documents. The data and documents path components must be real directories rather than symlinks, recursive symlink entries are skipped, and canonical traversed directories/files must remain below both the canonical documents root and Workspace root.
+
+The query is an exact, case-sensitive, single-line UTF-8 literal capped at 4 KiB. Search considers at most 10,000 regular files and returns at most 500 matching lines.
+
+Only UTF-8 regular files up to 4 MiB are searched. Reads use a 4 MiB + 1 byte hard limit so a file that grows after metadata inspection cannot cause an unbounded search read. Oversized and non-UTF-8 files are skipped and counted.
+
+Each result contains a Workspace-relative path, one-based line and Unicode-character column, plus a preview capped at 240 characters. The native SEARCH / DOCUMENTS view can pass a result path to the existing Editor boundary through an explicit OPEN action; the search core itself never writes a document.
+
+Search query text, previews and result/report state remain ephemeral. Generic session restoration stores only the active SEARCH navigation view.
+
+SEARCH is a generic non-secret utility and must not be used as a route for decrypted Vault data or other secret-subsystem plaintext.
+
 ## Save and recovery model
 
 Typing never automatically overwrites the source file.
