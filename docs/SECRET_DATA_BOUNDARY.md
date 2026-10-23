@@ -1,6 +1,6 @@
 # DANGOMUSHI Secret Data Boundary
 
-Status: **architectural contract established; Password Generator Core, both Credential input paths, encrypted Vault storage/unlock, and Recovery Code core/payload boundary implemented; Clipboard/UI integration remain unimplemented**
+Status: **architectural contract established; Password Generator Core, both Credential input paths, encrypted Vault storage/unlock, Recovery Code core/payload boundary, and Clipboard hygiene implemented; PASSWORDS UI and Secret Backup / Restore remain unimplemented**
 
 This document defines the mandatory boundary for future password, credential, recovery-code and vault work.
 
@@ -128,12 +128,15 @@ Tests, fixtures, examples, snapshots and documentation MUST use structural place
 
 Future secret types should minimize cloning and lifetime where practical, but DANGOMUSHI cannot promise perfect erasure from all memory.
 
-Clipboard handling is a separate boundary because the clipboard is owned by the operating system or desktop environment. A future clipboard-hygiene task must distinguish between:
+Clipboard handling is a separate boundary because the clipboard is owned by the operating system or desktop environment. The implemented clipboard-hygiene boundary distinguishes between:
 
-- placing a secret on the clipboard,
-- clearing it after a configured interval,
+- placing a secret on the clipboard through an explicitly owned `ClipboardSecret`,
+- clearing it after a configurable interval (30 seconds by default),
 - clearing only when the clipboard still appears to contain the value DANGOMUSHI placed there,
+- preserving changed, empty, or non-text clipboard content,
 - cases where the OS, clipboard manager, remote session, or another process may already have retained a copy.
+
+`SecretClipboard` owns the backend and the active delayed-clear lease so the expected secret copy has a deliberate lifetime. The readback used for comparison is also secret-owned and best-effort zeroized. Backend errors expose operation failure only, never clipboard contents. Compare and clear are separate OS operations, so DANGOMUSHI does not claim an atomic compare-and-clear guarantee.
 
 ## Dependency order
 
@@ -178,6 +181,6 @@ Normal M2 tools such as HASH / VERIFY continue independently. The secret subsyst
 
 ## Exactly One Next Task
 
-**Clipboard hygiene**
+**Secret Backup / Restore**
 
-That next task must establish explicit secret-copy ownership, configurable delayed clearing, and conditional clearing only when the Clipboard still appears to contain the value DANGOMUSHI placed there. It must preserve the limitation that OS/desktop Clipboard managers or other processes may already have retained copies.
+That next task must define a secret-specific encrypted backup and restore boundary without routing decrypted Credentials, Recovery Codes, Master Passphrases, clipboard values, or Vault plaintext through generic Workspace backup/export helpers.

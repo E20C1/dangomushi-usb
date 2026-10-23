@@ -1,6 +1,6 @@
 # Recovery Codes
 
-Status: implemented as an M2-S secret-aware model and versioned Vault section payload. No UI, Clipboard behavior, or Backup / Restore is attached.
+Status: implemented as an M2-S secret-aware model and versioned Vault section payload. No Recovery Code UI or Secret Backup / Restore is attached; clipboard copies are handled only through the separate Clipboard hygiene boundary.
 
 ## Scope
 
@@ -95,13 +95,12 @@ Not implemented here:
 - Recovery Code generation,
 - PASSWORDS UI,
 - automatic association with a Credential/service,
-- Clipboard copy,
-- Clipboard timed clearing,
+- Recovery Code-specific UI wiring to the Clipboard hygiene boundary,
 - Secret Backup / Restore,
 - full Credential + Recovery Code Vault document schema.
 
-## Exactly One Next Task
+## Current downstream status
 
-**Clipboard hygiene**
+Clipboard hygiene is implemented separately in `src/clipboard_hygiene.rs`, including a typed Recovery Code copy constructor. Recovery Codes themselves remain independent from OS clipboard APIs.
 
-That task should establish explicit secret-copy ownership, configurable delayed clearing, and conditional clearing only when the Clipboard still appears to contain the value DANGOMUSHI placed there. It must document that OS/desktop Clipboard managers or other processes may retain copies.
+The current M2-S Exactly One Next Task is **Secret Backup / Restore**.

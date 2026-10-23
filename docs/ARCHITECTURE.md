@@ -111,6 +111,8 @@ Vault unlock/lock is implemented by `src/vault_unlock.rs`. `MasterPassphrase` co
 
 Recovery Codes use a dedicated `RecoveryCode` / `RecoveryCodeSet` model in `src/recovery_codes.rs`. Directly owned code Strings are redacted in Debug and zeroized on Drop as best effort. Recovery Codes are encoded only into a bounded, versioned, length-delimited `RecoveryCodeVaultPayload` plaintext section intended for authenticated Vault data; they are never ordinary Workspace JSON/TOML/CSV/text, generic autosave, or session state. The complete combined Vault document schema remains intentionally undefined so Credential and Recovery Code sections can be composed later without making the Recovery Code task define unrelated Credential serialization.
 
+Clipboard hygiene is implemented in `src/clipboard_hygiene.rs`. `ClipboardSecret` makes each DANGOMUSHI-owned clipboard copy explicit, redacts Debug output, and best-effort zeroizes its directly owned String on Drop. `SecretClipboard` owns both a long-lived clipboard backend and at most one active delayed-clear lease. When the configured deadline is reached, DANGOMUSHI reads the current clipboard text into a temporary zeroized buffer and clears the clipboard only if that observed text still matches the secret DANGOMUSHI placed there. If the clipboard is empty, non-text, or contains different text, the content is preserved and the lease is discarded. Backend failures remain generic and do not include clipboard contents. This compare-before-clear check is not atomic with the OS clear operation, so a narrow external-change race remains possible and is documented rather than hidden.
+
 
 
 
@@ -201,5 +203,7 @@ The Password Generator Core introduces `getrandom` as a small unconditional depe
 Encrypted Vault storage adds RustCrypto `chacha20poly1305` for XChaCha20Poly1305 AEAD and `zeroize` for best-effort clearing of directly owned Vault key/plaintext buffers. This does not change the project's explicit limitation that allocator, GUI, OS, crash, clipboard, or other copies cannot be guaranteed erased. RustCrypto `argon2` 0.6 is used by the Vault unlock layer with the `alloc` and `zeroize` features for Argon2id raw-key derivation. New Vaults use the current portable baseline of 19 MiB memory, 2 iterations, and parallelism 1; per-Vault KDF metadata remains bounded and authenticated.
 
 The native desktop shell introduces eframe/egui as an optional feature-gated dependency. Building without the desktop feature does not require the desktop stack.
+
+Clipboard hygiene uses optional `arboard` 3.7.0 only with the desktop feature. Image clipboard support is disabled; the Linux `wayland-data-control` feature is enabled in addition to the default X11/XWayland backend path. The OS clipboard adapter is kept behind the injectable `ClipboardBackend` boundary so core tests do not access the real clipboard.
 
 Third-party crates may be introduced when they provide clear value, but offline rebuildability, maintenance status, platform support and future vendoring must be considered before they become foundational dependencies. Security-sensitive dependencies require an implementation-time review from official documentation.
