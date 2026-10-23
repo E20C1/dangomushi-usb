@@ -85,13 +85,14 @@ fn native_ui_dispatches_ready_search_without_session_payload_content() {
 }
 
 #[test]
-fn search_stays_outside_secret_boundary_and_advances_only_to_repositories() {
+fn search_stays_outside_secret_boundary_after_repositories_advance() {
     assert!(SECRET_BOUNDARY.contains(
         "MUST NOT be routed through its generic document-search path or result previews"
     ));
     assert!(ROADMAP.contains("- [x] **Local document search**"));
+    assert!(ROADMAP.contains("- [x] **Repository status and safe Git operations**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Repository status and safe Git operations** — Exactly One Next Task"
+        "- [ ] **Backup and restore workflow** — Exactly One Next Task"
     ));
-    assert!(!ROADMAP.contains("- [x] **Repository status and safe Git operations**"));
+    assert!(ROADMAP.contains("- [x] **Repository status and safe Git operations**"));
 }
