@@ -430,7 +430,7 @@ The transport is direct TCP over IPv4 only. It has no discovery, multicast, broa
 
 Production bind/connect operations require the process-local `LanEnableControl` to be enabled and call the live `network_safety::current_exposure_decision` rather than accepting a cached assessment. On Windows, all connected Network List Manager entries must therefore still be Private and/or DomainAuthenticated. Public, Unknown, probe-failure or empty evidence denies exposure. macOS/Linux remain fail-closed while their network-safety adapter is UnsupportedPlatform.
 
-The receiver uses a one-shot nonblocking listener with a maximum five-minute receive window. It re-probes network safety immediately before bind, every 50 ms while waiting, immediately after accept and again before authenticating/opening the encrypted payload. After the first accepted connection the listener is dropped before that connection is processed.
+The receiver uses a one-shot nonblocking listener with a maximum five-minute receive window. It re-probes network safety immediately before bind, every 50 ms while waiting, immediately after accept, before issuing the signed receive offer, before authenticating/opening the encrypted payload, and before the final success acknowledgement. After the first accepted connection the listener is dropped before that connection is processed.
 
 The sender re-probes before connect, immediately after connect and again before sealing/sending the encrypted envelope.
 
