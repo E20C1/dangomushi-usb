@@ -252,7 +252,7 @@ M3's transport-independent security and handoff boundaries are now complete. Any
   - first non-loopback peer transport is direct TCP over IPv4 only; no discovery, relay or NAT traversal
   - public API requires explicit process-local LAN enablement plus a fresh current-network safety check
   - Windows permits exposure only while all connected Network List Manager entries remain Private and/or DomainAuthenticated; macOS/Linux remain fail-closed
-  - receiver re-probes before bind, continuously while waiting, immediately after accept and again before encrypted payload authorization
+  - receiver re-probes before bind, continuously while waiting, after accept, before signed offer, before encrypted payload authorization and before final acknowledgement
   - sender re-probes before connect, after connect and before sealing/sending the encrypted envelope
   - target/accepted addresses are restricted to IPv4 loopback, RFC1918 private or IPv4 link-local; global/CGNAT/IPv6 targets are rejected
   - receive window is one-shot and bounded to five minutes; listener is dropped after the first accepted connection
