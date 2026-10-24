@@ -116,7 +116,7 @@ fn native_pairing_surface_is_explicit_run_local_and_transport_locked() {
         "PAIRING CORE READY / TRANSPORT LOCKED",
         "APPROVE DEVICE FOR THIS RUN",
         "PAIRED FOR THIS RUN",
-        "Persistent trusted-device storage is the next M3 task",
+        "TRUST DEVICE PERSISTENTLY",
         "self.device_pairing.cancel()",
     ] {
         assert!(UI.contains(required), "missing native pairing UI evidence: {required}");
