@@ -135,11 +135,11 @@ pub(crate) fn merge_for_workspace_restore(
     workspace_root: &Path,
     staging_root: &Path,
 ) -> Result<(), DeviceRevocationError> {
-    let current_identity = checked_identity_root(workspace_root)?;
+    let current_identity = checked_identity_directory(workspace_root)?;
     recover_interrupted_write(&current_identity)?;
     let current = load_committed(&current_identity)?;
 
-    let staged_identity = checked_staged_identity_root(staging_root)?;
+    let staged_identity = checked_identity_directory(staging_root)?;
     recover_interrupted_write(&staged_identity)?;
     let staged = load_committed(&staged_identity)?;
 
@@ -191,19 +191,23 @@ fn checked_identity_root(workspace_root: &Path) -> Result<PathBuf, DeviceRevocat
     Ok(canonical_identity)
 }
 
-fn checked_staged_identity_root(staging_root: &Path) -> Result<PathBuf, DeviceRevocationError> {
-    let identity = staging_root.join("identity");
+fn checked_identity_directory(root: &Path) -> Result<PathBuf, DeviceRevocationError> {
+    let canonical_root =
+        fs::canonicalize(root).map_err(|_| DeviceRevocationError::UnsafeIdentityLayout)?;
+    if !canonical_root.is_dir() {
+        return Err(DeviceRevocationError::UnsafeIdentityLayout);
+    }
+
+    let identity = canonical_root.join("identity");
     let metadata =
         fs::symlink_metadata(&identity).map_err(|_| DeviceRevocationError::UnsafeIdentityLayout)?;
     if metadata.file_type().is_symlink() || !metadata.is_dir() {
         return Err(DeviceRevocationError::UnsafeIdentityLayout);
     }
 
-    let canonical_staging =
-        fs::canonicalize(staging_root).map_err(|_| DeviceRevocationError::UnsafeIdentityLayout)?;
     let canonical_identity =
         fs::canonicalize(&identity).map_err(|_| DeviceRevocationError::UnsafeIdentityLayout)?;
-    if !canonical_identity.starts_with(&canonical_staging) {
+    if !canonical_identity.starts_with(&canonical_root) {
         return Err(DeviceRevocationError::UnsafeIdentityLayout);
     }
 
