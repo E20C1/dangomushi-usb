@@ -268,7 +268,7 @@ fn cli_exposes_creation_and_read_only_verification_but_not_restore() {
     assert!(MAIN.contains("--destination is required for a recovery snapshot"));
     assert!(MAIN.contains("--snapshot is required for recovery snapshot verification"));
     assert!(MAIN.contains("recovery snapshot verify --snapshot <PATH>"));
-    assert!(!MAIN.contains("recovery snapshot restore"));
+    assert!(!MAIN.contains(r#""restore" =>"#));
 }
 
 #[test]
