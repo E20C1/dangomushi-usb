@@ -1,0 +1,27 @@
+name: Lockfile capture
+
+on:
+  push:
+    branches:
+      - feat/reproducible-dependency-cache
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Generate Cargo.lock
+        run: cargo generate-lockfile
+      - name: Emit lockfile for repository commit
+        shell: python
+        run: |
+          import base64
+          from pathlib import Path
+          data = Path("Cargo.lock").read_bytes()
+          print("DANGOMUSHI_LOCKFILE_BASE64_BEGIN")
+          print(base64.b64encode(data).decode("ascii"))
+          print("DANGOMUSHI_LOCKFILE_BASE64_END")
