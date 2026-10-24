@@ -313,7 +313,5 @@ fn roadmap_advances_exactly_to_encrypted_transfer() {
     }
 
     assert!(ROADMAP.contains("- [x] **Trusted peer identity**"));
-    assert!(ROADMAP.contains(
-        "- [ ] **Encrypted text/file transfer** — Exactly One Next Task"
-    ));
+    assert!(ROADMAP.contains("- [x] **Encrypted text/file transfer**"));
 }

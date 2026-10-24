@@ -83,6 +83,11 @@ impl LocalPeerIdentity {
         let signing_key = SigningKey::from_bytes(&*self.secret_seed);
         Ok(signing_key.sign(&message).to_bytes())
     }
+
+    pub(crate) fn sign_message(&self, message: &[u8]) -> [u8; PEER_SIGNATURE_BYTES] {
+        let signing_key = SigningKey::from_bytes(&*self.secret_seed);
+        signing_key.sign(message).to_bytes()
+    }
 }
 
 impl fmt::Debug for LocalPeerIdentity {
