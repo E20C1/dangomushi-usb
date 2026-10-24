@@ -290,6 +290,16 @@ M3's transport-independent security and handoff boundaries are now complete. Any
   - CI pins toolchain 1.99.1, uses `--locked` on all normal Cargo paths and independently exercises a fresh vendor snapshot plus frozen offline build on Ubuntu
   - strategy does not claim hermetic OS/toolchain reproduction; system SDKs/native packages and preserved rustup distributions remain external prerequisites
   - dependency cache is build infrastructure and does not enter Workspace, Generic Backup, Secret Backup, autosave or session state
-- [ ] **Recovery snapshots** — Exactly One Next Task
-- [ ] Restore verification
+- [x] **Recovery snapshots**
+  - create-new recovery directory combines fixed first-party source/build inputs, the generated `vendor/` cache and one existing verified Generic Workspace Backup
+  - copied source is allowlisted rather than recursively cloning the repository root; `.git/`, `target/`, `build/`, `app/`, live `workspace/` and arbitrary root files are excluded
+  - live Workspace state is never copied directly; the existing Generic Workspace Backup scope remains authoritative
+  - Secret Backup remains separate and is not auto-discovered or bundled
+  - destination must be outside source/Workspace roots, must not exist, and must have a real non-symlink parent
+  - copied directory trees reject symlinks, special files and non-UTF-8 path components
+  - 64 KiB streaming copy hashes source and destination, detects observable per-file source changes and bounds file count/path/size totals
+  - final `.dangomushi-recovery-snapshot` marker is written only after exact payload re-enumeration and records sorted path/length/SHA-256 entries plus a domain-separated snapshot digest
+  - CLI exposes creation only; restore/extract and public snapshot verification are intentionally deferred
+  - snapshot includes Rust source/vendor recovery material but still does not preserve rustup installers, OS SDKs/native packages or platform linkers
+- [ ] **Restore verification** — Exactly One Next Task
 - [ ] Portable release bundles per operating system

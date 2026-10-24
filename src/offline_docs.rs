@@ -41,6 +41,7 @@ const DOCUMENTS: &[OfflineDocument] = &[
     OfflineDocument { path: "docs/PUBLIC_NETWORK_SAFE_DEFAULT.md", content: include_str!("../docs/PUBLIC_NETWORK_SAFE_DEFAULT.md") },
     OfflineDocument { path: "docs/RECEIVED_FILE_INTEGRITY.md", content: include_str!("../docs/RECEIVED_FILE_INTEGRITY.md") },
     OfflineDocument { path: "docs/REPRODUCIBLE_DEPENDENCY_CACHE.md", content: include_str!("../docs/REPRODUCIBLE_DEPENDENCY_CACHE.md") },
+    OfflineDocument { path: "docs/RECOVERY_SNAPSHOTS.md", content: include_str!("../docs/RECOVERY_SNAPSHOTS.md") },
     OfflineDocument { path: "docs/RECOVERY_CODES.md", content: include_str!("../docs/RECOVERY_CODES.md") },
     OfflineDocument { path: "docs/REPOSITORY_GIT.md", content: include_str!("../docs/REPOSITORY_GIT.md") },
     OfflineDocument { path: "docs/ROADMAP.md", content: include_str!("../docs/ROADMAP.md") },

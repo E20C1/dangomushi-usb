@@ -1,4 +1,4 @@
-use dangomushi::{offline_docs, server, workspace};
+use dangomushi::{offline_docs, recovery_snapshot, server, workspace};
 use std::env;
 use std::path::PathBuf;
 use std::process;
@@ -11,6 +11,14 @@ const DEFAULT_DOC_EXPORT: &str = "dangomushi-offline-docs";
 struct ServeOptions {
     port: u16,
     workspace: PathBuf,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct RecoverySnapshotOptions {
+    source: PathBuf,
+    workspace: PathBuf,
+    backup: PathBuf,
+    destination: PathBuf,
 }
 
 fn main() {
@@ -59,12 +67,99 @@ fn run() -> Result<(), String> {
             }
         }
         Some("docs") => run_docs(args.collect()),
+        Some("recovery") => run_recovery(args.collect()),
         Some("version") | Some("--version") | Some("-V") => {
             println!("dangomushi {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
         Some(other) => Err(format!("unknown command: {other}\n\n{}", help_text())),
     }
+}
+
+fn run_recovery(args: Vec<String>) -> Result<(), String> {
+    if args.len() < 2 || args[0] != "snapshot" || args[1] != "create" {
+        return Err(recovery_help_text());
+    }
+
+    let options = parse_recovery_snapshot_options(&args[2..])?;
+    let summary = recovery_snapshot::create_snapshot(
+        &options.source,
+        &options.workspace,
+        &options.backup,
+        &options.destination,
+    )
+    .map_err(|error| format!("recovery snapshot failed: {error}"))?;
+
+    println!("DANGOMUSHI RECOVERY SNAPSHOT");
+    println!("destination: {}", options.destination.display());
+    println!("files: {}", summary.files);
+    println!("bytes: {}", summary.total_bytes);
+    println!("sha256: {}", summary.sha256_hex());
+    println!("workspace_backup_files: {}", summary.workspace_backup.files);
+    println!(
+        "workspace_backup_bytes: {}",
+        summary.workspace_backup.total_file_bytes
+    );
+    Ok(())
+}
+
+fn parse_recovery_snapshot_options(args: &[String]) -> Result<RecoverySnapshotOptions, String> {
+    let mut source = PathBuf::from(".");
+    let mut workspace = PathBuf::from(DEFAULT_WORKSPACE);
+    let mut backup = None;
+    let mut destination = None;
+
+    let mut index = 0;
+    while index < args.len() {
+        let flag = args[index].as_str();
+        if matches!(flag, "--help" | "-h") {
+            return Err(recovery_help_text());
+        }
+
+        index += 1;
+        let value = args
+            .get(index)
+            .ok_or_else(|| format!("{flag} requires a value\n\n{}", recovery_help_text()))?;
+
+        match flag {
+            "--source" => source = PathBuf::from(value),
+            "--workspace" => workspace = PathBuf::from(value),
+            "--backup" => backup = Some(PathBuf::from(value)),
+            "--destination" => destination = Some(PathBuf::from(value)),
+            _ => {
+                return Err(format!(
+                    "unknown recovery snapshot option: {flag}\n\n{}",
+                    recovery_help_text()
+                ))
+            }
+        }
+
+        index += 1;
+    }
+
+    let backup = backup.ok_or_else(|| {
+        format!(
+            "--backup is required for a recovery snapshot\n\n{}",
+            recovery_help_text()
+        )
+    })?;
+    let destination = destination.ok_or_else(|| {
+        format!(
+            "--destination is required for a recovery snapshot\n\n{}",
+            recovery_help_text()
+        )
+    })?;
+
+    Ok(RecoverySnapshotOptions {
+        source,
+        workspace,
+        backup,
+        destination,
+    })
+}
+
+fn recovery_help_text() -> String {
+    "Usage:\n  dangomushi recovery snapshot create --backup backups/<NAME>.dgmwbk --destination <PATH> [--source <SOURCE-ROOT>] [--workspace <WORKSPACE-ROOT>]\n\nDefaults:\n  source: .\n  workspace: ./workspace\n\nThe destination must not already exist and must be outside the source and Workspace roots. A generated vendor/ directory and a verified Generic Workspace Backup are required.".to_string()
 }
 
 fn run_docs(args: Vec<String>) -> Result<(), String> {
@@ -198,6 +293,7 @@ Usage:\n  dangomushi serve [--port PORT] [--workspace PATH]\n  \
 dangomushi init [PATH]\n  \
 dangomushi doctor [PATH]\n  \
 dangomushi docs list|show|export|verify ...\n  \
+dangomushi recovery snapshot create --backup backups/<NAME>.dgmwbk --destination <PATH> [--source PATH] [--workspace PATH]\n  \
 dangomushi version\n\n\
 Desktop:\n  run the dangomushi-desktop binary built with --features desktop\n\n\
 Defaults:\n  port: {DEFAULT_PORT}\n  workspace: ./{DEFAULT_WORKSPACE}\n\n\
@@ -215,6 +311,38 @@ mod tests {
         let options = parse_serve_options(vec![]).expect("parse defaults");
         assert_eq!(options.port, DEFAULT_PORT);
         assert_eq!(options.workspace, PathBuf::from(DEFAULT_WORKSPACE));
+    }
+
+    #[test]
+    fn recovery_snapshot_options_require_explicit_backup_and_destination() {
+        let options = parse_recovery_snapshot_options(&[
+            "--source".into(),
+            "source-tree".into(),
+            "--workspace".into(),
+            "portable-workspace".into(),
+            "--backup".into(),
+            "backups/workspace.dgmwbk".into(),
+            "--destination".into(),
+            "../recovery-copy".into(),
+        ])
+        .expect("parse recovery snapshot options");
+
+        assert_eq!(
+            options,
+            RecoverySnapshotOptions {
+                source: PathBuf::from("source-tree"),
+                workspace: PathBuf::from("portable-workspace"),
+                backup: PathBuf::from("backups/workspace.dgmwbk"),
+                destination: PathBuf::from("../recovery-copy"),
+            }
+        );
+
+        assert!(parse_recovery_snapshot_options(&[]).is_err());
+        assert!(parse_recovery_snapshot_options(&[
+            "--backup".into(),
+            "backups/workspace.dgmwbk".into(),
+        ])
+        .is_err());
     }
 
     #[test]

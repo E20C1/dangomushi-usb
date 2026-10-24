@@ -554,6 +554,26 @@ This is not a fully hermetic operating-system build. Rust toolchain installation
 
 The next M5 boundary is Recovery snapshots.
 
+## Recovery snapshots
+
+M5 recovery snapshots are implemented by `src/recovery_snapshot.rs` as a create-only, higher-level offline recovery directory.
+
+A snapshot copies a fixed allowlist of first-party source/build inputs, the generated repository-root `vendor/` tree, and one selected Generic Workspace Backup that must pass `workspace_backup::verify_backup` before destination creation. The copied Workspace artifact is stored at `recovery/workspace.dgmwbk`.
+
+The source allowlist is intentionally narrower than the entire repository root. It contains Cargo/build metadata plus `.github/workflows/`, `docs/`, `scripts/`, `src/`, `tests/`, `web/` and `vendor/`. It does not recursively copy `.git/`, `target/`, `build/`, `app/`, live `workspace/` or arbitrary root files.
+
+The live Workspace is never copied directly. This preserves the existing Generic Workspace Backup scope and avoids bypassing security-sensitive exclusions such as session state, peer private identity and permission policy. M2-S Secret Backup also remains separate; recovery snapshot creation does not discover Vault storage, Master Passphrases, Credentials, Recovery Codes or Secret Backup ciphertext.
+
+Recovery snapshot destinations are create-new, must have a real non-symlink parent, and must be outside both source and Workspace roots. Copied trees reject symlinks, special entries and non-UTF-8 components.
+
+Files are streamed through 64 KiB buffers. Source length/modification metadata is sampled around the copy, source bytes are SHA-256 hashed while copying, destination files are synced and independently re-hashed, and the complete destination payload is re-enumerated before completion.
+
+The completion marker `.dangomushi-recovery-snapshot` is written last. It records format/app version, fixed Workspace Backup location, file count, total bytes, sorted hex-encoded path records with length/SHA-256, and a domain-separated deterministic snapshot SHA-256. This is integrity identification, not publisher authenticity.
+
+The CLI exposes only `recovery snapshot create`. There is deliberately no restore/extract or public verify command in this task. Restore Verification is the next M5 boundary.
+
+A snapshot contains the Rust source/vendor materials required by the existing frozen Cargo workflow but still does not preserve the Rust toolchain installer, Linux package payloads, Windows/macOS SDKs, system linkers or platform runtime dependencies.
+
 
 ## Dependency policy
 

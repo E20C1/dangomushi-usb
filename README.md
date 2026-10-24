@@ -48,11 +48,12 @@ The current implementation includes:
 - An M4 Internet P2P threat review whose current decision is fail-closed: Internet/global peer transport remains disabled, with no runtime/configuration override, rendezvous, relay, NAT traversal or automatic port mapping.
 - An M5 embedded offline documentation pack containing README plus all docs/*.md, with deterministic SHA-256 inventory, offline CLI list/show, create-new export/verify, and a read-only native SYSTEM viewer.
 - An M5 reproducible Cargo dependency-cache strategy with committed Cargo.lock, Rust 1.99.1 pinning, locked normal builds, generated versioned vendor snapshots, explicit offline source replacement, and frozen vendor CI verification.
+- An M5 recovery snapshot creator that packages reviewed source/build inputs, vendor/ and one verified Generic Workspace Backup into a create-new integrity-manifested offline directory without copying live Workspace/secret state.
 - No public/global peer address support, peer discovery, firewall mutation, UPnP, NAT-PMP, reverse tunnel, relay, CDN or external web request.
 - Windows double-click build/update entry point.
 - CI builds for Windows, macOS and Linux.
 
-M3's transport-independent mobile security and handoff foundation is complete. M4 is complete with trusted-peer identity, encrypted transfer, received-file verification and fail-closed Direct LAN. M5 Offline continuity now includes embedded documentation and a reproducible Cargo dependency-cache/vendor strategy; Recovery snapshots are the next task.
+M3's transport-independent mobile security and handoff foundation is complete. M4 is complete with trusted-peer identity, encrypted transfer, received-file verification and fail-closed Direct LAN. M5 Offline continuity now includes embedded documentation, reproducible Cargo dependencies and create-only recovery snapshots; Restore verification is the next task.
 
 ## Editor safety model
 
@@ -117,6 +118,7 @@ cargo run -- docs list
 cargo run -- docs show docs/ARCHITECTURE.md
 cargo run -- docs export
 cargo run -- docs verify
+cargo run -- recovery snapshot create --backup backups/<NAME>.dgmwbk --destination <PATH>
 cargo run -- serve
 ~~~
 
@@ -167,6 +169,18 @@ sh scripts/verify-vendored-dependencies.sh
 ~~~
 
 The generated `vendor/` directory is intentionally not committed to Git. Preserve it with the matching source tree and `Cargo.lock` when preparing long-term offline media. The Rust 1.99.1 toolchain and required OS-native build packages remain separate prerequisites.
+
+## Recovery snapshots
+
+After creating and verifying a normal Generic Workspace Backup and generating `vendor/`, create a higher-level offline recovery directory outside both the source tree and Workspace:
+
+~~~text
+cargo run -- recovery snapshot create \
+  --backup backups/<NAME>.dgmwbk \
+  --destination <PATH>
+~~~
+
+Use `--source` and `--workspace` when those roots are not the defaults. Recovery snapshots intentionally do not bundle live Workspace state or Secret Backup ciphertext. Restore/verification is a separate later M5 boundary.
 
 ## Repository layout
 
