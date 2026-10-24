@@ -570,9 +570,27 @@ Files are streamed through 64 KiB buffers. Source length/modification metadata i
 
 The completion marker `.dangomushi-recovery-snapshot` is written last. It records format/app version, fixed Workspace Backup location, file count, total bytes, sorted hex-encoded path records with length/SHA-256, and a domain-separated deterministic snapshot SHA-256. This is integrity identification, not publisher authenticity.
 
-The CLI exposes only `recovery snapshot create`. There is deliberately no restore/extract or public verify command in this task. Restore Verification is the next M5 boundary.
+The CLI exposes `recovery snapshot create`. Creation itself never restores or extracts into a live destination.
 
 A snapshot contains the Rust source/vendor materials required by the existing frozen Cargo workflow but still does not preserve the Rust toolchain installer, Linux package payloads, Windows/macOS SDKs, system linkers or platform runtime dependencies.
+
+## Restore verification
+
+M5 Restore Verification reuses `src/recovery_snapshot.rs` as a read-only verifier for already-existing Recovery Snapshots.
+
+`verify_snapshot` requires a real non-symlink snapshot directory and parses `.dangomushi-recovery-snapshot` with strict format-v1 rules. The parser enforces canonical integer and lowercase-hex fields, bounded marker/file counts and sizes, sorted unique relative paths, the fixed embedded Workspace Backup path, and a bounded application-version field.
+
+A self-consistent marker is not sufficient. Every marker entry must still belong to the reviewed Recovery Snapshot allowlist, all required fixed source/build inputs and source directories must exist, and directory traversal rejects unexpected empty directories as well as unexpected files, symlinks and special entries.
+
+The actual payload file set is enumerated again and must exactly equal the marker entry set. Every file is streamed through SHA-256 and checked for exact byte length and digest. The aggregate snapshot digest is recomputed using the application version recorded in the marker rather than the verifier's own current version, so compatible older format-v1 snapshots can be checked without weakening the digest definition.
+
+The embedded `recovery/workspace.dgmwbk` receives an independent second-layer verification through the existing Generic Workspace Backup archive parser. That validates DGMWBK01 structure, managed paths, per-file digests, archive digest and trailing-data rules. The .dgmwbk is hashed again after nested verification and must still match its outer snapshot record.
+
+The CLI exposes `recovery snapshot verify --snapshot <PATH>`. Verification does not extract source files, restore a Workspace, invoke Secret Backup restore, create staging/rollback directories, run Cargo, spawn processes or open network sockets. It is the trust gate for a later reconstruction path, not the reconstruction itself.
+
+Snapshot hashes remain integrity identification rather than publisher authenticity. A party able to replace an entire snapshot can build a different internally self-consistent marker; release provenance/signing remains a separate concern.
+
+The next M5 boundary is Portable release bundles per operating system.
 
 
 ## Dependency policy
