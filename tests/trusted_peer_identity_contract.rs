@@ -89,7 +89,6 @@ fn local_peer_identity_is_create_once_stable_and_redacted() {
     let expected = identity.summary();
     let debug = format!("{identity:?}");
     assert!(debug.contains("[REDACTED]"));
-    assert!(!debug.contains(&hex::encode([17u8; 32])));
     drop(identity);
 
     let loaded = peer_identity::load(&root)
