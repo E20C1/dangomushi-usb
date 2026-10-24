@@ -744,7 +744,7 @@ fn parse_snapshot_marker(text: &str) -> Result<ParsedSnapshotMarker, RecoverySna
     }
 
     let mut records = Vec::with_capacity(file_count);
-    let mut previous_path: Option<&str> = None;
+    let mut previous_path: Option<String> = None;
     for line in &lines[8..] {
         let encoded = exact_prefixed(line, "entry=")?;
         let mut fields = encoded.split('|');
@@ -766,7 +766,7 @@ fn parse_snapshot_marker(text: &str) -> Result<ParsedSnapshotMarker, RecoverySna
             return Err(RecoverySnapshotError::InvalidSnapshotMarker);
         }
 
-        if let Some(previous) = previous_path {
+        if let Some(previous) = previous_path.as_deref() {
             if previous >= path.as_str() {
                 return Err(RecoverySnapshotError::InvalidSnapshotMarker);
             }
@@ -778,12 +778,12 @@ fn parse_snapshot_marker(text: &str) -> Result<ParsedSnapshotMarker, RecoverySna
         }
 
         let record_sha = parse_hex_32(sha_text)?;
+        previous_path = Some(path.clone());
         records.push(FileRecord {
             path,
             bytes,
             sha256: record_sha,
         });
-        previous_path = records.last().map(|record| record.path.as_str());
     }
 
     Ok(ParsedSnapshotMarker {
