@@ -40,7 +40,9 @@ The receiver re-probes:
 - immediately before binding,
 - repeatedly while waiting for a connection,
 - immediately after accepting a connection,
-- immediately before authenticating/opening the encrypted payload.
+- again before issuing the signed receive offer,
+- immediately before authenticating/opening the encrypted payload,
+- once more before sending the final success acknowledgement.
 
 The sender re-probes:
 
