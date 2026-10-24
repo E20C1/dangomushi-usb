@@ -119,6 +119,9 @@ fn recovery_snapshot_is_create_new_and_contains_only_reviewed_recovery_inputs() 
     assert!(marker.contains("workspace_backup=recovery/workspace.dgmwbk"));
     assert!(marker.contains(&format!("snapshot_sha256={}", summary.sha256_hex())));
 
+    let verified = recovery_snapshot::verify_snapshot(&destination).expect("verify recovery snapshot");
+    assert_eq!(verified, summary);
+
     fs::remove_dir_all(source).expect("cleanup source");
     fs::remove_dir_all(workspace_root).expect("cleanup workspace");
     fs::remove_dir_all(destination_parent).expect("cleanup destination");
@@ -257,13 +260,15 @@ fn recovery_core_has_no_network_process_or_secret_backup_authority() {
 }
 
 #[test]
-fn cli_exposes_creation_but_not_restore_or_verification_yet() {
+fn cli_exposes_creation_and_read_only_verification_but_not_restore() {
     assert!(MAIN.contains(r#"Some("recovery") => run_recovery(args.collect())"#));
-    assert!(MAIN.contains(r#"args[0] != "snapshot" || args[1] != "create""#));
+    assert!(MAIN.contains(r#""create" =>"#));
+    assert!(MAIN.contains(r#""verify" =>"#));
     assert!(MAIN.contains("--backup is required for a recovery snapshot"));
     assert!(MAIN.contains("--destination is required for a recovery snapshot"));
+    assert!(MAIN.contains("--snapshot is required for recovery snapshot verification"));
+    assert!(MAIN.contains("recovery snapshot verify --snapshot <PATH>"));
     assert!(!MAIN.contains("recovery snapshot restore"));
-    assert!(!MAIN.contains("recovery snapshot verify"));
 }
 
 #[test]
@@ -284,8 +289,8 @@ fn docs_and_roadmap_advance_once_to_restore_verification() {
 
     assert!(README.contains("M5 recovery snapshot"));
     assert!(ROADMAP.contains("- [x] **Recovery snapshots**"));
-    assert!(ROADMAP.contains("- [ ] **Restore verification** — Exactly One Next Task"));
-    assert!(!ROADMAP.contains(
+    assert!(ROADMAP.contains("- [x] **Restore verification**"));
+    assert!(ROADMAP.contains(
         "- [ ] **Portable release bundles per operating system** — Exactly One Next Task"
     ));
 }
