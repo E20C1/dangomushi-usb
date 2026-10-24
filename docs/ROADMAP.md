@@ -280,7 +280,16 @@ M3's transport-independent security and handoff boundaries are now complete. Any
   - native SYSTEM view provides a read-only embedded-document selector/viewer without session persistence
   - pack content is application data and is not automatically copied into Workspace, Generic Backup, Secret Backup or autosave
   - no HTTP client, DNS, Git, shell, CDN or other network dependency is introduced
-- [ ] **Reproducible dependency cache/vendor strategy** — Exactly One Next Task
-- [ ] Recovery snapshots
+- [x] **Reproducible dependency cache/vendor strategy**
+  - committed `Cargo.lock` is the authoritative Rust package resolution and routine update/CI paths use `--locked`
+  - reproducible Rust baseline is pinned to toolchain 1.99.1 rather than a moving stable channel
+  - explicit helpers generate `vendor.pending/` with `cargo vendor --locked --versioned-dirs` and promote only after generation succeeds
+  - generated `vendor/` is ignored by Git and is treated as an external cache artifact to preserve with the matching source/lockfile when offline rebuildability is required
+  - dedicated `.cargo/vendor-config.toml` replaces crates.io with repository-root `vendor/` and forces Cargo offline only when explicitly selected
+  - frozen verification covers metadata, core tests/build, desktop library tests and native desktop release build
+  - CI pins toolchain 1.99.1, uses `--locked` on all normal Cargo paths and independently exercises a fresh vendor snapshot plus frozen offline build on Ubuntu
+  - strategy does not claim hermetic OS/toolchain reproduction; system SDKs/native packages and preserved rustup distributions remain external prerequisites
+  - dependency cache is build infrastructure and does not enter Workspace, Generic Backup, Secret Backup, autosave or session state
+- [ ] **Recovery snapshots** — Exactly One Next Task
 - [ ] Restore verification
 - [ ] Portable release bundles per operating system
