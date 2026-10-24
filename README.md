@@ -49,11 +49,12 @@ The current implementation includes:
 - An M5 embedded offline documentation pack containing README plus all docs/*.md, with deterministic SHA-256 inventory, offline CLI list/show, create-new export/verify, and a read-only native SYSTEM viewer.
 - An M5 reproducible Cargo dependency-cache strategy with committed Cargo.lock, Rust 1.99.1 pinning, locked normal builds, generated versioned vendor snapshots, explicit offline source replacement, and frozen vendor CI verification.
 - An M5 recovery snapshot creator that packages reviewed source/build inputs, vendor/ and one verified Generic Workspace Backup into a create-new integrity-manifested offline directory without copying live Workspace/secret state.
+- An M5 read-only Restore Verification gate that strictly parses recovery manifests, rejects unreviewed layout entries, re-hashes every payload, recomputes the aggregate snapshot digest, and independently validates the embedded Generic Workspace Backup before recovery input is trusted.
 - No public/global peer address support, peer discovery, firewall mutation, UPnP, NAT-PMP, reverse tunnel, relay, CDN or external web request.
 - Windows double-click build/update entry point.
 - CI builds for Windows, macOS and Linux.
 
-M3's transport-independent mobile security and handoff foundation is complete. M4 is complete with trusted-peer identity, encrypted transfer, received-file verification and fail-closed Direct LAN. M5 Offline continuity now includes embedded documentation, reproducible Cargo dependencies and create-only recovery snapshots; Restore verification is the next task.
+M3's transport-independent mobile security and handoff foundation is complete. M4 is complete with trusted-peer identity, encrypted transfer, received-file verification and fail-closed Direct LAN. M5 Offline continuity now includes embedded documentation, reproducible Cargo dependencies, recovery snapshots and read-only Restore Verification; portable per-OS release bundles are the next task.
 
 ## Editor safety model
 
@@ -119,6 +120,7 @@ cargo run -- docs show docs/ARCHITECTURE.md
 cargo run -- docs export
 cargo run -- docs verify
 cargo run -- recovery snapshot create --backup backups/<NAME>.dgmwbk --destination <PATH>
+cargo run -- recovery snapshot verify --snapshot <PATH>
 cargo run -- serve
 ~~~
 
@@ -180,7 +182,15 @@ cargo run -- recovery snapshot create \
   --destination <PATH>
 ~~~
 
-Use `--source` and `--workspace` when those roots are not the defaults. Recovery snapshots intentionally do not bundle live Workspace state or Secret Backup ciphertext. Restore/verification is a separate later M5 boundary.
+Use `--source` and `--workspace` when those roots are not the defaults. Recovery snapshots intentionally do not bundle live Workspace state or Secret Backup ciphertext.
+
+Before trusting an existing snapshot as recovery input, run:
+
+~~~text
+cargo run -- recovery snapshot verify --snapshot <PATH>
+~~~
+
+Verification is read-only: it validates the strict marker and reviewed layout, re-hashes every payload and the aggregate digest, and independently verifies the embedded Generic Workspace Backup. It does not restore or extract the snapshot.
 
 ## Repository layout
 
