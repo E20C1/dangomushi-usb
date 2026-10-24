@@ -666,6 +666,286 @@ fn resolve_verified_workspace_backup(
     Ok(canonical)
 }
 
+fn read_snapshot_marker(
+    snapshot_root: &Path,
+) -> Result<ParsedSnapshotMarker, RecoverySnapshotError> {
+    let marker_path = snapshot_root.join(SNAPSHOT_MARKER);
+    let metadata = fs::symlink_metadata(&marker_path)
+        .map_err(|_| RecoverySnapshotError::InvalidSnapshotMarker)?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err(RecoverySnapshotError::InvalidSnapshotMarker);
+    }
+    if metadata.len() > MAX_SNAPSHOT_MARKER_BYTES as u64 {
+        return Err(RecoverySnapshotError::SizeLimitExceeded);
+    }
+
+    let mut file = File::open(&marker_path).map_err(|_| RecoverySnapshotError::Io)?;
+    let mut bytes = Vec::with_capacity(metadata.len() as usize);
+    file.by_ref()
+        .take((MAX_SNAPSHOT_MARKER_BYTES as u64) + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| RecoverySnapshotError::Io)?;
+    if bytes.len() > MAX_SNAPSHOT_MARKER_BYTES || bytes.len() as u64 != metadata.len() {
+        return Err(RecoverySnapshotError::InvalidSnapshotMarker);
+    }
+
+    let text =
+        String::from_utf8(bytes).map_err(|_| RecoverySnapshotError::InvalidSnapshotMarker)?;
+    parse_snapshot_marker(&text)
+}
+
+fn parse_snapshot_marker(text: &str) -> Result<ParsedSnapshotMarker, RecoverySnapshotError> {
+    if !text.ends_with('\n') {
+        return Err(RecoverySnapshotError::InvalidSnapshotMarker);
+    }
+
+    let mut lines = text.split('\n').collect::<Vec<_>>();
+    if lines.last() != Some(&"") {
+        return Err(RecoverySnapshotError::InvalidSnapshotMarker);
+    }
+    lines.pop();
+
+    if lines.len() < 8 || lines[0] != SNAPSHOT_MAGIC {
+        return Err(RecoverySnapshotError::InvalidSnapshotMarker);
+    }
+    if lines[1] != format!("kind={SNAPSHOT_KIND}") {
+        return Err(RecoverySnapshotError::InvalidSnapshotMarker);
+    }
+
+    let format_text = exact_prefixed(lines[2], "format=")?;
+    let format = parse_canonical_u64(format_text)?;
+    if format != SNAPSHOT_FORMAT_VERSION as u64 {
+        return Err(RecoverySnapshotError::UnsupportedSnapshotVersion);
+    }
+
+    let app_version = exact_prefixed(lines[3], "app_version=")?;
+    validate_app_version(app_version)?;
+
+    if lines[4] != format!("workspace_backup={RECOVERY_DIR}/{WORKSPACE_BACKUP_NAME}") {
+        return Err(RecoverySnapshotError::InvalidSnapshotMarker);
+    }
+
+    let file_count_u64 = parse_canonical_u64(exact_prefixed(lines[5], "file_count=")?)?;
+    let file_count =
+        usize::try_from(file_count_u64).map_err(|_| RecoverySnapshotError::EntryLimitExceeded)?;
+    if file_count == 0 || file_count > MAX_SNAPSHOT_FILES {
+        return Err(RecoverySnapshotError::EntryLimitExceeded);
+    }
+
+    let total_bytes = parse_canonical_u64(exact_prefixed(lines[6], "total_bytes=")?)?;
+    if total_bytes > MAX_SNAPSHOT_TOTAL_BYTES {
+        return Err(RecoverySnapshotError::SizeLimitExceeded);
+    }
+
+    let sha256 = parse_hex_32(exact_prefixed(lines[7], "snapshot_sha256=")?)?;
+
+    if lines.len() != 8 + file_count {
+        return Err(RecoverySnapshotError::InvalidSnapshotMarker);
+    }
+
+    let mut records = Vec::with_capacity(file_count);
+    let mut previous_path: Option<&str> = None;
+    for line in &lines[8..] {
+        let encoded = exact_prefixed(line, "entry=")?;
+        let mut fields = encoded.split('|');
+        let path_hex = fields.next().ok_or(RecoverySnapshotError::InvalidSnapshotMarker)?;
+        let bytes_text = fields.next().ok_or(RecoverySnapshotError::InvalidSnapshotMarker)?;
+        let sha_text = fields.next().ok_or(RecoverySnapshotError::InvalidSnapshotMarker)?;
+        if fields.next().is_some() {
+            return Err(RecoverySnapshotError::InvalidSnapshotMarker);
+        }
+
+        let path_bytes = decode_lower_hex(path_hex)?;
+        if path_bytes.is_empty() || path_bytes.len() > MAX_SNAPSHOT_PATH_BYTES {
+            return Err(RecoverySnapshotError::PathLimitExceeded);
+        }
+        let path =
+            String::from_utf8(path_bytes).map_err(|_| RecoverySnapshotError::NonUtf8Path)?;
+        validate_relative_text(&path)?;
+        if hex_lower(path.as_bytes()) != path_hex {
+            return Err(RecoverySnapshotError::InvalidSnapshotMarker);
+        }
+
+        if let Some(previous) = previous_path {
+            if previous >= path.as_str() {
+                return Err(RecoverySnapshotError::InvalidSnapshotMarker);
+            }
+        }
+
+        let bytes = parse_canonical_u64(bytes_text)?;
+        if bytes > MAX_SNAPSHOT_SINGLE_FILE_BYTES {
+            return Err(RecoverySnapshotError::SizeLimitExceeded);
+        }
+
+        let record_sha = parse_hex_32(sha_text)?;
+        records.push(FileRecord {
+            path,
+            bytes,
+            sha256: record_sha,
+        });
+        previous_path = records.last().map(|record| record.path.as_str());
+    }
+
+    Ok(ParsedSnapshotMarker {
+        app_version: app_version.to_string(),
+        file_count,
+        total_bytes,
+        sha256,
+        records,
+    })
+}
+
+fn exact_prefixed<'a>(
+    line: &'a str,
+    prefix: &str,
+) -> Result<&'a str, RecoverySnapshotError> {
+    line.strip_prefix(prefix)
+        .filter(|value| !value.is_empty())
+        .ok_or(RecoverySnapshotError::InvalidSnapshotMarker)
+}
+
+fn parse_canonical_u64(value: &str) -> Result<u64, RecoverySnapshotError> {
+    let parsed = value
+        .parse::<u64>()
+        .map_err(|_| RecoverySnapshotError::InvalidSnapshotMarker)?;
+    if parsed.to_string() != value {
+        return Err(RecoverySnapshotError::InvalidSnapshotMarker);
+    }
+    Ok(parsed)
+}
+
+fn validate_app_version(value: &str) -> Result<(), RecoverySnapshotError> {
+    if value.is_empty()
+        || value.len() > 128
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'+'))
+    {
+        return Err(RecoverySnapshotError::InvalidSnapshotMarker);
+    }
+    Ok(())
+}
+
+fn decode_lower_hex(value: &str) -> Result<Vec<u8>, RecoverySnapshotError> {
+    if value.len() % 2 != 0 {
+        return Err(RecoverySnapshotError::InvalidSnapshotMarker);
+    }
+
+    let mut output = Vec::with_capacity(value.len() / 2);
+    let bytes = value.as_bytes();
+    for pair in bytes.chunks_exact(2) {
+        let high = lower_hex_nibble(pair[0])?;
+        let low = lower_hex_nibble(pair[1])?;
+        output.push((high << 4) | low);
+    }
+    Ok(output)
+}
+
+fn parse_hex_32(value: &str) -> Result<[u8; 32], RecoverySnapshotError> {
+    if value.len() != 64 {
+        return Err(RecoverySnapshotError::InvalidSnapshotMarker);
+    }
+    let decoded = decode_lower_hex(value)?;
+    decoded
+        .try_into()
+        .map_err(|_| RecoverySnapshotError::InvalidSnapshotMarker)
+}
+
+fn lower_hex_nibble(byte: u8) -> Result<u8, RecoverySnapshotError> {
+    match byte {
+        b'0'..=b'9' => Ok(byte - b'0'),
+        b'a'..=b'f' => Ok(byte - b'a' + 10),
+        _ => Err(RecoverySnapshotError::InvalidSnapshotMarker),
+    }
+}
+
+fn validate_snapshot_semantics(
+    snapshot_root: &Path,
+    records: &[FileRecord],
+) -> Result<(), RecoverySnapshotError> {
+    if records.is_empty() || records.len() > MAX_SNAPSHOT_FILES {
+        return Err(RecoverySnapshotError::EntryLimitExceeded);
+    }
+
+    let paths = records
+        .iter()
+        .map(|record| record.path.as_str())
+        .collect::<BTreeSet<_>>();
+    if paths.len() != records.len() {
+        return Err(RecoverySnapshotError::InvalidSnapshotMarker);
+    }
+
+    for required in SOURCE_FILES {
+        if !paths.contains(required) {
+            return Err(RecoverySnapshotError::UnsafeSnapshotLayout);
+        }
+    }
+
+    let backup_relative = format!("{RECOVERY_DIR}/{WORKSPACE_BACKUP_NAME}");
+    if !paths.contains(backup_relative.as_str()) {
+        return Err(RecoverySnapshotError::UnsafeSnapshotLayout);
+    }
+
+    for directory in SOURCE_DIRS {
+        let prefix = format!("{directory}/");
+        if !records.iter().any(|record| record.path.starts_with(&prefix)) {
+            return Err(RecoverySnapshotError::UnsafeSnapshotLayout);
+        }
+    }
+
+    for record in records {
+        if !is_allowed_snapshot_file(&record.path) {
+            return Err(RecoverySnapshotError::UnsafeSnapshotLayout);
+        }
+    }
+
+    for directory in [".cargo", ".github", RECOVERY_DIR] {
+        ensure_snapshot_directory(snapshot_root, directory)?;
+    }
+    for directory in SOURCE_DIRS {
+        ensure_snapshot_directory(snapshot_root, directory)?;
+    }
+
+    Ok(())
+}
+
+fn ensure_snapshot_directory(
+    snapshot_root: &Path,
+    relative: &str,
+) -> Result<(), RecoverySnapshotError> {
+    let path = join_relative(snapshot_root, relative)?;
+    let metadata =
+        fs::symlink_metadata(path).map_err(|_| RecoverySnapshotError::UnsafeSnapshotLayout)?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(RecoverySnapshotError::UnsafeSnapshotLayout);
+    }
+    Ok(())
+}
+
+fn is_allowed_snapshot_file(path: &str) -> bool {
+    if SOURCE_FILES.contains(&path) {
+        return true;
+    }
+    if path == format!("{RECOVERY_DIR}/{WORKSPACE_BACKUP_NAME}") {
+        return true;
+    }
+
+    SOURCE_DIRS.iter().any(|directory| {
+        let prefix = format!("{directory}/");
+        path.starts_with(&prefix)
+    })
+}
+
+fn is_allowed_snapshot_directory(path: &str) -> bool {
+    if matches!(path, ".cargo" | ".github" | RECOVERY_DIR) {
+        return true;
+    }
+
+    SOURCE_DIRS.iter().any(|directory| {
+        path == *directory || path.starts_with(&format!("{directory}/"))
+    })
+}
+
 fn verify_payload_exact(
     destination: &Path,
     expected: &[FileRecord],
@@ -713,6 +993,13 @@ fn collect_payload_files(
         }
 
         if metadata.is_dir() {
+            let relative = path
+                .strip_prefix(root)
+                .map_err(|_| RecoverySnapshotError::UnsafeSnapshotLayout)?;
+            let text = path_to_forward_slash(relative)?;
+            if !is_allowed_snapshot_directory(&text) {
+                return Err(RecoverySnapshotError::UnsafeSnapshotLayout);
+            }
             collect_payload_files(root, &path, output)?;
         } else if metadata.is_file() {
             let relative = path
@@ -720,7 +1007,7 @@ fn collect_payload_files(
                 .map_err(|_| RecoverySnapshotError::IntegrityFailed)?;
             let text = path_to_forward_slash(relative)?;
             if text == SNAPSHOT_MARKER {
-                return Err(RecoverySnapshotError::IntegrityFailed);
+                continue;
             }
             if !output.insert(text) {
                 return Err(RecoverySnapshotError::IntegrityFailed);
@@ -734,11 +1021,18 @@ fn collect_payload_files(
 }
 
 fn snapshot_digest(records: &[FileRecord]) -> [u8; 32] {
+    snapshot_digest_for_version(env!("CARGO_PKG_VERSION"), records)
+}
+
+fn snapshot_digest_for_version(
+    app_version: &str,
+    records: &[FileRecord],
+) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(SNAPSHOT_DIGEST_DOMAIN);
     hasher.update(SNAPSHOT_FORMAT_VERSION.to_le_bytes());
 
-    let version = env!("CARGO_PKG_VERSION").as_bytes();
+    let version = app_version.as_bytes();
     hasher.update((version.len() as u32).to_le_bytes());
     hasher.update(version);
     hasher.update((records.len() as u64).to_le_bytes());
