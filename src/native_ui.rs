@@ -3194,7 +3194,7 @@ impl NativeApp {
 
             ui.label(
                 egui::RichText::new(
-                    "Peer trust requires fresh Ed25519 proof-of-possession and a separate explicit trust action. Encrypted text/file envelope core is READY using ephemeral X25519 + HKDF-SHA256 + XChaCha20Poly1305, but no peer discovery, filesystem receiver or LAN transport exists yet.",
+                    "Peer trust requires fresh Ed25519 proof-of-possession and a separate explicit trust action. No peer discovery or transfer transport exists yet. The encrypted text/file envelope core is READY using ephemeral X25519 + HKDF-SHA256 + XChaCha20Poly1305, but no filesystem receiver or LAN transport is enabled.",
                 )
                 .color(MUTED),
             );
