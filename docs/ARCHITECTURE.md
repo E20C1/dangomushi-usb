@@ -346,7 +346,23 @@ Network-safety state is process-local evidence only. It is not written to `sessi
 
 This task does not create a LAN listener. `src/server.rs` remains bound to `127.0.0.1` and retains the existing loopback peer/Host restrictions. No wildcard bind, firewall mutation, UPnP/NAT-PMP mapping, public relay, TLS/cookie transport or mobile handoff endpoint is introduced.
 
-Mobile editor/session handoff is the next M3 task.
+### Mobile editor/session handoff
+
+The M3 mobile handoff core is implemented in `src/mobile_handoff.rs` and remains transport-independent. It does not create a LAN listener, HTTP/WebSocket route, mobile web UI, browser key store or alternate persistence path.
+
+A session snapshot requires the current authenticated device to hold `session.handoff`. The snapshot contains only the existing navigation fields from the in-process `SessionState`: active view, current FILES directory, selected FILES entry and current Editor path. Relative paths are validated again before handoff. Editor buffers, autosave drafts, secret-subsystem plaintext, authentication material and permission state are not part of the session snapshot.
+
+Opening a mobile Editor document requires both `session.handoff` and `files.read`. The core delegates the read to the existing Text Editor boundary, so relative-path validation, symlink rejection, in-Workspace confinement, regular-file enforcement, UTF-8 decoding and the 4 MiB limit remain authoritative. A successful read returns a SHA-256 content revision together with the UTF-8 text. The revision is only a concurrency token, not a bearer credential or durable capability.
+
+Saving a mobile Editor document requires both `session.handoff` and `files.write`. The caller must return the revision of the version it edited. The core re-reads the current disk text before save. If the revision changed, DANGOMUSHI refuses to overwrite the newer disk file and stores the submitted mobile text through the existing recovery-draft boundary. If the revision still matches, saving delegates to the existing Text Editor save path, which persists recovery before touching the source file and syncs the explicit source write.
+
+The comparison is deliberately aligned with the current desktop Editor conflict model. It does not claim an operating-system-atomic compare-and-swap against another process changing the file in the narrow interval between revision checking and final write.
+
+Every handoff capture, read and save reuses `AuthenticatedDeviceSession::authorize`; permissions are never snapshotted into a handoff. LAN disable, trust removal, revocation or permission removal therefore affects later operations immediately.
+
+Handoff snapshots, Editor text, content revisions and authenticated principals remain process-local. They are not added to `session.v1`, Workspace config, Generic Workspace Backup, Secret Backup / Restore, trusted-device identity, revocation state or permission policy.
+
+This completes M3's transport-independent mobile security and handoff boundaries. Any future non-loopback transport must still perform the live network-safety checks defined above and must not weaken the trust, reconnect or permission checks when connecting this core to a remote client.
 
 ## Web gateway
 
