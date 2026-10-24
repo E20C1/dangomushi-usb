@@ -195,7 +195,7 @@ fn architecture_advances_exactly_to_device_revocation() {
     for required in [
         "workspace/identity/trusted_devices.v1.json",
         "bounded to 256 devices and 256 KiB",
-        "pending-only first write is discarded",
+        "never promotes a pending-only first write",
         "older backup can restore an older trust set",
         "following Device revocation task must define fail-closed revoked-key behavior",
         "No removal or revocation operation",
