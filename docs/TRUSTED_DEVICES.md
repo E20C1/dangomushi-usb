@@ -48,4 +48,4 @@ Public keys are identity/authorization material but are not secret values.
 
 The store does not claim protection from an attacker who already has arbitrary write access to the Workspace filesystem. It establishes bounded durable identity with corruption and layout checks, not a hardware-backed local trust root.
 
-Revocation is separate from permission scopes, LAN listening and network authorization.
+Revocation remains the authority for same-key exclusion. Permission scopes are stored separately under `workspace/state/device_permissions.v1.json`; new persistent trust clears any stale permission policy for that fingerprint before the trust record is committed. LAN listening and network authorization transport remain separate later boundaries.

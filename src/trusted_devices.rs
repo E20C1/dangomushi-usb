@@ -1,3 +1,4 @@
+use crate::device_permissions;
 use crate::device_revocation;
 use crate::device_pairing::{
     device_key_fingerprint, validate_device_name, PairedDeviceCandidate, PAIRING_PUBLIC_KEY_BYTES,
@@ -79,6 +80,7 @@ pub enum TrustedDeviceError {
     AlreadyTrusted,
     RevokedDevice,
     RevocationStateUnavailable,
+    PermissionStateUnavailable,
     DeviceLimitExceeded,
     StoreTooLarge,
     VerificationFailed,
@@ -95,6 +97,7 @@ impl fmt::Display for TrustedDeviceError {
             Self::AlreadyTrusted => "device public key is already trusted",
             Self::RevokedDevice => "device public key has been revoked and cannot be trusted again",
             Self::RevocationStateUnavailable => "device revocation state could not be verified",
+            Self::PermissionStateUnavailable => "stale device permission state could not be reset safely",
             Self::DeviceLimitExceeded => "trusted-device limit was exceeded",
             Self::StoreTooLarge => "trusted-device store exceeds its size limit",
             Self::VerificationFailed => "trusted-device replacement verification failed",
@@ -148,6 +151,9 @@ pub fn register_candidate(
     if store.devices.len() >= MAX_TRUSTED_DEVICES {
         return Err(TrustedDeviceError::DeviceLimitExceeded);
     }
+
+    device_permissions::reset_for_new_trust(workspace_root, trusted.fingerprint())
+        .map_err(|_| TrustedDeviceError::PermissionStateUnavailable)?;
 
     store.devices.push(trusted.clone());
     persist_store(&identity_root, &store)?;

@@ -1,4 +1,5 @@
 use crate::device_pairing::{DevicePairing, PairedDeviceCandidate, PairingInvitation, PairingStatus};
+use crate::device_permissions::{self, DevicePermissionStore, PermissionScope};
 use crate::device_revocation;
 use crate::document_search;
 use crate::file_browser::{self, EntryKind, FileEntry};
@@ -832,6 +833,10 @@ struct NativeApp {
     paired_device: Option<PairedDeviceCandidate>,
     trusted_devices: Vec<TrustedDevice>,
     trusted_devices_error: Option<String>,
+    permission_store: DevicePermissionStore,
+    permission_store_error: Option<String>,
+    permission_editor_target: Option<[u8; 32]>,
+    permission_editor_scopes: Vec<PermissionScope>,
     pending_revocation: Option<[u8; 32]>,
     revocation_confirmation: String,
     text_json: TextJsonState,
@@ -865,6 +870,10 @@ impl NativeApp {
             paired_device: None,
             trusted_devices: Vec::new(),
             trusted_devices_error: None,
+            permission_store: DevicePermissionStore::default(),
+            permission_store_error: None,
+            permission_editor_target: None,
+            permission_editor_scopes: Vec::new(),
             pending_revocation: None,
             revocation_confirmation: String::new(),
             text_json: TextJsonState::new(),
@@ -930,6 +939,10 @@ impl NativeApp {
         if !workspace::summary(&self.workspace_root).initialized {
             self.trusted_devices.clear();
             self.trusted_devices_error = None;
+            self.permission_store = DevicePermissionStore::default();
+            self.permission_store_error = None;
+            self.permission_editor_target = None;
+            self.permission_editor_scopes.clear();
             return;
         }
 
@@ -941,8 +954,35 @@ impl NativeApp {
             Err(error) => {
                 self.trusted_devices.clear();
                 self.trusted_devices_error = Some(error.to_string());
+                self.permission_store = DevicePermissionStore::default();
+                self.permission_store_error = None;
+                self.permission_editor_target = None;
+                self.permission_editor_scopes.clear();
                 self.notice = format!("TRUST STORE FAILED: {error}");
+                return;
             }
+        }
+
+        match device_permissions::load(&self.workspace_root) {
+            Ok(store) => {
+                self.permission_store = store;
+                self.permission_store_error = None;
+            }
+            Err(error) => {
+                self.permission_store = DevicePermissionStore::default();
+                self.permission_store_error = Some(error.to_string());
+                self.notice = format!("PERMISSION STORE FAILED: {error}");
+            }
+        }
+
+        if self.permission_editor_target.is_some_and(|fingerprint| {
+            !self
+                .trusted_devices
+                .iter()
+                .any(|device| device.fingerprint() == &fingerprint)
+        }) {
+            self.permission_editor_target = None;
+            self.permission_editor_scopes.clear();
         }
     }
 
@@ -3050,6 +3090,34 @@ impl NativeApp {
                     theme::key_value(ui, "DEVICE", trusted.device_name());
                     theme::key_value(ui, "KEY", "Ed25519");
                     theme::key_value(ui, "FINGERPRINT", &trusted.fingerprint_hex());
+
+                    if self.permission_store_error.is_none() {
+                        let scopes = self
+                            .permission_store
+                            .policy_for(trusted.fingerprint())
+                            .map(|policy| policy.scopes())
+                            .unwrap_or(&[]);
+                        let scope_text = if scopes.is_empty() {
+                            "DEFAULT DENY".to_string()
+                        } else {
+                            scopes
+                                .iter()
+                                .map(|scope| scope.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        };
+                        theme::key_value(ui, "SCOPES", &scope_text);
+
+                        if ui.button("EDIT PERMISSIONS").clicked() {
+                            self.permission_editor_target = Some(*trusted.fingerprint());
+                            self.permission_editor_scopes = scopes.to_vec();
+                            self.notice =
+                                format!("PERMISSION EDIT: {}", trusted.device_name());
+                        }
+                    } else {
+                        theme::key_value(ui, "SCOPES", "UNAVAILABLE / DENY");
+                    }
+
                     if ui.button("REVOKE DEVICE").clicked() {
                         self.pending_revocation = Some(*trusted.fingerprint());
                         self.revocation_confirmation.clear();
@@ -3059,12 +3127,90 @@ impl NativeApp {
                 }
             }
 
+            if let Some(error) = self.permission_store_error.as_ref() {
+                ui.label(
+                    egui::RichText::new(format!("PERMISSION STORE: {error}"))
+                        .color(BAD)
+                        .monospace(),
+                );
+            }
+
             ui.label(
                 egui::RichText::new(
-                    "Trusted public keys and durable revocation tombstones live under workspace:/identity and are included in generic Workspace backups. Restore unions revocation state before identity replacement, so an older backup cannot remove a local tombstone.",
+                    "Trusted public keys and durable revocation tombstones live under workspace:/identity and are included in generic Workspace backups. Device permissions live under workspace:/state, remain DEFAULT DENY unless explicitly saved, and are intentionally excluded from generic Workspace backups.",
                 )
                 .color(MUTED),
             );
+
+            if let Some(fingerprint) = self.permission_editor_target {
+                ui.add_space(8.0);
+                theme::small_label(ui, "DEVICE PERMISSIONS");
+                let target_name = self
+                    .trusted_devices
+                    .iter()
+                    .find(|trusted| trusted.fingerprint() == &fingerprint)
+                    .map(|trusted| trusted.device_name().to_string())
+                    .unwrap_or_else(|| "selected device".to_string());
+                theme::key_value(ui, "DEVICE", &target_name);
+                ui.label(
+                    egui::RichText::new(
+                        "Scopes are future authorization requirements only. They do not open a LAN listener or broaden existing filesystem and secret boundaries.",
+                    )
+                    .color(MUTED),
+                );
+
+                for scope in PermissionScope::ALL {
+                    let mut granted = self.permission_editor_scopes.contains(&scope);
+                    if ui
+                        .checkbox(
+                            &mut granted,
+                            format!("{}  [{}]", scope.label(), scope.as_str()),
+                        )
+                        .changed()
+                    {
+                        if granted {
+                            if !self.permission_editor_scopes.contains(&scope) {
+                                self.permission_editor_scopes.push(scope);
+                                self.permission_editor_scopes.sort_unstable();
+                            }
+                        } else {
+                            self.permission_editor_scopes.retain(|existing| existing != &scope);
+                        }
+                    }
+                }
+
+                ui.horizontal(|ui| {
+                    if ui.button("SAVE PERMISSIONS").clicked() {
+                        match device_permissions::set_scopes(
+                            &self.workspace_root,
+                            &fingerprint,
+                            &self.permission_editor_scopes,
+                        ) {
+                            Ok(policy) => {
+                                let saved_count = policy.scopes().len();
+                                self.permission_editor_target = None;
+                                self.permission_editor_scopes.clear();
+                                self.refresh_trusted_devices();
+                                self.notice = if saved_count == 0 {
+                                    format!("DEVICE PERMISSIONS SAVED: {target_name} / DEFAULT DENY")
+                                } else {
+                                    format!(
+                                        "DEVICE PERMISSIONS SAVED: {target_name} / {saved_count} SCOPE(S)"
+                                    )
+                                };
+                            }
+                            Err(error) => {
+                                self.notice = format!("PERMISSION SAVE FAILED: {error}");
+                            }
+                        }
+                    }
+                    if ui.button("CANCEL PERMISSION EDIT").clicked() {
+                        self.permission_editor_target = None;
+                        self.permission_editor_scopes.clear();
+                        self.notice = "PERMISSION EDIT CANCELLED".to_string();
+                    }
+                });
+            }
 
             if let Some(fingerprint) = self.pending_revocation {
                 ui.add_space(8.0);
@@ -3160,11 +3306,10 @@ impl NativeApp {
                     ui.add_space(6.0);
                     if ui.button("TRUST DEVICE PERSISTENTLY").clicked() {
                         match trusted_devices::register_candidate(&self.workspace_root, &paired) {
-                            Ok(trusted) => {
-                                self.trusted_devices.push(trusted);
-                                self.trusted_devices_error = None;
+                            Ok(_trusted) => {
+                                self.refresh_trusted_devices();
                                 self.notice =
-                                    format!("DEVICE PUBLIC KEY TRUSTED: {}", paired.device_name());
+                                    format!("DEVICE PUBLIC KEY TRUSTED: {} / DEFAULT DENY", paired.device_name());
                             }
                             Err(trusted_devices::TrustedDeviceError::AlreadyTrusted) => {
                                 self.refresh_trusted_devices();

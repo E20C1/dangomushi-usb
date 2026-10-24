@@ -294,7 +294,25 @@ Because the ledger lives under identity/, Generic Workspace Backup carries revoc
 
 A backup created before a later revocation cannot contain that future fact. If both the live Workspace and every post-revocation backup are lost, there is no external revocation authority from which DANGOMUSHI can reconstruct it. The local Workspace filesystem also remains outside a hardware tamper-proof trust model.
 
-No permission scopes, reconnect/session policy, non-loopback listener or network authorization is added by this task.
+Permission scopes are defined separately below and cannot bypass revocation. No reconnect/session policy, non-loopback listener or network authorization is added by the revocation task.
+
+### Permission scopes
+
+The M3 authorization policy is implemented in `src/device_permissions.rs` and stored at `workspace/state/device_permissions.v1.json`. The permission store is deliberately separate from durable public-key identity: being trusted does not itself authorize any future LAN operation.
+
+The initial vocabulary is fixed to four canonical scope identifiers: `status.read`, `files.read`, `files.write`, and `session.handoff`. A newly trusted device starts at default deny with no scopes. Scope identifiers are necessary authorization labels only; they do not create endpoints, broaden Workspace path validation, expose secret-subsystem plaintext, allow arbitrary commands or Git mutation, or override any later endpoint-specific security check.
+
+`device_permissions::authorize` first resolves the effective trusted-device set, which already applies revocation. An untrusted or revoked fingerprint is denied even when a stale permission record exists. If trusted-device state or permission state cannot be verified, callers do not receive an allow result.
+
+The native MOBILE view exposes a separate DEVICE PERMISSIONS editor for each effective trusted device. Checkbox changes remain ephemeral UI draft state until the owner presses SAVE PERMISSIONS. Saving an empty set removes the record and returns the device to default deny.
+
+Permission policy is durable across normal application restarts because it remains on the portable Workspace. Generic Workspace Backup intentionally excludes the policy by managing only `state/autosave/`, not the complete `state/` root. Consequently, restoring an older DGMWBK01 snapshot cannot re-grant a scope that was removed locally, and restoring a snapshot into another initialized Workspace does not import permission grants.
+
+A historical restore can remove a trusted-device record while leaving the local permission file untouched. To prevent that stale policy from becoming active after a later explicit re-trust of the same non-revoked public key, `trusted_devices::register_candidate` clears the fingerprint's permission record before committing new trust. The newly trusted key starts without stale authorization. Revoked keys still require key rotation because the revocation layer rejects same-key re-trust entirely.
+
+The permission store is versioned, sorted, duplicate-free, bounded to 256 device records and 128 KiB, and accepts only the fixed canonical scope identifiers. The `state/` root and fixed permission files reject symlink and special-file layouts. Replacement uses create-new pending output, full parse verification, a previous-file rollback slot, file sync and best-effort directory synchronization.
+
+No reconnect/session policy, public-network policy, non-loopback listener, mobile editor endpoint, or network request authorization transport is added by this task.
 
 ## Web gateway
 

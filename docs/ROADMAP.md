@@ -183,8 +183,14 @@ Both `Generate new password` and `Enter existing password` must converge on the 
   - Generic Workspace restore unions live and staged revocation ledgers before identity replacement
   - older backups cannot remove a locally known revocation, while post-revocation backups carry tombstones portably
   - no un-revoke action, permission scope, reconnect policy or LAN listener is added by this task
-- [ ] **Permission scopes** — Exactly One Next Task
-- [ ] Reconnection without short fixed session expiry
+- [x] **Permission scopes**
+  - fixed initial scope vocabulary: `status.read`, `files.read`, `files.write`, `session.handoff`
+  - persistent trusted devices remain default-deny until scopes are explicitly saved in the native MOBILE view
+  - durable policy lives at `workspace/state/device_permissions.v1.json`, outside Generic Workspace Backup restore
+  - authorization requires the fingerprint to remain effectively trusted and non-revoked
+  - new persistent trust clears any stale permission record for the same fingerprint before trust is committed
+  - no remote request API, reconnect/session policy or LAN listener is added by this task
+- [ ] **Reconnection without short fixed session expiry** — Exactly One Next Task
 - [ ] Public-network safe default
 - [ ] Mobile editor/session handoff
 
