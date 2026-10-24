@@ -1,10 +1,11 @@
-use dangomushi::{server, workspace};
+use dangomushi::{offline_docs, server, workspace};
 use std::env;
 use std::path::PathBuf;
 use std::process;
 
 const DEFAULT_PORT: u16 = 45_821;
 const DEFAULT_WORKSPACE: &str = "workspace";
+const DEFAULT_DOC_EXPORT: &str = "dangomushi-offline-docs";
 
 #[derive(Debug)]
 struct ServeOptions {
@@ -57,12 +58,91 @@ fn run() -> Result<(), String> {
                 Err("workspace is incomplete; run dangomushi init".to_string())
             }
         }
+        Some("docs") => run_docs(args.collect()),
         Some("version") | Some("--version") | Some("-V") => {
             println!("dangomushi {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
         Some(other) => Err(format!("unknown command: {other}\n\n{}", help_text())),
     }
+}
+
+fn run_docs(args: Vec<String>) -> Result<(), String> {
+    match args.as_slice() {
+        [] => {
+            let summary = offline_docs::summary()
+                .map_err(|error| format!("offline docs unavailable: {error}"))?;
+            println!("DANGOMUSHI OFFLINE DOCS");
+            println!("pack: {}", summary.pack_id);
+            println!("format: {}", summary.format_version);
+            println!("app_version: {}", summary.app_version);
+            println!("documents: {}", summary.document_count);
+            println!("bytes: {}", summary.total_bytes);
+            println!("sha256: {}", summary.sha256_hex());
+            for document in offline_docs::documents() {
+                println!("{}", document.path);
+            }
+            Ok(())
+        }
+        [command] if command == "list" => {
+            let summary = offline_docs::summary()
+                .map_err(|error| format!("offline docs unavailable: {error}"))?;
+            println!("DANGOMUSHI OFFLINE DOCS");
+            println!("pack: {}", summary.pack_id);
+            println!("format: {}", summary.format_version);
+            println!("app_version: {}", summary.app_version);
+            println!("documents: {}", summary.document_count);
+            println!("bytes: {}", summary.total_bytes);
+            println!("sha256: {}", summary.sha256_hex());
+            for document in offline_docs::documents() {
+                println!("{}", document.path);
+            }
+            Ok(())
+        }
+        [command, path] if command == "show" => {
+            let document = offline_docs::document(path)
+                .map_err(|error| format!("could not open offline document {path}: {error}"))?;
+            print!("{}", document.content);
+            Ok(())
+        }
+        [command] if command == "export" => {
+            export_docs(PathBuf::from(DEFAULT_DOC_EXPORT))
+        }
+        [command, destination] if command == "export" => {
+            export_docs(PathBuf::from(destination))
+        }
+        [command] if command == "verify" => {
+            verify_docs(PathBuf::from(DEFAULT_DOC_EXPORT))
+        }
+        [command, destination] if command == "verify" => {
+            verify_docs(PathBuf::from(destination))
+        }
+        _ => Err(docs_help_text()),
+    }
+}
+
+fn export_docs(destination: PathBuf) -> Result<(), String> {
+    let summary = offline_docs::export(&destination)
+        .map_err(|error| format!("offline docs export failed: {error}"))?;
+    println!("exported offline docs: {}", destination.display());
+    println!("documents: {}", summary.document_count);
+    println!("sha256: {}", summary.sha256_hex());
+    Ok(())
+}
+
+fn verify_docs(destination: PathBuf) -> Result<(), String> {
+    let summary = offline_docs::verify_export(&destination)
+        .map_err(|error| format!("offline docs verification failed: {error}"))?;
+    println!("offline docs verified: {}", destination.display());
+    println!("documents: {}", summary.document_count);
+    println!("sha256: {}", summary.sha256_hex());
+    Ok(())
+}
+
+fn docs_help_text() -> String {
+    format!(
+        "Usage:\n  dangomushi docs list\n  dangomushi docs show <PACK-PATH>\n  dangomushi docs export [DESTINATION]\n  dangomushi docs verify [DESTINATION]\n\nDefault destination: ./{DEFAULT_DOC_EXPORT}"
+    )
 }
 
 fn parse_single_path(args: Vec<String>) -> Result<PathBuf, String> {
@@ -117,6 +197,7 @@ fn help_text() -> String {
 Usage:\n  dangomushi serve [--port PORT] [--workspace PATH]\n  \
 dangomushi init [PATH]\n  \
 dangomushi doctor [PATH]\n  \
+dangomushi docs list|show|export|verify ...\n  \
 dangomushi version\n\n\
 Desktop:\n  run the dangomushi-desktop binary built with --features desktop\n\n\
 Defaults:\n  port: {DEFAULT_PORT}\n  workspace: ./{DEFAULT_WORKSPACE}\n\n\

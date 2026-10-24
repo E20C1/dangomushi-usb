@@ -270,8 +270,17 @@ M3's transport-independent security and handoff boundaries are now complete. Any
 
 ## M5 — Offline continuity
 
-- [ ] **Offline documentation packs** — Exactly One Next Task
-- [ ] Reproducible dependency cache/vendor strategy
+- [x] **Offline documentation packs**
+  - `README.md` plus every repository `docs/*.md` file is compile-time embedded into the core binary
+  - embedded paths are fixed relative-normal UTF-8 paths with duplicate/size validation and no remote lookup
+  - deterministic pack summary binds format version, every path, document length and per-document SHA-256
+  - CLI supports offline `docs list`, exact `docs show`, create-new `docs export` and exact `docs verify`
+  - export refuses overwrite, syncs each created file and writes a pack marker with app version/count/size/digest
+  - export verification rejects missing/modified/extra files, symlinks and special entries
+  - native SYSTEM view provides a read-only embedded-document selector/viewer without session persistence
+  - pack content is application data and is not automatically copied into Workspace, Generic Backup, Secret Backup or autosave
+  - no HTTP client, DNS, Git, shell, CDN or other network dependency is introduced
+- [ ] **Reproducible dependency cache/vendor strategy** — Exactly One Next Task
 - [ ] Recovery snapshots
 - [ ] Restore verification
 - [ ] Portable release bundles per operating system

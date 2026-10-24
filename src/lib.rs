@@ -12,6 +12,7 @@ pub mod internet_p2p_policy;
 pub mod lan_access_control;
 pub mod mobile_handoff;
 pub mod network_safety;
+pub mod offline_docs;
 pub mod file_browser;
 pub mod file_compare;
 pub mod password_generator;

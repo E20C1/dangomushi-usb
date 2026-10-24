@@ -516,6 +516,25 @@ The icon set is generated from source-code bit patterns. No external icon pack, 
 The native navigation, Tool Launcher and FILES entry types use the shared icon vocabulary so later tools can extend the same visual language without duplicating screen-specific styling.
 
 
+## Offline documentation packs
+
+M5 offline continuity begins with a compile-time embedded documentation pack implemented in `src/offline_docs.rs`.
+
+The pack contains `README.md` plus every Markdown document under `docs/`. Pack entries use fixed relative-normal paths and are capped at 4 MiB per document. The runtime does not discover arbitrary filesystem documentation and does not fetch documentation from GitHub, a CDN, DNS, HTTP, Git or another external service.
+
+A deterministic pack SHA-256 is calculated over a domain-separated sequence containing the pack format, each path, each document length and each document SHA-256. This identifies the exact embedded documentation set but is not a publisher signature or executable-authenticity mechanism.
+
+The CLI can list and show embedded documents without filesystem or network access. Export is explicit and create-new only: an existing destination is never overwritten. Export writes the fixed files, syncs each created file, and writes a `.dangomushi-offline-docs` marker containing pack format, ID, application version, document count, total bytes and pack digest.
+
+Export verification compares the destination exactly against the current executable's embedded pack. The root, marker and documents must be real non-symlink files/directories; missing, modified, extra, truncated, special or symlink entries fail closed.
+
+The native SYSTEM surface exposes the embedded pack through a read-only selector/viewer. Selection is ephemeral and is not added to `session.v1`.
+
+Embedded documentation is application content, not Workspace state. DANGOMUSHI does not automatically copy it into `workspace/data`, autosave, Generic Workspace Backup, Secret Backup or trusted-device/peer state. An explicitly exported directory becomes ordinary user-controlled filesystem content after export.
+
+This task does not vendor Rust dependencies, create recovery snapshots, verify recovery restores, or construct portable operating-system release bundles. Those remain later M5 boundaries.
+
+
 ## Dependency policy
 
 The TEXT / JSON utility uses serde_json 1.0.154 for complete JSON syntax validation and root-type classification. Formatting remains DANGOMUSHI-owned whitespace transformation after validation so the tool does not silently rewrite JSON token content.

@@ -46,11 +46,12 @@ The current implementation includes:
 - An M4 received-file integrity gate that embeds a sender-authenticated SHA-256/length commitment and exposes file bytes only after `PendingReceivedFile::verify` produces `VerifiedReceivedFile`.
 - An M4 direct IPv4 LAN peer transport with live LAN-intent/network-safety gating, trusted-peer recipient binding, bounded one-shot receive windows, encrypted transfer reuse, and file verification before acknowledgement.
 - An M4 Internet P2P threat review whose current decision is fail-closed: Internet/global peer transport remains disabled, with no runtime/configuration override, rendezvous, relay, NAT traversal or automatic port mapping.
+- An M5 embedded offline documentation pack containing README plus all docs/*.md, with deterministic SHA-256 inventory, offline CLI list/show, create-new export/verify, and a read-only native SYSTEM viewer.
 - No public/global peer address support, peer discovery, firewall mutation, UPnP, NAT-PMP, reverse tunnel, relay, CDN or external web request.
 - Windows double-click build/update entry point.
 - CI builds for Windows, macOS and Linux.
 
-M3's transport-independent mobile security and handoff foundation is complete. M4 is complete with trusted-peer identity, encrypted transfer, received-file verification and fail-closed Direct LAN. The Internet P2P threat review is complete and explicitly keeps Internet/global peer transport disabled; M5 Offline continuity is next.
+M3's transport-independent mobile security and handoff foundation is complete. M4 is complete with trusted-peer identity, encrypted transfer, received-file verification and fail-closed Direct LAN. M5 Offline continuity has started with embedded documentation packs; reproducible dependency cache/vendor strategy is the next task.
 
 ## Editor safety model
 
@@ -111,6 +112,10 @@ The update script stages the new binaries, keeps one rollback copy, and does not
 ~~~bash
 cargo run -- init
 cargo run -- doctor
+cargo run -- docs list
+cargo run -- docs show docs/ARCHITECTURE.md
+cargo run -- docs export
+cargo run -- docs verify
 cargo run -- serve
 ~~~
 
