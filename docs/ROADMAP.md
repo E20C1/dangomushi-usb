@@ -229,8 +229,18 @@ M3's transport-independent security and handoff boundaries are now complete. Any
   - bounded versioned trusted-peer policy lives under `workspace/state` and is not rolled back by Generic Workspace restore
   - explicit peer removal requires fresh proof and explicit trust before the same key can be trusted again
   - no LAN listener, peer discovery, encrypted transfer or file receiver is added by this task
-- [ ] **Encrypted text/file transfer** — Exactly One Next Task
-- [ ] Integrity verification for received files
+- [x] **Encrypted text/file transfer**
+  - one-shot signed receiver offers bind transfer ID, expected sender, recipient identity and ephemeral X25519 public key
+  - fresh ephemeral X25519 on both sides; long-lived Ed25519 peer identity remains authentication-only
+  - non-contributory X25519 shared secrets fail closed
+  - HKDF-SHA256 derives a per-transfer 256-bit key from the DH secret with transfer/identity context binding
+  - XChaCha20Poly1305 encrypts one bounded text or file payload with the fixed envelope header as associated data
+  - sender Ed25519 signature authenticates the envelope digest before receiver decryption
+  - pending receive is process-local, five-minute bounded and consumed on one open attempt; replayed envelopes cannot bind to a new offer
+  - strict versioned binary framing rejects truncation, trailing bytes, invalid lengths and over-limit payloads
+  - file transfer returns only bytes plus a validated suggested filename; it never selects or writes a filesystem destination
+  - no LAN listener, peer discovery, file receiver persistence or Internet P2P path is added
+- [ ] **Integrity verification for received files** — Exactly One Next Task
 - [ ] Direct LAN path first
 - [ ] Internet P2P only after a separate threat review
 
