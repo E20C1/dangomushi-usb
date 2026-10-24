@@ -2,6 +2,7 @@ pub mod clipboard_hygiene;
 pub mod credential;
 pub mod device_pairing;
 pub mod device_permissions;
+pub mod device_reconnection;
 pub mod device_revocation;
 pub mod document_search;
 pub mod existing_credential_input;

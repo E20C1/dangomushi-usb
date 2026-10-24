@@ -190,8 +190,14 @@ Both `Generate new password` and `Enter existing password` must converge on the 
   - authorization requires the fingerprint to remain effectively trusted and non-revoked
   - new persistent trust clears any stale permission record for the same fingerprint before trust is committed
   - no remote request API, reconnect/session policy or LAN listener is added by this task
-- [ ] **Reconnection without short fixed session expiry** — Exactly One Next Task
-- [ ] Public-network safe default
+- [x] **Reconnection without short fixed session expiry**
+  - every reconnect uses a fresh 256-bit OS-CSPRNG challenge and strict Ed25519 proof with the already trusted device key
+  - the reconnect challenge is one-time and short-lived, but the authenticated in-process principal has no fixed session expiry
+  - no durable bearer token, refresh token, cookie secret or reconnect credential is persisted
+  - effective trust/revocation and current permission scopes are re-evaluated when the authenticated principal is used
+  - reconnecting after transport loss requires a new key proof but not a new human pairing code while the key remains trusted
+  - no public-network policy, remote API or LAN listener is added by this task
+- [ ] **Public-network safe default** — Exactly One Next Task
 - [ ] Mobile editor/session handoff
 
 No LAN listener should be merged before these security boundaries are implemented and tested.

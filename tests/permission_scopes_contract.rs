@@ -317,7 +317,7 @@ fn native_ui_edits_scopes_explicitly_and_session_does_not_persist_drafts() {
 }
 
 #[test]
-fn architecture_and_roadmap_advance_exactly_to_reconnection() {
+fn architecture_and_roadmap_advance_exactly_to_public_network_safety() {
     for required in [
         "workspace/state/device_permissions.v1.json",
         "default deny",
@@ -327,7 +327,7 @@ fn architecture_and_roadmap_advance_exactly_to_reconnection() {
         "session.handoff",
         "Generic Workspace Backup intentionally excludes",
         "newly trusted key starts without stale authorization",
-        "No reconnect/session policy",
+        "Scopes are not snapshotted",
     ] {
         assert!(
             ARCHITECTURE.contains(required),
@@ -337,7 +337,10 @@ fn architecture_and_roadmap_advance_exactly_to_reconnection() {
 
     assert!(ROADMAP.contains("- [x] **Permission scopes**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Reconnection without short fixed session expiry** — Exactly One Next Task"
+        "- [x] **Reconnection without short fixed session expiry**"
+    ));
+    assert!(ROADMAP.contains(
+        "- [ ] **Public-network safe default** — Exactly One Next Task"
     ));
     assert!(ROADMAP.contains(
         "No LAN listener should be merged before these security boundaries are implemented and tested."

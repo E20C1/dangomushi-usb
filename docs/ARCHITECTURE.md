@@ -312,7 +312,23 @@ A historical restore can remove a trusted-device record while leaving the local 
 
 The permission store is versioned, sorted, duplicate-free, bounded to 256 device records and 128 KiB, and accepts only the fixed canonical scope identifiers. The `state/` root and fixed permission files reject symlink and special-file layouts. Replacement uses create-new pending output, full parse verification, a previous-file rollback slot, file sync and best-effort directory synchronization.
 
-No reconnect/session policy, public-network policy, non-loopback listener, mobile editor endpoint, or network request authorization transport is added by this task.
+Permission scopes remain transport-independent authorization labels. They do not themselves create a reconnect session, public-network policy, non-loopback listener, mobile editor endpoint, or network request transport.
+
+### Reconnection without short fixed session expiry
+
+The M3 reconnect boundary is implemented in `src/device_reconnection.rs`. It deliberately avoids both repeatedly asking for the five-minute human pairing code and introducing a durable bearer credential.
+
+A reconnect can begin only while explicit LAN intent is enabled and only for an effectively trusted, non-revoked fingerprint. DANGOMUSHI generates a fresh 256-bit challenge from the operating-system CSPRNG for each reconnect attempt. The device signs a domain-separated transcript that binds the reconnect protocol, the fresh challenge and the trusted fingerprint. Completion consumes the challenge object, re-reads effective trust and uses Ed25519 strict signature verification.
+
+The reconnect challenge has a two-minute anti-staleness lifetime. That is only a handshake lifetime. A successful proof creates an in-process `AuthenticatedDeviceSession` containing the fingerprint and display name with no fixed expiry field and no access token, refresh token, cookie secret, shared secret or persisted session identifier. A future transport owns this principal only for its live connection/process lifetime.
+
+Closing the transport discards the principal. Reconnecting later requires a fresh challenge and a new Ed25519 proof, but does not require a new pairing code while the same public key remains trusted. There is no indefinitely reusable reconnect bearer token.
+
+`AuthenticatedDeviceSession::is_currently_valid` requires LAN intent to remain enabled and re-reads effective trusted-device state. `AuthenticatedDeviceSession::authorize` then consults the current default-deny permission store. Scopes are not snapshotted into the authenticated principal. Revocation or permission removal therefore takes effect without waiting for a clock-based session expiry, and an unreadable trust or permission state never produces an allow result.
+
+Nothing from reconnection is written to `session.v1`, Workspace config, Generic Workspace Backup, Secret Backup / Restore or another durable store. The reconnect core is transport-free and does not add a LAN listener, HTTP route, socket binding, network framing, cookie policy or public-network classification.
+
+Public-network safe default is the next M3 task.
 
 ## Web gateway
 
