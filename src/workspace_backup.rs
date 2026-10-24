@@ -200,6 +200,12 @@ pub fn verify_backup(
     verify_archive_path(&backup_path, None)
 }
 
+pub(crate) fn verify_backup_file(
+    backup_path: &Path,
+) -> Result<WorkspaceBackupSummary, WorkspaceBackupError> {
+    verify_archive_path(backup_path, None)
+}
+
 pub fn restore_backup(
     workspace_root: &Path,
     relative_backup: &Path,

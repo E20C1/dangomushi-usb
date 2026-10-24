@@ -21,6 +21,11 @@ struct RecoverySnapshotOptions {
     destination: PathBuf,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct RecoverySnapshotVerifyOptions {
+    snapshot: PathBuf,
+}
+
 fn main() {
     if let Err(message) = run() {
         eprintln!("dangomushi: {message}");
@@ -77,30 +82,52 @@ fn run() -> Result<(), String> {
 }
 
 fn run_recovery(args: Vec<String>) -> Result<(), String> {
-    if args.len() < 2 || args[0] != "snapshot" || args[1] != "create" {
+    if args.len() < 2 || args[0] != "snapshot" {
         return Err(recovery_help_text());
     }
 
-    let options = parse_recovery_snapshot_options(&args[2..])?;
-    let summary = recovery_snapshot::create_snapshot(
-        &options.source,
-        &options.workspace,
-        &options.backup,
-        &options.destination,
-    )
-    .map_err(|error| format!("recovery snapshot failed: {error}"))?;
+    match args[1].as_str() {
+        "create" => {
+            let options = parse_recovery_snapshot_options(&args[2..])?;
+            let summary = recovery_snapshot::create_snapshot(
+                &options.source,
+                &options.workspace,
+                &options.backup,
+                &options.destination,
+            )
+            .map_err(|error| format!("recovery snapshot failed: {error}"))?;
 
-    println!("DANGOMUSHI RECOVERY SNAPSHOT");
-    println!("destination: {}", options.destination.display());
-    println!("files: {}", summary.files);
-    println!("bytes: {}", summary.total_bytes);
-    println!("sha256: {}", summary.sha256_hex());
-    println!("workspace_backup_files: {}", summary.workspace_backup.files);
-    println!(
-        "workspace_backup_bytes: {}",
-        summary.workspace_backup.total_file_bytes
-    );
-    Ok(())
+            println!("DANGOMUSHI RECOVERY SNAPSHOT");
+            println!("destination: {}", options.destination.display());
+            println!("files: {}", summary.files);
+            println!("bytes: {}", summary.total_bytes);
+            println!("sha256: {}", summary.sha256_hex());
+            println!("workspace_backup_files: {}", summary.workspace_backup.files);
+            println!(
+                "workspace_backup_bytes: {}",
+                summary.workspace_backup.total_file_bytes
+            );
+            Ok(())
+        }
+        "verify" => {
+            let options = parse_recovery_snapshot_verify_options(&args[2..])?;
+            let summary = recovery_snapshot::verify_snapshot(&options.snapshot)
+                .map_err(|error| format!("recovery snapshot verification failed: {error}"))?;
+
+            println!("DANGOMUSHI RECOVERY SNAPSHOT VERIFIED");
+            println!("snapshot: {}", options.snapshot.display());
+            println!("files: {}", summary.files);
+            println!("bytes: {}", summary.total_bytes);
+            println!("sha256: {}", summary.sha256_hex());
+            println!("workspace_backup_files: {}", summary.workspace_backup.files);
+            println!(
+                "workspace_backup_bytes: {}",
+                summary.workspace_backup.total_file_bytes
+            );
+            Ok(())
+        }
+        _ => Err(recovery_help_text()),
+    }
 }
 
 fn parse_recovery_snapshot_options(args: &[String]) -> Result<RecoverySnapshotOptions, String> {
@@ -158,8 +185,48 @@ fn parse_recovery_snapshot_options(args: &[String]) -> Result<RecoverySnapshotOp
     })
 }
 
+fn parse_recovery_snapshot_verify_options(
+    args: &[String],
+) -> Result<RecoverySnapshotVerifyOptions, String> {
+    let mut snapshot = None;
+    let mut index = 0;
+
+    while index < args.len() {
+        let flag = args[index].as_str();
+        if matches!(flag, "--help" | "-h") {
+            return Err(recovery_help_text());
+        }
+
+        index += 1;
+        let value = args
+            .get(index)
+            .ok_or_else(|| format!("{flag} requires a value\n\n{}", recovery_help_text()))?;
+
+        match flag {
+            "--snapshot" => snapshot = Some(PathBuf::from(value)),
+            _ => {
+                return Err(format!(
+                    "unknown recovery snapshot verify option: {flag}\n\n{}",
+                    recovery_help_text()
+                ))
+            }
+        }
+
+        index += 1;
+    }
+
+    let snapshot = snapshot.ok_or_else(|| {
+        format!(
+            "--snapshot is required for recovery snapshot verification\n\n{}",
+            recovery_help_text()
+        )
+    })?;
+
+    Ok(RecoverySnapshotVerifyOptions { snapshot })
+}
+
 fn recovery_help_text() -> String {
-    "Usage:\n  dangomushi recovery snapshot create --backup backups/<NAME>.dgmwbk --destination <PATH> [--source <SOURCE-ROOT>] [--workspace <WORKSPACE-ROOT>]\n\nDefaults:\n  source: .\n  workspace: ./workspace\n\nThe destination must not already exist and must be outside the source and Workspace roots. A generated vendor/ directory and a verified Generic Workspace Backup are required.".to_string()
+    "Usage:\n  dangomushi recovery snapshot create --backup backups/<NAME>.dgmwbk --destination <PATH> [--source <SOURCE-ROOT>] [--workspace <WORKSPACE-ROOT>]\n  dangomushi recovery snapshot verify --snapshot <PATH>\n\nDefaults for create:\n  source: .\n  workspace: ./workspace\n\nCreate requires a generated vendor/ directory and a verified Generic Workspace Backup. Verify is read-only and validates the snapshot marker, exact payload, reviewed layout, per-file digests, aggregate digest, and embedded Workspace Backup before the snapshot is trusted as recovery input. No recovery snapshot restore/extract command exists yet.".to_string()
 }
 
 fn run_docs(args: Vec<String>) -> Result<(), String> {
@@ -294,6 +361,7 @@ dangomushi init [PATH]\n  \
 dangomushi doctor [PATH]\n  \
 dangomushi docs list|show|export|verify ...\n  \
 dangomushi recovery snapshot create --backup backups/<NAME>.dgmwbk --destination <PATH> [--source PATH] [--workspace PATH]\n  \
+dangomushi recovery snapshot verify --snapshot <PATH>\n  \
 dangomushi version\n\n\
 Desktop:\n  run the dangomushi-desktop binary built with --features desktop\n\n\
 Defaults:\n  port: {DEFAULT_PORT}\n  workspace: ./{DEFAULT_WORKSPACE}\n\n\
@@ -343,6 +411,23 @@ mod tests {
             "backups/workspace.dgmwbk".into(),
         ])
         .is_err());
+    }
+
+    #[test]
+    fn recovery_snapshot_verify_requires_explicit_snapshot_path() {
+        let options = parse_recovery_snapshot_verify_options(&[
+            "--snapshot".into(),
+            "../recovery-copy".into(),
+        ])
+        .expect("parse recovery snapshot verify options");
+
+        assert_eq!(
+            options,
+            RecoverySnapshotVerifyOptions {
+                snapshot: PathBuf::from("../recovery-copy"),
+            }
+        );
+        assert!(parse_recovery_snapshot_verify_options(&[]).is_err());
     }
 
     #[test]
