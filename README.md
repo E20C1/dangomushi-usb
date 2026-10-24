@@ -41,12 +41,14 @@ The current implementation includes:
 - An M3 reconnect proof boundary using fresh CSPRNG challenges and strict Ed25519 proof-of-possession, with no fixed authenticated-session expiry or persisted bearer credential.
 - An M3 fail-closed public-network safety gate: Windows reads all connected Network List Manager categories, while unknown/unsupported evidence denies future LAN exposure by default.
 - An M3 transport-independent mobile editor/session handoff core with live scope checks, existing Editor path/UTF-8/size enforcement, SHA-256 revision conflict detection, and recovery-draft preservation on stale saves.
-- An M4 trusted-peer identity core with a create-once local Ed25519 identity, fresh proof-of-possession challenges, explicit non-TOFU trusted-peer persistence, and backup-isolated peer state.\n- An M4 transport-independent encrypted text/file transfer core using signed one-shot offers, ephemeral X25519, HKDF-SHA256 and XChaCha20Poly1305; received files remain in memory and no peer socket is opened.
+- An M4 trusted-peer identity core with a create-once local Ed25519 identity, fresh proof-of-possession challenges, explicit non-TOFU trusted-peer persistence, and backup-isolated peer state.
+- An M4 transport-independent encrypted text/file transfer core using signed one-shot offers, ephemeral X25519, HKDF-SHA256 and XChaCha20Poly1305; received files remain in memory and no peer socket is opened.
+- An M4 received-file integrity gate that embeds a sender-authenticated SHA-256/length commitment and exposes file bytes only after `PendingReceivedFile::verify` produces `VerifiedReceivedFile`.
 - No public bind, LAN bind, peer-transfer bind, UPnP, NAT-PMP, reverse tunnel, CDN or external web request.
 - Windows double-click build/update entry point.
 - CI builds for Windows, macOS and Linux.
 
-M3's transport-independent mobile security and handoff foundation is complete. M4 now has separate trusted-peer identity plus encrypted text/file envelope boundaries, while peer discovery, non-loopback listeners, durable received-file acceptance and Internet P2P remain unavailable.
+M3's transport-independent mobile security and handoff foundation is complete. M4 now has trusted-peer identity, encrypted text/file envelope, and received-file SHA-256 verification boundaries, while peer discovery, non-loopback listeners, durable received-file acceptance and Internet P2P remain unavailable.
 
 ## Editor safety model
 

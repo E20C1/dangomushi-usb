@@ -161,13 +161,26 @@ fn trusted_peers_round_trip_file_without_writing_destination() {
         peer_transfer::open_transfer(&pair.b_root, pending, &encrypted, now + Duration::from_secs(1))
             .expect("open file");
 
+    let ReceivedTransfer::File(pending_file) = received else {
+        panic!("expected pending received file");
+    };
+    assert_eq!(pending_file.suggested_name(), "transfer.bin");
+    assert_eq!(pending_file.declared_len(), bytes.len() as u64);
     assert_eq!(
-        received,
-        ReceivedTransfer::File {
-            suggested_name: "transfer.bin".to_string(),
-            bytes,
-        }
+        pending_file.expected_sha256_hex(),
+        "0bd2929eae18487406bc523b95bae3ca3502e2ae52666acf922d88262b6af0f1"
     );
+    assert_eq!(pending_file.sender_fingerprint(), pair.a.fingerprint());
+
+    let verified = pending_file.verify().expect("verify file");
+    assert_eq!(verified.suggested_name(), "transfer.bin");
+    assert_eq!(verified.bytes(), bytes.as_slice());
+    assert_eq!(verified.bytes_verified(), bytes.len() as u64);
+    assert_eq!(
+        verified.sha256_hex(),
+        "0bd2929eae18487406bc523b95bae3ca3502e2ae52666acf922d88262b6af0f1"
+    );
+    assert_eq!(verified.sender_fingerprint(), pair.a.fingerprint());
     assert!(!pair.b_root.join("transfer.bin").exists());
     assert!(!pair.b_root.join("data/transfer.bin").exists());
 }
@@ -341,7 +354,5 @@ fn transfer_core_is_ephemeral_transport_independent_and_roadmap_bounded() {
 
     assert!(UI.contains("TRANSFER CORE READY"));
     assert!(ROADMAP.contains("- [x] **Encrypted text/file transfer**"));
-    assert!(ROADMAP.contains(
-        "- [ ] **Integrity verification for received files** — Exactly One Next Task"
-    ));
+    assert!(ROADMAP.contains("- [x] **Integrity verification for received files**"));
 }
