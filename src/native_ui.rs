@@ -7,6 +7,7 @@ use crate::file_compare;
 use crate::hash_verify;
 use crate::lan_access_control::LanEnableControl;
 use crate::network_safety::{self, NetworkEnvironment, NetworkSafetyAssessment};
+use crate::peer_identity;
 use crate::native_ui_theme::{self as theme, PixelIcon, BAD, BG, LINE, MUTED, OK, PANEL, TEXT, WARN};
 use crate::repository_git;
 use crate::session_state::{self, SessionState, SessionView};
@@ -14,6 +15,7 @@ use crate::text_editor;
 use crate::text_json;
 use crate::tool_registry::{self, ToolId, ToolStatus};
 use crate::trusted_devices::{self, TrustedDevice};
+use crate::trusted_peers;
 use crate::workspace;
 use crate::workspace_backup;
 use eframe::egui;
@@ -835,6 +837,10 @@ struct NativeApp {
     paired_device: Option<PairedDeviceCandidate>,
     trusted_devices: Vec<TrustedDevice>,
     trusted_devices_error: Option<String>,
+    peer_identity: Option<peer_identity::PeerIdentitySummary>,
+    peer_identity_error: Option<String>,
+    trusted_peers: Vec<trusted_peers::TrustedPeer>,
+    trusted_peers_error: Option<String>,
     permission_store: DevicePermissionStore,
     permission_store_error: Option<String>,
     permission_editor_target: Option<[u8; 32]>,
@@ -873,6 +879,10 @@ impl NativeApp {
             paired_device: None,
             trusted_devices: Vec::new(),
             trusted_devices_error: None,
+            peer_identity: None,
+            peer_identity_error: None,
+            trusted_peers: Vec::new(),
+            trusted_peers_error: None,
             permission_store: DevicePermissionStore::default(),
             permission_store_error: None,
             permission_editor_target: None,
@@ -891,6 +901,7 @@ impl NativeApp {
 
         app.restore_saved_session();
         app.refresh_trusted_devices();
+        app.refresh_peer_identity();
         app.session_saved = app.session_snapshot();
         app
     }
@@ -986,6 +997,42 @@ impl NativeApp {
         }) {
             self.permission_editor_target = None;
             self.permission_editor_scopes.clear();
+        }
+    }
+
+    fn refresh_peer_identity(&mut self) {
+        if !workspace::summary(&self.workspace_root).initialized {
+            self.peer_identity = None;
+            self.peer_identity_error = None;
+            self.trusted_peers.clear();
+            self.trusted_peers_error = None;
+            return;
+        }
+
+        match peer_identity::load(&self.workspace_root) {
+            Ok(Some(identity)) => {
+                self.peer_identity = Some(identity.summary());
+                self.peer_identity_error = None;
+            }
+            Ok(None) => {
+                self.peer_identity = None;
+                self.peer_identity_error = None;
+            }
+            Err(error) => {
+                self.peer_identity = None;
+                self.peer_identity_error = Some(error.to_string());
+            }
+        }
+
+        match trusted_peers::load(&self.workspace_root) {
+            Ok(store) => {
+                self.trusted_peers = store.peers().to_vec();
+                self.trusted_peers_error = None;
+            }
+            Err(error) => {
+                self.trusted_peers.clear();
+                self.trusted_peers_error = Some(error.to_string());
+            }
         }
     }
 
@@ -1321,6 +1368,7 @@ impl NativeApp {
         self.pending_revocation = None;
         self.revocation_confirmation.clear();
         self.refresh_trusted_devices();
+        self.refresh_peer_identity();
     }
 
     fn files(&mut self, ui: &mut egui::Ui) {
@@ -1373,6 +1421,7 @@ impl NativeApp {
                                 self.notice = "WORKSPACE INITIALIZED".to_string();
                                 self.browser.current_dir.clear();
                                 self.browser.refresh(&self.workspace_root);
+                                self.refresh_peer_identity();
                             }
                             Err(error) => {
                                 self.notice = format!("INIT FAILED: {error}");
@@ -3004,6 +3053,7 @@ impl NativeApp {
                     Ok(()) => {
                         self.notice = "WORKSPACE INITIALIZED".to_string();
                         self.browser.refresh(&self.workspace_root);
+                        self.refresh_peer_identity();
                     }
                     Err(error) => self.notice = format!("INIT FAILED: {error}"),
                 }
@@ -3071,6 +3121,79 @@ impl NativeApp {
             ui.label(
                 egui::RichText::new(
                     "Session navigation and existing UTF-8 Editor documents now have a transport-independent handoff boundary with live session.handoff / files.read / files.write checks and stale-save recovery. No LAN endpoint exists yet.",
+                )
+                .color(MUTED),
+            );
+            ui.add_space(10.0);
+
+            theme::small_label(ui, "M4 PEER IDENTITY");
+            if let Some(identity) = self.peer_identity {
+                theme::status_badge(ui, "LOCAL IDENTITY READY / TRANSPORT LOCKED", OK);
+                theme::key_value(ui, "KEY", "Ed25519");
+                theme::key_value(ui, "FINGERPRINT", &identity.fingerprint_hex());
+            } else if let Some(error) = self.peer_identity_error.as_ref() {
+                theme::status_badge(ui, "LOCAL IDENTITY UNAVAILABLE", BAD);
+                ui.label(egui::RichText::new(error).color(BAD).monospace());
+            } else {
+                theme::status_badge(ui, "LOCAL IDENTITY NOT INITIALIZED", MUTED);
+                if workspace::summary(&self.workspace_root).initialized {
+                    if ui.button("INITIALIZE PEER IDENTITY").clicked() {
+                        match peer_identity::initialize(&self.workspace_root) {
+                            Ok(identity) => {
+                                self.peer_identity = Some(identity.summary());
+                                self.peer_identity_error = None;
+                                self.refresh_peer_identity();
+                                self.notice =
+                                    "PEER IDENTITY INITIALIZED / NO TRANSPORT OPENED".to_string();
+                            }
+                            Err(peer_identity::PeerIdentityError::AlreadyInitialized) => {
+                                self.refresh_peer_identity();
+                                self.notice = "PEER IDENTITY ALREADY INITIALIZED".to_string();
+                            }
+                            Err(error) => {
+                                self.peer_identity_error = Some(error.to_string());
+                                self.notice = format!("PEER IDENTITY FAILED: {error}");
+                            }
+                        }
+                    }
+                } else {
+                    ui.label(
+                        egui::RichText::new(
+                            "Initialize the Workspace before creating a peer identity.",
+                        )
+                        .color(MUTED),
+                    );
+                }
+            }
+
+            ui.horizontal(|ui| {
+                if ui.button("REFRESH PEER IDENTITY").clicked() {
+                    self.refresh_peer_identity();
+                }
+                theme::status_badge(
+                    ui,
+                    &format!("{} TRUSTED PEER(S)", self.trusted_peers.len()),
+                    if self.trusted_peers.is_empty() { MUTED } else { OK },
+                );
+            });
+
+            if let Some(error) = self.trusted_peers_error.as_ref() {
+                ui.label(
+                    egui::RichText::new(format!("TRUSTED PEERS: {error}"))
+                        .color(BAD)
+                        .monospace(),
+                );
+            } else {
+                for peer in self.trusted_peers.clone() {
+                    ui.separator();
+                    theme::key_value(ui, "PEER", peer.peer_name());
+                    theme::key_value(ui, "FINGERPRINT", &peer.fingerprint_hex());
+                }
+            }
+
+            ui.label(
+                egui::RichText::new(
+                    "Peer trust requires fresh Ed25519 proof-of-possession and a separate explicit trust action. Peer identity and trusted-peer policy live under workspace:/state and are excluded from Generic Workspace Backup. No peer discovery or transfer transport exists yet.",
                 )
                 .color(MUTED),
             );

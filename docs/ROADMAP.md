@@ -220,8 +220,16 @@ M3's transport-independent security and handoff boundaries are now complete. Any
 
 ## M4 — Peer communication
 
-- [ ] **Trusted peer identity** — Exactly One Next Task
-- [ ] Encrypted text/file transfer
+- [x] **Trusted peer identity**
+  - explicit create-once local Ed25519 identity generated from the OS CSPRNG
+  - private peer identity lives under `workspace/state`, outside Generic Workspace Backup
+  - public-key fingerprints are SHA-256 with peer-specific domain separation from M3 device identity
+  - fresh 256-bit challenge plus strict Ed25519 proof-of-possession produces a verified peer candidate
+  - persistent trust requires a separate explicit action; names, addresses and bare public keys never create TOFU trust
+  - bounded versioned trusted-peer policy lives under `workspace/state` and is not rolled back by Generic Workspace restore
+  - explicit peer removal requires fresh proof and explicit trust before the same key can be trusted again
+  - no LAN listener, peer discovery, encrypted transfer or file receiver is added by this task
+- [ ] **Encrypted text/file transfer** — Exactly One Next Task
 - [ ] Integrity verification for received files
 - [ ] Direct LAN path first
 - [ ] Internet P2P only after a separate threat review
