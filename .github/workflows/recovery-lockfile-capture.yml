@@ -1,0 +1,27 @@
+name: Recovery lockfile capture
+
+on:
+  push:
+    branches:
+      - feat/recovery-snapshots
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99.1
+      - name: Refresh root package lock metadata
+        run: cargo check
+      - name: Emit lockfile
+        shell: python
+        run: |
+          import base64
+          from pathlib import Path
+          data = Path("Cargo.lock").read_bytes()
+          print("DANGOMUSHI_LOCKFILE_BASE64_BEGIN")
+          print(base64.b64encode(data).decode("ascii"))
+          print("DANGOMUSHI_LOCKFILE_BASE64_END")
