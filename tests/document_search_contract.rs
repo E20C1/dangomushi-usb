@@ -93,8 +93,9 @@ fn search_stays_outside_secret_boundary_after_repositories_advance() {
     assert!(ROADMAP.contains("- [x] **Repository status and safe Git operations**"));
     assert!(ROADMAP.contains("- [x] **Backup and restore workflow**"));
     assert!(ROADMAP.contains("- [x] **Explicit LAN enable control**"));
+    assert!(ROADMAP.contains("- [x] **Device pairing**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Device pairing** — Exactly One Next Task"
+        "- [ ] **Persistent trusted-device public keys** — Exactly One Next Task"
     ));
     assert!(ROADMAP.contains("- [x] **Repository status and safe Git operations**"));
 }

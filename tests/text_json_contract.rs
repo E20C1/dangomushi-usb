@@ -96,7 +96,8 @@ fn secret_boundary_excludes_text_json_and_roadmap_keeps_it_complete() {
     assert!(ROADMAP.contains("- [x] **Repository status and safe Git operations**"));
     assert!(ROADMAP.contains("- [x] **Backup and restore workflow**"));
     assert!(ROADMAP.contains("- [x] **Explicit LAN enable control**"));
+    assert!(ROADMAP.contains("- [x] **Device pairing**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Device pairing** — Exactly One Next Task"
+        "- [ ] **Persistent trusted-device public keys** — Exactly One Next Task"
     ));
 }

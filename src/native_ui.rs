@@ -1,3 +1,4 @@
+use crate::device_pairing::{DevicePairing, PairedDeviceCandidate, PairingInvitation, PairingStatus};
 use crate::document_search;
 use crate::file_browser::{self, EntryKind, FileEntry};
 use crate::file_compare;
@@ -824,6 +825,9 @@ struct NativeApp {
     editor: EditorState,
     hash_verify: HashVerifyState,
     lan_access: LanEnableControl,
+    device_pairing: DevicePairing,
+    pairing_invitation: Option<PairingInvitation>,
+    paired_device: Option<PairedDeviceCandidate>,
     text_json: TextJsonState,
     file_compare: FileCompareState,
     document_search: DocumentSearchState,
@@ -850,6 +854,9 @@ impl NativeApp {
             editor: EditorState::new(),
             hash_verify: HashVerifyState::new(),
             lan_access: LanEnableControl::default(),
+            device_pairing: DevicePairing::default(),
+            pairing_invitation: None,
+            paired_device: None,
             text_json: TextJsonState::new(),
             file_compare: FileCompareState::new(),
             document_search: DocumentSearchState::new(),
@@ -2942,11 +2949,11 @@ impl NativeApp {
             );
             ui.add_space(6.0);
             ui.label(
-                "This control records explicit operator intent for this process only. It resets OFF on every launch and is not stored in session state, Workspace config, or backups.",
+                "LAN intent remains process-local. Restarting DANGOMUSHI returns this control to OFF.",
             );
             ui.add_space(6.0);
             ui.label(
-                "Enabling this control does not create a LAN listener. The gateway remains bound to 127.0.0.1 until device pairing, trusted-device identity, revocation, permission scopes, and public-network safeguards are implemented.",
+                "The gateway remains bound to 127.0.0.1. Device pairing is prepared before any LAN listener is allowed.",
             );
             ui.add_space(10.0);
 
@@ -2962,7 +2969,10 @@ impl NativeApp {
                 .clicked()
                 {
                     self.lan_access.disable();
-                    self.notice = "LAN CONTROL OFF / LOOPBACK ONLY".to_string();
+                    self.device_pairing.cancel();
+                    self.pairing_invitation = None;
+                    self.paired_device = None;
+                    self.notice = "LAN CONTROL OFF / PAIRING CLEARED / LOOPBACK ONLY".to_string();
                 }
             } else if theme::pixel_button(
                 ui,
@@ -2976,6 +2986,146 @@ impl NativeApp {
             {
                 self.lan_access.enable_for_this_run();
                 self.notice = "LAN CONTROL ON / LISTENER STILL LOCKED".to_string();
+            }
+
+            ui.add_space(14.0);
+            theme::small_label(ui, "DEVICE PAIRING");
+            ui.add_space(4.0);
+
+            if !self.lan_access.is_enabled() {
+                ui.label(
+                    egui::RichText::new("Enable LAN control before starting a pairing session.")
+                        .color(MUTED),
+                );
+                return;
+            }
+
+            if let Some(paired) = self.paired_device.as_ref() {
+                theme::status_badge(ui, "PAIRED FOR THIS RUN", WARN);
+                theme::key_value(ui, "DEVICE", paired.device_name());
+                theme::key_value(ui, "KEY", "Ed25519");
+                theme::key_value(ui, "FINGERPRINT", &paired.fingerprint_hex());
+                ui.label(
+                    egui::RichText::new(
+                        "This approval is process-local only. Persistent trusted-device storage is the next M3 task.",
+                    )
+                    .color(MUTED),
+                );
+                ui.add_space(6.0);
+                if ui.button("CLEAR RUN-LOCAL PAIRING").clicked() {
+                    self.paired_device = None;
+                    self.device_pairing.cancel();
+                    self.pairing_invitation = None;
+                    self.notice = "RUN-LOCAL PAIRING CLEARED".to_string();
+                }
+                return;
+            }
+
+            let now = Instant::now();
+            let status = self.device_pairing.status(now);
+
+            match status {
+                PairingStatus::Idle => {
+                    self.pairing_invitation = None;
+                    ui.label(
+                        egui::RichText::new(
+                            "PAIRING CORE READY / TRANSPORT LOCKED. No non-loopback listener exists yet.",
+                        )
+                        .color(MUTED),
+                    );
+                    ui.add_space(6.0);
+                    if ui.button("START DEVICE PAIRING").clicked() {
+                        match self.device_pairing.begin(&self.lan_access, now) {
+                            Ok(invitation) => {
+                                self.pairing_invitation = Some(invitation);
+                                self.notice =
+                                    "PAIRING STARTED / CODE IS SHORT-LIVED / LISTENER STILL LOCKED"
+                                        .to_string();
+                            }
+                            Err(error) => {
+                                self.notice = format!("PAIRING START FAILED: {error}");
+                            }
+                        }
+                    }
+                }
+                PairingStatus::Waiting {
+                    attempts_remaining,
+                    remaining,
+                } => {
+                    theme::status_badge(ui, "WAITING FOR DEVICE", WARN);
+                    if let Some(invitation) = self.pairing_invitation.as_ref() {
+                        theme::key_value(ui, "PAIRING CODE", invitation.code().expose_secret());
+                        theme::key_value(
+                            ui,
+                            "EXPIRES",
+                            &format!("{}s", remaining.as_secs().saturating_add(1)),
+                        );
+                        theme::key_value(
+                            ui,
+                            "PROOF ATTEMPTS",
+                            &attempts_remaining.to_string(),
+                        );
+                    } else {
+                        ui.label(
+                            egui::RichText::new(
+                                "Pairing is active, but the one-time display code is no longer available. Cancel and start again.",
+                            )
+                            .color(BAD),
+                        );
+                    }
+                    ui.label(
+                        egui::RichText::new(
+                            "The code is entered on the device. The future transport submits only an HMAC proof plus an Ed25519 proof-of-possession; the raw code is not a LAN request field.",
+                        )
+                        .color(MUTED),
+                    );
+                    ui.add_space(6.0);
+                    if ui.button("CANCEL PAIRING").clicked() {
+                        self.device_pairing.cancel();
+                        self.pairing_invitation = None;
+                        self.notice = "PAIRING CANCELLED".to_string();
+                    }
+                }
+                PairingStatus::AwaitingApproval {
+                    summary,
+                    remaining,
+                } => {
+                    self.pairing_invitation = None;
+                    theme::status_badge(ui, "APPROVAL REQUIRED", WARN);
+                    theme::key_value(ui, "DEVICE", summary.device_name());
+                    theme::key_value(ui, "FINGERPRINT", &summary.fingerprint_hex());
+                    theme::key_value(
+                        ui,
+                        "EXPIRES",
+                        &format!("{}s", remaining.as_secs().saturating_add(1)),
+                    );
+                    ui.label(
+                        egui::RichText::new(
+                            "Cryptographic proof succeeded. Explicit desktop approval is still required, and approval remains process-local until trusted-device persistence exists.",
+                        )
+                        .color(MUTED),
+                    );
+                    ui.add_space(6.0);
+                    ui.horizontal(|ui| {
+                        if ui.button("APPROVE DEVICE FOR THIS RUN").clicked() {
+                            match self.device_pairing.approve(&self.lan_access, now) {
+                                Ok(candidate) => {
+                                    self.notice =
+                                        format!("DEVICE PAIRED FOR THIS RUN: {}", candidate.device_name());
+                                    self.paired_device = Some(candidate);
+                                }
+                                Err(error) => {
+                                    self.notice = format!("PAIRING APPROVAL FAILED: {error}");
+                                }
+                            }
+                        }
+                        if ui.button("REJECT DEVICE").clicked() {
+                            self.device_pairing.reject_candidate();
+                            self.pairing_invitation = None;
+                            self.notice = "PAIRING CANDIDATE REJECTED".to_string();
+                        }
+                    });
+                }
             }
         });
     }

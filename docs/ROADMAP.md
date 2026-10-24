@@ -161,8 +161,15 @@ Both `Generate new password` and `Enter existing password` must converge on the 
   - enable/disable requires an explicit native MOBILE action
   - control state is intentionally absent from session.v1, Workspace config and generic backups
   - enabling the control does not authorize or create a LAN listener; the gateway remains loopback-only
-- [ ] **Device pairing** — Exactly One Next Task
-- [ ] Persistent trusted-device public keys
+- [x] **Device pairing**
+  - process-local pairing state machine is gated by the explicit LAN enable control
+  - OS CSPRNG creates a short-lived 80-bit human pairing code and independent 256-bit challenge
+  - the future device transport sends HMAC-SHA256 proof rather than the raw pairing code
+  - Ed25519 strict signature verification proves possession of the submitted device private key
+  - pairing expires after five minutes, allows at most five cryptographic proof failures, and is one-time
+  - successful proof still requires explicit desktop approval and produces only a run-local PairedDeviceCandidate
+  - no trusted-device key is persisted and no LAN listener is opened by this task
+- [ ] **Persistent trusted-device public keys** — Exactly One Next Task
 - [ ] Device revocation
 - [ ] Permission scopes
 - [ ] Reconnection without short fixed session expiry

@@ -1,5 +1,6 @@
 pub mod clipboard_hygiene;
 pub mod credential;
+pub mod device_pairing;
 pub mod document_search;
 pub mod existing_credential_input;
 pub mod generated_credential_input;
