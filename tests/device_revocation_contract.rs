@@ -243,7 +243,7 @@ fn architecture_and_roadmap_advance_exactly_to_permission_scopes() {
         "cannot remove a fingerprint that has already been revoked locally",
         "fails closed",
         "same public key cannot be trusted again",
-        "No permission scopes",
+        "Permission scopes are defined separately below",
     ] {
         assert!(
             ARCHITECTURE.contains(required),
@@ -253,7 +253,7 @@ fn architecture_and_roadmap_advance_exactly_to_permission_scopes() {
 
     assert!(ROADMAP.contains("- [x] **Device revocation**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Permission scopes** — Exactly One Next Task"
+        "- [ ] **Reconnection without short fixed session expiry** — Exactly One Next Task"
     ));
     assert!(ROADMAP.contains(
         "No LAN listener should be merged before these security boundaries are implemented and tested."

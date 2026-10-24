@@ -95,7 +95,7 @@ fn search_stays_outside_secret_boundary_after_repositories_advance() {
     assert!(ROADMAP.contains("- [x] **Explicit LAN enable control**"));
     assert!(ROADMAP.contains("- [x] **Device pairing**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Permission scopes** — Exactly One Next Task"
+        "- [ ] **Reconnection without short fixed session expiry** — Exactly One Next Task"
     ));
     assert!(ROADMAP.contains("- [x] **Repository status and safe Git operations**"));
 }

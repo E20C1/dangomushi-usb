@@ -207,7 +207,7 @@ fn architecture_keeps_trust_store_separate_and_advances_to_permission_scopes() {
     assert!(ROADMAP.contains("- [x] **Persistent trusted-device public keys**"));
     assert!(ROADMAP.contains("- [x] **Device revocation**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Permission scopes** — Exactly One Next Task"
+        "- [ ] **Reconnection without short fixed session expiry** — Exactly One Next Task"
     ));
     assert!(ROADMAP.contains(
         "No LAN listener should be merged before these security boundaries are implemented and tested."

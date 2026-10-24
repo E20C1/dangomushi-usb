@@ -50,4 +50,4 @@ Replacement uses create-new pending output, full parse verification, a previous-
 
 This task does not provide an operating-system or hardware tamper-proof root. A local attacker with arbitrary write access to the Workspace can modify both trusted-device and revocation files.
 
-No permission scopes, reconnect/session policy, non-loopback listener or network authorization is added by this task.
+Permission scopes are defined by the following M3 boundary and cannot override a revocation tombstone. No reconnect/session policy, non-loopback listener or network authorization transport is added by the revocation task.
