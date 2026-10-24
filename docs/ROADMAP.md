@@ -260,7 +260,17 @@ M3's transport-independent security and handoff boundaries are now complete. Any
   - `seal_transfer_to` binds the send to the caller's explicitly expected recipient fingerprint
   - file transfers are acknowledged only after `PendingReceivedFile::verify` produces `VerifiedReceivedFile`
   - no filesystem receive write, firewall mutation, UPnP/NAT-PMP, relay, public discovery or Internet transport is added
-- [ ] **Internet P2P only after a separate threat review** — Exactly One Next Task
+- [x] **Internet P2P threat review**
+  - decision: Internet P2P remains DISABLED / DEFERRED in the current roadmap
+  - threat model covers public listeners, global addressing, NAT traversal, automatic router/firewall mutation, rendezvous/discovery, relay metadata/operations, DoS/resource exhaustion, malicious trusted peers, key compromise, traffic analysis, downgrade/versioning and local-first availability
+  - no public/global listener, rendezvous, relay, NAT traversal, UPnP/NAT-PMP/PCP, public discovery or Internet peer transport is authorized by the review
+  - `internet_p2p_policy` is fail-closed with no runtime/configuration override
+  - future reconsideration requires a new scoped milestone satisfying the documented security, privacy, abuse, resource and recovery prerequisites
+  - M4 closes with Direct LAN as the supported peer transport; Internet P2P is explicitly not implemented
+
+## M5 — Offline continuity
+
+- [ ] **Offline documentation packs** — Exactly One Next Task
 
 ## M5 — Offline continuity
 
