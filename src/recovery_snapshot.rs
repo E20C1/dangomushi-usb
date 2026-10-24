@@ -336,7 +336,10 @@ fn checked_destination_path(
         return Err(RecoverySnapshotError::UnsafeDestinationParent);
     }
 
-    let parent = destination.parent().unwrap_or_else(|| Path::new("."));
+    let parent = match destination.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent,
+        _ => Path::new("."),
+    };
     let parent_metadata = fs::symlink_metadata(parent)
         .map_err(|_| RecoverySnapshotError::UnsafeDestinationParent)?;
     if parent_metadata.file_type().is_symlink() || !parent_metadata.is_dir() {
