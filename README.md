@@ -44,11 +44,12 @@ The current implementation includes:
 - An M4 trusted-peer identity core with a create-once local Ed25519 identity, fresh proof-of-possession challenges, explicit non-TOFU trusted-peer persistence, and backup-isolated peer state.
 - An M4 transport-independent encrypted text/file transfer core using signed one-shot offers, ephemeral X25519, HKDF-SHA256 and XChaCha20Poly1305; received files remain in memory and no peer socket is opened.
 - An M4 received-file integrity gate that embeds a sender-authenticated SHA-256/length commitment and exposes file bytes only after `PendingReceivedFile::verify` produces `VerifiedReceivedFile`.
-- No public bind, LAN bind, peer-transfer bind, UPnP, NAT-PMP, reverse tunnel, CDN or external web request.
+- An M4 direct IPv4 LAN peer transport with live LAN-intent/network-safety gating, trusted-peer recipient binding, bounded one-shot receive windows, encrypted transfer reuse, and file verification before acknowledgement.
+- No public/global peer address support, peer discovery, firewall mutation, UPnP, NAT-PMP, reverse tunnel, relay, CDN or external web request.
 - Windows double-click build/update entry point.
 - CI builds for Windows, macOS and Linux.
 
-M3's transport-independent mobile security and handoff foundation is complete. M4 now has trusted-peer identity, encrypted text/file envelope, and received-file SHA-256 verification boundaries, while peer discovery, non-loopback listeners, durable received-file acceptance and Internet P2P remain unavailable.
+M3's transport-independent mobile security and handoff foundation is complete. M4 now has trusted-peer identity, encrypted transfer, received-file verification and a fail-closed direct IPv4 LAN path. Peer discovery, durable received-file writes and Internet P2P remain unavailable.
 
 ## Editor safety model
 
@@ -180,7 +181,7 @@ See docs/ARCHITECTURE.md for the authority, filesystem, editor, network and data
 
 The local HTTP gateway is a presentation surface only. It exposes fixed read-only routes and a read-only status endpoint. It does not expose filesystem writes, command execution or Git operations.
 
-M3 trusted-device pairing and authorization boundaries are implemented, but no non-loopback mobile or peer listener is enabled. M4 encrypted transfer is implemented only as an in-process envelope core; Direct LAN transport remains locked.
+The local HTTP gateway remains loopback-only. M4 peer communication has a separate one-shot direct IPv4 LAN transport that requires explicit run-local LAN intent, live trusted-network assessment and trusted-peer cryptographic authentication. Internet/global peer transport remains unavailable.
 
 ## License
 
