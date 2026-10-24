@@ -1,6 +1,9 @@
 use crate::peer_identity::{
     self, LocalPeerIdentity, PEER_FINGERPRINT_BYTES, PEER_SIGNATURE_BYTES,
 };
+use crate::received_file_integrity::{
+    self, PendingReceivedFile, RECEIVED_FILE_SHA256_BYTES,
+};
 use crate::trusted_peers::{self, TrustedPeer};
 use chacha20poly1305::{
     aead::{Aead, KeyInit, Payload},
@@ -20,6 +23,7 @@ const OFFER_MAGIC: &[u8; 8] = b"DGMPOFR1";
 const ENVELOPE_MAGIC: &[u8; 8] = b"DGMPXFR1";
 const PAYLOAD_MAGIC: &[u8; 8] = b"DGMPAY01";
 const FORMAT_VERSION: u16 = 1;
+const PAYLOAD_FORMAT_VERSION: u16 = 2;
 
 const OFFER_SIGNATURE_DOMAIN: &[u8] = b"DANGOMUSHI-PEER-TRANSFER-OFFER-SIGNATURE-V1\0";
 const ENVELOPE_SIGNATURE_DOMAIN: &[u8] = b"DANGOMUSHI-PEER-TRANSFER-ENVELOPE-SIGNATURE-V1\0";
@@ -35,6 +39,8 @@ pub const PEER_TRANSFER_OFFER_BYTES: usize = OFFER_UNSIGNED_BYTES + PEER_SIGNATU
 const ENVELOPE_HEADER_BYTES: usize =
     8 + 2 + TRANSFER_ID_BYTES + PEER_FINGERPRINT_BYTES * 2 + X25519_PUBLIC_BYTES * 2 + NONCE_BYTES + 8;
 const PAYLOAD_HEADER_BYTES: usize = 8 + 2 + 1 + 2 + 8;
+const FILE_INTEGRITY_ALGORITHM_SHA256: u8 = 1;
+const FILE_INTEGRITY_RECORD_BYTES: usize = 1 + RECEIVED_FILE_SHA256_BYTES;
 
 const PAYLOAD_KIND_TEXT: u8 = 1;
 const PAYLOAD_KIND_FILE: u8 = 2;
@@ -44,7 +50,10 @@ pub const MAX_TRANSFER_TEXT_BYTES: usize = 4 * 1024 * 1024;
 pub const MAX_TRANSFER_FILE_BYTES: usize = 64 * 1024 * 1024;
 pub const MAX_TRANSFER_FILE_NAME_BYTES: usize = 255;
 pub const MAX_TRANSFER_PLAINTEXT_BYTES: usize =
-    PAYLOAD_HEADER_BYTES + MAX_TRANSFER_FILE_NAME_BYTES + MAX_TRANSFER_FILE_BYTES;
+    PAYLOAD_HEADER_BYTES
+        + MAX_TRANSFER_FILE_NAME_BYTES
+        + FILE_INTEGRITY_RECORD_BYTES
+        + MAX_TRANSFER_FILE_BYTES;
 pub const MAX_ENCRYPTED_TRANSFER_BYTES: usize =
     ENVELOPE_HEADER_BYTES + MAX_TRANSFER_PLAINTEXT_BYTES + AEAD_TAG_BYTES + PEER_SIGNATURE_BYTES;
 
@@ -104,10 +113,10 @@ impl fmt::Debug for TransferPayload {
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub enum ReceivedTransfer {
     Text(String),
-    File { suggested_name: String, bytes: Vec<u8> },
+    File(PendingReceivedFile),
 }
 
 impl fmt::Debug for ReceivedTransfer {
@@ -117,13 +126,9 @@ impl fmt::Debug for ReceivedTransfer {
                 .debug_struct("ReceivedTransfer::Text")
                 .field("bytes", &text.len())
                 .finish(),
-            Self::File {
-                suggested_name: _,
-                bytes,
-            } => formatter
-                .debug_struct("ReceivedTransfer::File")
-                .field("suggested_name", &"[REDACTED]")
-                .field("bytes", &bytes.len())
+            Self::File(file) => formatter
+                .debug_tuple("ReceivedTransfer::File")
+                .field(file)
                 .finish(),
         }
     }
@@ -494,7 +499,7 @@ pub fn open_transfer(
         return Err(PeerTransferError::PayloadTooLarge);
     }
 
-    decode_payload(&plaintext)
+    decode_payload(&plaintext, header.sender_fingerprint)
 }
 
 fn load_local_identity(workspace_root: &Path) -> Result<LocalPeerIdentity, PeerTransferError> {
@@ -571,51 +576,78 @@ fn derive_transfer_key(
 }
 
 fn encode_payload(payload: TransferPayload) -> Result<Zeroizing<Vec<u8>>, PeerTransferError> {
-    let (kind, name, body): (u8, &[u8], &[u8]) = match &payload {
+    match payload {
         TransferPayload::Text(text) => {
             if text.len() > MAX_TRANSFER_TEXT_BYTES {
                 return Err(PeerTransferError::PayloadTooLarge);
             }
-            (PAYLOAD_KIND_TEXT, &[], text.as_bytes())
+
+            let body = text.into_bytes();
+            let body_len =
+                u64::try_from(body.len()).map_err(|_| PeerTransferError::PayloadTooLarge)?;
+            let total = PAYLOAD_HEADER_BYTES
+                .checked_add(body.len())
+                .ok_or(PeerTransferError::PayloadTooLarge)?;
+            if total > MAX_TRANSFER_PLAINTEXT_BYTES {
+                return Err(PeerTransferError::PayloadTooLarge);
+            }
+
+            let mut encoded = Vec::with_capacity(total);
+            encoded.extend_from_slice(PAYLOAD_MAGIC);
+            encoded.extend_from_slice(&PAYLOAD_FORMAT_VERSION.to_be_bytes());
+            encoded.push(PAYLOAD_KIND_TEXT);
+            encoded.extend_from_slice(&0_u16.to_be_bytes());
+            encoded.extend_from_slice(&body_len.to_be_bytes());
+            encoded.extend_from_slice(&body);
+            Ok(Zeroizing::new(encoded))
         }
         TransferPayload::File {
             suggested_name,
             bytes,
         } => {
-            validate_file_name(suggested_name)?;
+            validate_file_name(&suggested_name)?;
             if bytes.len() > MAX_TRANSFER_FILE_BYTES {
                 return Err(PeerTransferError::PayloadTooLarge);
             }
-            (PAYLOAD_KIND_FILE, suggested_name.as_bytes(), bytes)
+
+            let name = suggested_name.into_bytes();
+            let name_len =
+                u16::try_from(name.len()).map_err(|_| PeerTransferError::InvalidFileName)?;
+            let body_len =
+                u64::try_from(bytes.len()).map_err(|_| PeerTransferError::PayloadTooLarge)?;
+            let sha256 = received_file_integrity::sha256_bytes(&bytes);
+
+            let total = PAYLOAD_HEADER_BYTES
+                .checked_add(name.len())
+                .and_then(|value| value.checked_add(FILE_INTEGRITY_RECORD_BYTES))
+                .and_then(|value| value.checked_add(bytes.len()))
+                .ok_or(PeerTransferError::PayloadTooLarge)?;
+            if total > MAX_TRANSFER_PLAINTEXT_BYTES {
+                return Err(PeerTransferError::PayloadTooLarge);
+            }
+
+            let mut encoded = Vec::with_capacity(total);
+            encoded.extend_from_slice(PAYLOAD_MAGIC);
+            encoded.extend_from_slice(&PAYLOAD_FORMAT_VERSION.to_be_bytes());
+            encoded.push(PAYLOAD_KIND_FILE);
+            encoded.extend_from_slice(&name_len.to_be_bytes());
+            encoded.extend_from_slice(&body_len.to_be_bytes());
+            encoded.extend_from_slice(&name);
+            encoded.push(FILE_INTEGRITY_ALGORITHM_SHA256);
+            encoded.extend_from_slice(&sha256);
+            encoded.extend_from_slice(&bytes);
+            Ok(Zeroizing::new(encoded))
         }
-    };
-
-    let total = PAYLOAD_HEADER_BYTES
-        .checked_add(name.len())
-        .and_then(|value| value.checked_add(body.len()))
-        .ok_or(PeerTransferError::PayloadTooLarge)?;
-    if total > MAX_TRANSFER_PLAINTEXT_BYTES {
-        return Err(PeerTransferError::PayloadTooLarge);
     }
-
-    let name_len = u16::try_from(name.len()).map_err(|_| PeerTransferError::InvalidFileName)?;
-    let body_len = u64::try_from(body.len()).map_err(|_| PeerTransferError::PayloadTooLarge)?;
-
-    let mut encoded = Vec::with_capacity(total);
-    encoded.extend_from_slice(PAYLOAD_MAGIC);
-    encoded.extend_from_slice(&FORMAT_VERSION.to_be_bytes());
-    encoded.push(kind);
-    encoded.extend_from_slice(&name_len.to_be_bytes());
-    encoded.extend_from_slice(&body_len.to_be_bytes());
-    encoded.extend_from_slice(name);
-    encoded.extend_from_slice(body);
-    Ok(Zeroizing::new(encoded))
 }
 
-fn decode_payload(encoded: &[u8]) -> Result<ReceivedTransfer, PeerTransferError> {
+fn decode_payload(
+    encoded: &[u8],
+    sender_fingerprint: [u8; PEER_FINGERPRINT_BYTES],
+) -> Result<ReceivedTransfer, PeerTransferError> {
     if encoded.len() < PAYLOAD_HEADER_BYTES
         || &encoded[..8] != PAYLOAD_MAGIC
-        || read_u16(encoded, 8) != Some(FORMAT_VERSION)
+        || read_u16(encoded, 8) != Some(PAYLOAD_FORMAT_VERSION)
     {
         return Err(PeerTransferError::InvalidPayload);
     }
@@ -624,45 +656,84 @@ fn decode_payload(encoded: &[u8]) -> Result<ReceivedTransfer, PeerTransferError>
     let name_len = read_u16(encoded, 11).ok_or(PeerTransferError::InvalidPayload)? as usize;
     let body_len_u64 = read_u64(encoded, 13).ok_or(PeerTransferError::InvalidPayload)?;
     let body_len = usize::try_from(body_len_u64).map_err(|_| PeerTransferError::PayloadTooLarge)?;
-    let expected_len = PAYLOAD_HEADER_BYTES
-        .checked_add(name_len)
-        .and_then(|value| value.checked_add(body_len))
-        .ok_or(PeerTransferError::PayloadTooLarge)?;
 
-    if expected_len != encoded.len()
-        || name_len > MAX_TRANSFER_FILE_NAME_BYTES
-        || encoded.len() > MAX_TRANSFER_PLAINTEXT_BYTES
-    {
+    if name_len > MAX_TRANSFER_FILE_NAME_BYTES || encoded.len() > MAX_TRANSFER_PLAINTEXT_BYTES {
         return Err(PeerTransferError::InvalidPayload);
     }
 
     let name_start = PAYLOAD_HEADER_BYTES;
-    let body_start = name_start + name_len;
-    let name_bytes = &encoded[name_start..body_start];
-    let body = &encoded[body_start..];
+    let name_end = name_start
+        .checked_add(name_len)
+        .ok_or(PeerTransferError::InvalidPayload)?;
+    let name_bytes = encoded
+        .get(name_start..name_end)
+        .ok_or(PeerTransferError::InvalidPayload)?;
 
     match kind {
         PAYLOAD_KIND_TEXT => {
-            if name_len != 0 || body.len() > MAX_TRANSFER_TEXT_BYTES {
+            if name_len != 0 || body_len > MAX_TRANSFER_TEXT_BYTES {
                 return Err(PeerTransferError::InvalidPayload);
             }
+            let expected_len = PAYLOAD_HEADER_BYTES
+                .checked_add(body_len)
+                .ok_or(PeerTransferError::InvalidPayload)?;
+            if expected_len != encoded.len() {
+                return Err(PeerTransferError::InvalidPayload);
+            }
+
+            let body = &encoded[PAYLOAD_HEADER_BYTES..];
             let text = std::str::from_utf8(body)
                 .map_err(|_| PeerTransferError::InvalidPayload)?
                 .to_owned();
             Ok(ReceivedTransfer::Text(text))
         }
         PAYLOAD_KIND_FILE => {
-            if body.len() > MAX_TRANSFER_FILE_BYTES {
+            if body_len > MAX_TRANSFER_FILE_BYTES {
                 return Err(PeerTransferError::PayloadTooLarge);
             }
+
+            let integrity_start = name_end;
+            let integrity_end = integrity_start
+                .checked_add(FILE_INTEGRITY_RECORD_BYTES)
+                .ok_or(PeerTransferError::InvalidPayload)?;
+            let body_start = integrity_end;
+            let expected_len = body_start
+                .checked_add(body_len)
+                .ok_or(PeerTransferError::InvalidPayload)?;
+            if expected_len != encoded.len() {
+                return Err(PeerTransferError::InvalidPayload);
+            }
+
+            let algorithm = *encoded
+                .get(integrity_start)
+                .ok_or(PeerTransferError::InvalidPayload)?;
+            if algorithm != FILE_INTEGRITY_ALGORITHM_SHA256 {
+                return Err(PeerTransferError::InvalidPayload);
+            }
+
+            let expected_sha256: [u8; RECEIVED_FILE_SHA256_BYTES] = encoded
+                .get(integrity_start + 1..integrity_end)
+                .ok_or(PeerTransferError::InvalidPayload)?
+                .try_into()
+                .map_err(|_| PeerTransferError::InvalidPayload)?;
+            let body = encoded
+                .get(body_start..)
+                .ok_or(PeerTransferError::InvalidPayload)?;
+
             let suggested_name = std::str::from_utf8(name_bytes)
                 .map_err(|_| PeerTransferError::InvalidFileName)?
                 .to_owned();
             validate_file_name(&suggested_name)?;
-            Ok(ReceivedTransfer::File {
-                suggested_name,
-                bytes: body.to_vec(),
-            })
+
+            Ok(ReceivedTransfer::File(
+                PendingReceivedFile::from_authenticated_payload(
+                    suggested_name,
+                    body_len_u64,
+                    expected_sha256,
+                    sender_fingerprint,
+                    body.to_vec(),
+                ),
+            ))
         }
         _ => Err(PeerTransferError::InvalidPayload),
     }
