@@ -8,6 +8,7 @@ pub mod document_search;
 pub mod existing_credential_input;
 pub mod generated_credential_input;
 pub mod hash_verify;
+pub mod internet_p2p_policy;
 pub mod lan_access_control;
 pub mod mobile_handoff;
 pub mod network_safety;
