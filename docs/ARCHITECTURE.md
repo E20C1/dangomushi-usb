@@ -404,6 +404,24 @@ Transfer IDs, ephemeral X25519 secrets, derived keys, plaintext/ciphertext trans
 
 `src/server.rs` remains loopback-only. Direct LAN transport is still a later M4 task.
 
+## Received file integrity
+
+M4 received-file integrity is implemented by `src/received_file_integrity.rs` together with file-payload framing in `src/peer_transfer.rs`.
+
+For file transfers, the sender computes SHA-256 over the raw file bytes before encryption. Payload format v2 carries the declared file byte length, a fixed SHA-256 algorithm identifier, and the 32-byte digest alongside the validated suggested filename and file bytes. This integrity record is inside the existing XChaCha20Poly1305 ciphertext and therefore is also covered by the sender-authenticated encrypted envelope.
+
+After envelope signature verification and AEAD decryption, a file is returned as `PendingReceivedFile`, not as directly accessible bytes. The pending type exposes only the suggested filename, authenticated declared length, expected SHA-256 and trusted sender fingerprint. Its byte buffer remains private.
+
+`PendingReceivedFile::verify(self)` consumes the pending file, first compares the actual byte length with the authenticated declared length, then recomputes SHA-256 over the received bytes and compares it with the authenticated expected digest. Mismatch fails closed. Only successful verification produces `VerifiedReceivedFile`, which exposes the file bytes plus verified length, digest, sender fingerprint and suggested filename.
+
+This is intentionally separate from transport-envelope integrity. XChaCha20Poly1305 and the sender Ed25519 signature protect the encrypted transfer envelope; the file SHA-256 verifies the exact decrypted bytes against the trusted sender's authenticated commitment. A malicious trusted sender can still provide malicious bytes with a matching digest, so this boundary is not malware detection or content-safety approval.
+
+No filesystem destination is selected and no received file is written by this task. A future durable receiver must verify the bytes it actually makes durable against the verified digest if any write path is introduced.
+
+Received file bytes and verification state remain ephemeral and are not added to session state, autosave, Generic Workspace Backup, Secret Backup, trusted-peer policy or M3 device state.
+
+`src/server.rs` remains loopback-only. Direct LAN path first is the next M4 task and must preserve this verification gate.
+
 ## Web gateway
 
 The embedded gateway currently serves only fixed assets and a read-only status endpoint.
