@@ -39,11 +39,12 @@ The current implementation includes:
 - An M3 durable device-revocation ledger that tombstones revoked Ed25519 fingerprints, rejects same-key re-trust, and unions revocation state across Generic Workspace restore.
 - An M3 default-deny device-permission policy with four fixed future authorization scopes, explicit native editing, effective-trust checks, and backup-restore isolation under workspace/state.
 - An M3 reconnect proof boundary using fresh CSPRNG challenges and strict Ed25519 proof-of-possession, with no fixed authenticated-session expiry or persisted bearer credential.
+- An M3 fail-closed public-network safety gate: Windows reads all connected Network List Manager categories, while unknown/unsupported evidence denies future LAN exposure by default.
 - No public bind, LAN bind, UPnP, NAT-PMP, reverse tunnel, CDN or external web request.
 - Windows double-click build/update entry point.
 - CI builds for Windows, macOS and Linux.
 
-M3 now has explicit LAN intent control, bounded device pairing, persistent trusted-device public keys, restore-monotonic device revocation, default-deny permission scopes, and fresh-proof reconnection without a short fixed authenticated-session expiry. Public-network safety and all actual LAN listening remain later work and are not faked as completed features.
+M3 now has explicit LAN intent control, bounded device pairing, persistent trusted-device public keys, restore-monotonic device revocation, default-deny permission scopes, fresh-proof reconnection without a short fixed authenticated-session expiry, and a fail-closed public-network safety gate. Mobile editor/session handoff and all actual LAN listening remain later work and are not faked as completed features.
 
 ## Editor safety model
 

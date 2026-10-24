@@ -6,6 +6,7 @@ use crate::file_browser::{self, EntryKind, FileEntry};
 use crate::file_compare;
 use crate::hash_verify;
 use crate::lan_access_control::LanEnableControl;
+use crate::network_safety::{self, NetworkEnvironment, NetworkSafetyAssessment};
 use crate::native_ui_theme::{self as theme, PixelIcon, BAD, BG, LINE, MUTED, OK, PANEL, TEXT, WARN};
 use crate::repository_git;
 use crate::session_state::{self, SessionState, SessionView};
@@ -828,6 +829,7 @@ struct NativeApp {
     editor: EditorState,
     hash_verify: HashVerifyState,
     lan_access: LanEnableControl,
+    network_safety: NetworkSafetyAssessment,
     device_pairing: DevicePairing,
     pairing_invitation: Option<PairingInvitation>,
     paired_device: Option<PairedDeviceCandidate>,
@@ -865,6 +867,7 @@ impl NativeApp {
             editor: EditorState::new(),
             hash_verify: HashVerifyState::new(),
             lan_access: LanEnableControl::default(),
+            network_safety: network_safety::assess_current_network(),
             device_pairing: DevicePairing::default(),
             pairing_invitation: None,
             paired_device: None,
@@ -3031,6 +3034,38 @@ impl NativeApp {
             );
             ui.add_space(10.0);
 
+            theme::small_label(ui, "NETWORK SAFETY");
+            let exposure = network_safety::evaluate(&self.lan_access, self.network_safety);
+            let safety_color = match self.network_safety.environment() {
+                NetworkEnvironment::Trusted => OK,
+                NetworkEnvironment::Public => BAD,
+                NetworkEnvironment::Unknown => WARN,
+            };
+            theme::status_badge(ui, self.network_safety.environment().label(), safety_color);
+            theme::key_value(ui, "SOURCE", self.network_safety.source().label());
+            theme::key_value(
+                ui,
+                "CONNECTED NETWORKS",
+                &self.network_safety.connected_networks().to_string(),
+            );
+            theme::key_value(ui, "LAN EXPOSURE", exposure.label());
+            if ui.button("REFRESH NETWORK SAFETY").clicked() {
+                self.network_safety = network_safety::assess_current_network();
+                let refreshed = network_safety::evaluate(&self.lan_access, self.network_safety);
+                self.notice = format!(
+                    "NETWORK SAFETY: {} / {}",
+                    self.network_safety.environment().label(),
+                    refreshed.label()
+                );
+            }
+            ui.label(
+                egui::RichText::new(
+                    "Public or unknown network evidence blocks future LAN exposure. Windows uses all connected Network List Manager categories; unsupported or failed probes fail closed.",
+                )
+                .color(MUTED),
+            );
+            ui.add_space(10.0);
+
             if enabled {
                 if theme::pixel_button(
                     ui,
@@ -3059,7 +3094,12 @@ impl NativeApp {
             .clicked()
             {
                 self.lan_access.enable_for_this_run();
-                self.notice = "LAN CONTROL ON / LISTENER STILL LOCKED".to_string();
+                self.network_safety = network_safety::assess_current_network();
+                let exposure = network_safety::evaluate(&self.lan_access, self.network_safety);
+                self.notice = format!(
+                    "LAN CONTROL ON / {} / LISTENER STILL LOCKED",
+                    exposure.label()
+                );
             }
 
             ui.add_space(14.0);
