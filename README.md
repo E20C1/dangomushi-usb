@@ -45,11 +45,12 @@ The current implementation includes:
 - An M4 transport-independent encrypted text/file transfer core using signed one-shot offers, ephemeral X25519, HKDF-SHA256 and XChaCha20Poly1305; received files remain in memory and no peer socket is opened.
 - An M4 received-file integrity gate that embeds a sender-authenticated SHA-256/length commitment and exposes file bytes only after `PendingReceivedFile::verify` produces `VerifiedReceivedFile`.
 - An M4 direct IPv4 LAN peer transport with live LAN-intent/network-safety gating, trusted-peer recipient binding, bounded one-shot receive windows, encrypted transfer reuse, and file verification before acknowledgement.
+- An M4 Internet P2P threat review whose current decision is fail-closed: Internet/global peer transport remains disabled, with no runtime/configuration override, rendezvous, relay, NAT traversal or automatic port mapping.
 - No public/global peer address support, peer discovery, firewall mutation, UPnP, NAT-PMP, reverse tunnel, relay, CDN or external web request.
 - Windows double-click build/update entry point.
 - CI builds for Windows, macOS and Linux.
 
-M3's transport-independent mobile security and handoff foundation is complete. M4 now has trusted-peer identity, encrypted transfer, received-file verification and a fail-closed direct IPv4 LAN path. Peer discovery, durable received-file writes and Internet P2P remain unavailable.
+M3's transport-independent mobile security and handoff foundation is complete. M4 is complete with trusted-peer identity, encrypted transfer, received-file verification and fail-closed Direct LAN. The Internet P2P threat review is complete and explicitly keeps Internet/global peer transport disabled; M5 Offline continuity is next.
 
 ## Editor safety model
 
