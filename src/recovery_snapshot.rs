@@ -679,10 +679,10 @@ fn read_snapshot_marker(
         return Err(RecoverySnapshotError::SizeLimitExceeded);
     }
 
-    let mut file = File::open(&marker_path).map_err(|_| RecoverySnapshotError::Io)?;
+    let file = File::open(&marker_path).map_err(|_| RecoverySnapshotError::Io)?;
     let mut bytes = Vec::with_capacity(metadata.len() as usize);
-    file.by_ref()
-        .take((MAX_SNAPSHOT_MARKER_BYTES as u64) + 1)
+    let mut limited = file.take((MAX_SNAPSHOT_MARKER_BYTES as u64) + 1);
+    limited
         .read_to_end(&mut bytes)
         .map_err(|_| RecoverySnapshotError::Io)?;
     if bytes.len() > MAX_SNAPSHOT_MARKER_BYTES || bytes.len() as u64 != metadata.len() {
