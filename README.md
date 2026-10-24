@@ -41,12 +41,12 @@ The current implementation includes:
 - An M3 reconnect proof boundary using fresh CSPRNG challenges and strict Ed25519 proof-of-possession, with no fixed authenticated-session expiry or persisted bearer credential.
 - An M3 fail-closed public-network safety gate: Windows reads all connected Network List Manager categories, while unknown/unsupported evidence denies future LAN exposure by default.
 - An M3 transport-independent mobile editor/session handoff core with live scope checks, existing Editor path/UTF-8/size enforcement, SHA-256 revision conflict detection, and recovery-draft preservation on stale saves.
-- An M4 trusted-peer identity core with a create-once local Ed25519 identity, fresh proof-of-possession challenges, explicit non-TOFU trusted-peer persistence, and backup-isolated peer state.
+- An M4 trusted-peer identity core with a create-once local Ed25519 identity, fresh proof-of-possession challenges, explicit non-TOFU trusted-peer persistence, and backup-isolated peer state.\n- An M4 transport-independent encrypted text/file transfer core using signed one-shot offers, ephemeral X25519, HKDF-SHA256 and XChaCha20Poly1305; received files remain in memory and no peer socket is opened.
 - No public bind, LAN bind, peer-transfer bind, UPnP, NAT-PMP, reverse tunnel, CDN or external web request.
 - Windows double-click build/update entry point.
 - CI builds for Windows, macOS and Linux.
 
-M3's transport-independent mobile security and handoff foundation is complete. M4 now has a separate trusted-peer identity boundary, but no peer discovery, non-loopback listener, encrypted transfer protocol or file receiver exists yet.
+M3's transport-independent mobile security and handoff foundation is complete. M4 now has separate trusted-peer identity plus encrypted text/file envelope boundaries, while peer discovery, non-loopback listeners, durable received-file acceptance and Internet P2P remain unavailable.
 
 ## Editor safety model
 
@@ -178,7 +178,7 @@ See docs/ARCHITECTURE.md for the authority, filesystem, editor, network and data
 
 The local HTTP gateway is a presentation surface only. It exposes fixed read-only routes and a read-only status endpoint. It does not expose filesystem writes, command execution or Git operations.
 
-M3 trusted-device pairing and authorization boundaries are implemented, but no non-loopback mobile or peer listener is enabled. M4 peer transfer remains transport-locked until its encrypted-transfer boundary is implemented and tested.
+M3 trusted-device pairing and authorization boundaries are implemented, but no non-loopback mobile or peer listener is enabled. M4 encrypted transfer is implemented only as an in-process envelope core; Direct LAN transport remains locked.
 
 ## License
 
