@@ -185,9 +185,7 @@ fn ui_and_roadmap_make_disabled_decision_unambiguous_and_advance_to_m5() {
     assert!(!UI.contains("ENABLE P2P"));
 
     assert!(ROADMAP.contains("- [x] **Internet P2P threat review**"));
-    assert!(ROADMAP.contains(
-        "- [ ] **Offline documentation packs** — Exactly One Next Task"
-    ));
+    assert!(ROADMAP.contains("- [x] **Offline documentation packs**"));
     assert!(!ROADMAP.contains(
         "- [ ] **Internet P2P only after a separate threat review** — Exactly One Next Task"
     ));
