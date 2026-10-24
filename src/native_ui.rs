@@ -3130,6 +3130,7 @@ impl NativeApp {
             if let Some(identity) = self.peer_identity {
                 theme::status_badge(ui, "LOCAL IDENTITY READY / TRANSPORT LOCKED", OK);
                 theme::status_badge(ui, "ENCRYPTED TRANSFER CORE READY / LAN LOCKED", OK);
+                theme::status_badge(ui, "RECEIVED FILE INTEGRITY READY / LAN LOCKED", OK);
                 theme::key_value(ui, "KEY", "Ed25519");
                 theme::key_value(ui, "FINGERPRINT", &identity.fingerprint_hex());
             } else if let Some(error) = self.peer_identity_error.as_ref() {
@@ -3194,7 +3195,7 @@ impl NativeApp {
 
             ui.label(
                 egui::RichText::new(
-                    "Peer trust requires fresh Ed25519 proof-of-possession and a separate explicit trust action. No peer discovery or transfer transport exists yet. The encrypted text/file envelope core is READY using ephemeral X25519 + HKDF-SHA256 + XChaCha20Poly1305, but no filesystem receiver or LAN transport is enabled.",
+                    "Peer trust requires fresh Ed25519 proof-of-possession and a separate explicit trust action. No peer discovery or transfer transport exists yet. Encrypted transfer and received-file SHA-256 verification cores are READY, but no filesystem receiver or LAN transport is enabled.",
                 )
                 .color(MUTED),
             );
