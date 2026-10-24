@@ -43,7 +43,7 @@ fn roadmap_completes_secret_core_and_keeps_non_secret_m2_sequence_bounded() {
     assert!(ROADMAP.contains("[x] **Explicit LAN enable control**"));
     assert!(ROADMAP.contains("[x] **Device pairing**"));
     assert!(ROADMAP.contains(
-        "[ ] **Persistent trusted-device public keys** — Exactly One Next Task"
+        "[ ] **Device revocation** — Exactly One Next Task"
     ));
 }
 

@@ -272,6 +272,18 @@ Successful cryptographic proof does not itself create durable trust. The native 
 
 Pairing state, pairing codes, pending candidates and run-local approval are not written to session.v1, config/, generic backups, Secret Backup / Restore, or the embedded web gateway. No non-loopback listener or pairing HTTP route is added in this task.
 
+### Persistent trusted-device public keys
+
+Approved run-local pairing candidates can be promoted through a second explicit native action into a versioned trust store at workspace/identity/trusted_devices.v1.json. The durable record contains only the device display name, Ed25519 public key and its domain-separated SHA-256 fingerprint. Pairing codes, HMAC proofs, signatures, private keys and session state are never written to this store.
+
+The store is bounded to 256 devices and 256 KiB, validates UTF-8 device-name rules, exact 32-byte public keys, recomputed fingerprints and duplicate keys on every load, and rejects symlink or special-file storage layouts. Replacement uses create-new pending output, full parse verification, a previous-file rollback slot, fsync of file content and best-effort directory synchronization. Interrupted-write recovery prefers the last verified committed store and never promotes a pending-only first write.
+
+Because identity/ is already a managed Generic Workspace Backup root, trusted public keys are intentionally included in generic snapshots and can be restored with them. This means an older backup can restore an older trust set. No LAN listener exists yet; the following Device revocation task must define fail-closed revoked-key behavior across restore before network authorization can rely on this store.
+
+The trust store does not defend against an attacker who already has arbitrary write access to the Workspace filesystem. This task establishes bounded durable public-key identity, not a local tamper-proof hardware root.
+
+No removal or revocation operation and no non-loopback listener are added in this task.
+
 ## Web gateway
 
 The embedded gateway currently serves only fixed assets and a read-only status endpoint.
