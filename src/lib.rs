@@ -21,6 +21,7 @@ pub mod peer_lan;
 pub mod peer_transfer;
 pub mod received_file_integrity;
 pub mod recovery_codes;
+pub mod recovery_snapshot;
 pub mod repository_git;
 pub mod secret_backup;
 pub mod server;
