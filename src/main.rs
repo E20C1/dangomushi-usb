@@ -69,7 +69,22 @@ fn run() -> Result<(), String> {
 
 fn run_docs(args: Vec<String>) -> Result<(), String> {
     match args.as_slice() {
-        [] | [command] if command == "list" => {
+        [] => {
+            let summary = offline_docs::summary()
+                .map_err(|error| format!("offline docs unavailable: {error}"))?;
+            println!("DANGOMUSHI OFFLINE DOCS");
+            println!("pack: {}", summary.pack_id);
+            println!("format: {}", summary.format_version);
+            println!("app_version: {}", summary.app_version);
+            println!("documents: {}", summary.document_count);
+            println!("bytes: {}", summary.total_bytes);
+            println!("sha256: {}", summary.sha256_hex());
+            for document in offline_docs::documents() {
+                println!("{}", document.path);
+            }
+            Ok(())
+        }
+        [command] if command == "list" => {
             let summary = offline_docs::summary()
                 .map_err(|error| format!("offline docs unavailable: {error}"))?;
             println!("DANGOMUSHI OFFLINE DOCS");
