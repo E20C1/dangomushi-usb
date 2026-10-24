@@ -534,6 +534,26 @@ Embedded documentation is application content, not Workspace state. DANGOMUSHI d
 
 This task does not vendor Rust dependencies, create recovery snapshots, verify recovery restores, or construct portable operating-system release bundles. Those remain later M5 boundaries.
 
+## Reproducible dependency cache
+
+M5 dependency continuity uses Cargo's native lock/vendor model instead of defining a DANGOMUSHI-specific package cache format.
+
+`Cargo.lock` is committed and is the authoritative Rust dependency resolution. Normal CI plus the Windows/Unix application update paths pass `--locked`, so routine builds fail rather than silently rewriting dependency versions.
+
+The reviewed rebuild baseline is pinned by `rust-toolchain.toml` to Rust 1.99.1 with the minimal rustup profile. CI installs the same exact toolchain instead of a moving stable channel. This pin is the rebuild baseline; it is separate from any lower MSRV declaration in `Cargo.toml`.
+
+The generated Rust source cache lives at repository-root `vendor/`. `scripts/vendor-dependencies.sh` and `scripts/vendor-dependencies.cmd` require the lockfile, refuse to overwrite an existing cache, run `cargo vendor --locked --versioned-dirs` into `vendor.pending/`, then promote it to `vendor/` and verify frozen metadata through the offline source replacement.
+
+`.cargo/vendor-config.toml` is opt-in rather than the default Cargo config. When explicitly selected it replaces crates.io with `vendor/` and sets Cargo offline. This avoids stale vendor content silently affecting ordinary online development while still providing a strict offline mode.
+
+`scripts/verify-vendored-dependencies.*` run metadata, core tests/build, desktop library tests and native desktop release build through the vendor config with `--frozen`. CI contains a separate Ubuntu offline-vendor job that generates a new cache from the committed lockfile and exercises that complete frozen path.
+
+The generated vendor tree is ignored by Git. It is third-party build material and can be preserved on offline media alongside the matching source tree and lockfile or incorporated by a later explicit recovery/release artifact. Existing Workspace/Backup scopes are unchanged.
+
+This is not a fully hermetic operating-system build. Rust toolchain installation, Linux native development packages, Windows/macOS SDKs, system linkers and other platform prerequisites are not cached by this task. A valid Cargo checksum also proves source consistency, not that a dependency is secure or independently audited.
+
+The next M5 boundary is Recovery snapshots.
+
 
 ## Dependency policy
 

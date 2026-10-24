@@ -1,6 +1,6 @@
 [package]
 name = "dangomushi"
-version = "0.5.26"
+version = "0.5.27"
 edition = "2021"
 rust-version = "1.95"
 description = "Portable, local-first workspace core"

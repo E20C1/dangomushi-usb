@@ -47,11 +47,12 @@ The current implementation includes:
 - An M4 direct IPv4 LAN peer transport with live LAN-intent/network-safety gating, trusted-peer recipient binding, bounded one-shot receive windows, encrypted transfer reuse, and file verification before acknowledgement.
 - An M4 Internet P2P threat review whose current decision is fail-closed: Internet/global peer transport remains disabled, with no runtime/configuration override, rendezvous, relay, NAT traversal or automatic port mapping.
 - An M5 embedded offline documentation pack containing README plus all docs/*.md, with deterministic SHA-256 inventory, offline CLI list/show, create-new export/verify, and a read-only native SYSTEM viewer.
+- An M5 reproducible Cargo dependency-cache strategy with committed Cargo.lock, Rust 1.99.1 pinning, locked normal builds, generated versioned vendor snapshots, explicit offline source replacement, and frozen vendor CI verification.
 - No public/global peer address support, peer discovery, firewall mutation, UPnP, NAT-PMP, reverse tunnel, relay, CDN or external web request.
 - Windows double-click build/update entry point.
 - CI builds for Windows, macOS and Linux.
 
-M3's transport-independent mobile security and handoff foundation is complete. M4 is complete with trusted-peer identity, encrypted transfer, received-file verification and fail-closed Direct LAN. M5 Offline continuity has started with embedded documentation packs; reproducible dependency cache/vendor strategy is the next task.
+M3's transport-independent mobile security and handoff foundation is complete. M4 is complete with trusted-peer identity, encrypted transfer, received-file verification and fail-closed Direct LAN. M5 Offline continuity now includes embedded documentation and a reproducible Cargo dependency-cache/vendor strategy; Recovery snapshots are the next task.
 
 ## Editor safety model
 
@@ -139,11 +140,42 @@ cargo run --features desktop --bin dangomushi-desktop
 
 The desktop stack is optional. Core tests and CLI builds do not require the desktop feature.
 
+## Offline dependency cache
+
+Create a local Cargo source snapshot while registry access is available:
+
+~~~text
+scripts\\vendor-dependencies.cmd
+~~~
+
+or on Unix:
+
+~~~text
+sh scripts/vendor-dependencies.sh
+~~~
+
+Then verify the complete Cargo path with registry access disabled:
+
+~~~text
+scripts\\verify-vendored-dependencies.cmd
+~~~
+
+or:
+
+~~~text
+sh scripts/verify-vendored-dependencies.sh
+~~~
+
+The generated `vendor/` directory is intentionally not committed to Git. Preserve it with the matching source tree and `Cargo.lock` when preparing long-term offline media. The Rust 1.99.1 toolchain and required OS-native build packages remain separate prerequisites.
+
 ## Repository layout
 
 ~~~text
 dangomushi-usb/
 ├─ Cargo.toml
+├─ Cargo.lock
+├─ rust-toolchain.toml
+├─ .cargo/vendor-config.toml
 ├─ UPDATE_TOOLBOX.cmd
 ├─ src/
 │  ├─ main.rs

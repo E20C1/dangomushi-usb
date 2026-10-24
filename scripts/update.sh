@@ -7,9 +7,9 @@ cd "$ROOT_DIR"
 echo "DANGOMUSHI UPDATE"
 echo "================="
 
-cargo test
-cargo build --release --bin dangomushi
-cargo build --release --features desktop --bin dangomushi-desktop
+cargo test --locked
+cargo build --locked --release --bin dangomushi
+cargo build --locked --release --features desktop --bin dangomushi-desktop
 
 rm -rf build/staging
 mkdir -p build/staging build/backup app
