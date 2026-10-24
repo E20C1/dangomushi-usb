@@ -283,6 +283,7 @@ fn handle_inbound_stream<G: ExposureGate>(
         return Err(PeerLanError::PeerNotTrusted);
     }
 
+    require_fresh_exposure(lan_control, gate)?;
     let pending = peer_transfer::begin_receive(workspace_root, &sender_fingerprint, Instant::now())
         .map_err(|_| PeerLanError::TransferRejected)?;
     let offer = pending.offer_bytes();
@@ -316,6 +317,7 @@ fn handle_inbound_stream<G: ExposureGate>(
         }
     };
 
+    require_fresh_exposure(lan_control, gate)?;
     write_ack(&mut stream)?;
     Ok(accepted)
 }
