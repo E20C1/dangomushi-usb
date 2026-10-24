@@ -380,7 +380,29 @@ Removing a peer deletes it from the current trusted-peer policy. Because that po
 
 M3 device fingerprints and M4 peer fingerprints use different domain-separation strings and separate stores. Trust in one domain grants nothing in the other.
 
-This task remains transport-independent. `src/server.rs` is still loopback-only and no peer discovery, socket, transfer framing, encryption protocol or file receiver is introduced. Encrypted text/file transfer is the next M4 task and must authenticate the remote party against this peer-identity boundary before defining confidentiality or transfer semantics.
+This task remains transport-independent. `src/server.rs` is still loopback-only and no peer discovery or peer socket is introduced.
+
+## Encrypted peer transfer
+
+M4 encrypted text/file transfer is implemented by `src/peer_transfer.rs` as a transport-independent one-shot envelope protocol layered on the trusted-peer identity authority.
+
+The receiver creates a fresh OS-CSPRNG transfer ID and ephemeral X25519 key pair, then signs a public offer with its existing Ed25519 peer identity. The signed offer binds the transfer ID, receiver peer fingerprint, expected sender peer fingerprint and receiver ephemeral X25519 public key. The sender verifies that the receiver remains trusted and verifies the Ed25519 offer signature before proceeding.
+
+The sender creates its own fresh ephemeral X25519 key pair, rejects non-contributory Diffie-Hellman output, and derives a 256-bit transfer key with HKDF-SHA256. HKDF uses the transfer ID as salt and a versioned context containing both peer fingerprints and both ephemeral X25519 public keys.
+
+The payload is encrypted with XChaCha20Poly1305 using a fresh 192-bit OS-CSPRNG nonce. The fixed versioned envelope header is associated data. The sender additionally authenticates the envelope with its Ed25519 peer identity by signing a domain-separated SHA-256 digest of header plus ciphertext. The receiver verifies that signature against the current trusted sender key before decryption.
+
+Ed25519 remains the long-lived authentication identity. It is not converted into a static X25519 key. Both X25519 secrets are transfer-ephemeral.
+
+A pending receive is process-local, expires after five minutes, and is consumed by value on one open attempt. Replays do not match a newly generated transfer ID/receiver ephemeral key. Offer, envelope and inner payload framing use strict version and exact-length checks with bounded text/file sizes.
+
+Transferred text is bounded to 4 MiB UTF-8. Transferred files are bounded to 64 MiB. A file carries only a validated single-component suggested name plus bytes. The core never chooses a destination path and never writes a received file.
+
+XChaCha20Poly1305 authenticates the encrypted envelope for the derived transfer key, while the Ed25519 signature authenticates the sender peer. This is transport-envelope integrity, not the next task's durable received-file integrity record.
+
+Transfer IDs, ephemeral X25519 secrets, derived keys, plaintext/ciphertext transfer content and pending receive state remain ephemeral and are not added to session state, autosave, Generic Backup, Secret Backup, trusted-peer policy or M3 device state.
+
+`src/server.rs` remains loopback-only. Direct LAN transport is still a later M4 task.
 
 ## Web gateway
 
