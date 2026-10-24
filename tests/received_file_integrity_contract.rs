@@ -303,10 +303,10 @@ fn docs_and_roadmap_keep_integrity_meaning_narrow_and_advance_once() {
         );
     }
 
-    assert!(UI.contains("RECEIVED FILE INTEGRITY READY / LAN LOCKED"));
+    assert!(UI.contains("RECEIVED FILE INTEGRITY READY"));
     assert!(ROADMAP.contains("- [x] **Integrity verification for received files**"));
-    assert!(ROADMAP.contains("- [ ] **Direct LAN path first** — Exactly One Next Task"));
-    assert!(!ROADMAP.contains(
+    assert!(ROADMAP.contains("- [x] **Direct LAN path first**"));
+    assert!(ROADMAP.contains(
         "- [ ] **Internet P2P only after a separate threat review** — Exactly One Next Task"
     ));
 }
