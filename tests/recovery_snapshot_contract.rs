@@ -290,6 +290,9 @@ fn docs_and_roadmap_advance_once_to_restore_verification() {
     assert!(README.contains("M5 recovery snapshot"));
     assert!(ROADMAP.contains("- [x] **Recovery snapshots**"));
     assert!(ROADMAP.contains("- [x] **Restore verification**"));
+    assert!(!ROADMAP.contains(
+        "public snapshot verification are intentionally deferred"
+    ));
     assert!(ROADMAP.contains(
         "- [ ] **Portable release bundles per operating system** — Exactly One Next Task"
     ));
