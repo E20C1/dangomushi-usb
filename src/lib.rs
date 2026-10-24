@@ -16,6 +16,7 @@ pub mod server;
 pub mod session_state;
 pub mod text_editor;
 pub mod text_json;
+pub mod trusted_devices;
 pub mod tool_registry;
 pub mod vault_storage;
 pub mod vault_unlock;

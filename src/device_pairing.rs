@@ -502,7 +502,7 @@ pub fn pairing_signature_message(
     message
 }
 
-fn validate_device_name(device_name: &str) -> Result<(), PairingError> {
+pub(crate) fn validate_device_name(device_name: &str) -> Result<(), PairingError> {
     if device_name.is_empty()
         || device_name.len() > MAX_DEVICE_NAME_BYTES
         || device_name.trim() != device_name
@@ -548,7 +548,7 @@ fn format_pairing_code(normalized: &[u8; PAIRING_CODE_CHARS]) -> String {
     display
 }
 
-fn device_key_fingerprint(public_key: &[u8; PAIRING_PUBLIC_KEY_BYTES]) -> [u8; 32] {
+pub(crate) fn device_key_fingerprint(public_key: &[u8; PAIRING_PUBLIC_KEY_BYTES]) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(FINGERPRINT_DOMAIN);
     hasher.update(public_key);

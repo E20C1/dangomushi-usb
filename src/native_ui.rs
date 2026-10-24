@@ -10,6 +10,7 @@ use crate::session_state::{self, SessionState, SessionView};
 use crate::text_editor;
 use crate::text_json;
 use crate::tool_registry::{self, ToolId, ToolStatus};
+use crate::trusted_devices::{self, TrustedDevice};
 use crate::workspace;
 use crate::workspace_backup;
 use eframe::egui;
@@ -828,6 +829,8 @@ struct NativeApp {
     device_pairing: DevicePairing,
     pairing_invitation: Option<PairingInvitation>,
     paired_device: Option<PairedDeviceCandidate>,
+    trusted_devices: Vec<TrustedDevice>,
+    trusted_devices_error: Option<String>,
     text_json: TextJsonState,
     file_compare: FileCompareState,
     document_search: DocumentSearchState,
@@ -857,6 +860,8 @@ impl NativeApp {
             device_pairing: DevicePairing::default(),
             pairing_invitation: None,
             paired_device: None,
+            trusted_devices: Vec::new(),
+            trusted_devices_error: None,
             text_json: TextJsonState::new(),
             file_compare: FileCompareState::new(),
             document_search: DocumentSearchState::new(),
@@ -868,6 +873,7 @@ impl NativeApp {
         };
 
         app.restore_saved_session();
+        app.refresh_trusted_devices();
         app.session_saved = app.session_snapshot();
         app
     }
@@ -913,6 +919,26 @@ impl NativeApp {
         } else {
             "SESSION RESTORED".to_string()
         };
+    }
+
+    fn refresh_trusted_devices(&mut self) {
+        if !workspace::summary(&self.workspace_root).initialized {
+            self.trusted_devices.clear();
+            self.trusted_devices_error = None;
+            return;
+        }
+
+        match trusted_devices::load(&self.workspace_root) {
+            Ok(store) => {
+                self.trusted_devices = store.devices().to_vec();
+                self.trusted_devices_error = None;
+            }
+            Err(error) => {
+                self.trusted_devices.clear();
+                self.trusted_devices_error = Some(error.to_string());
+                self.notice = format!("TRUST STORE FAILED: {error}");
+            }
+        }
     }
 
     fn persist_session_if_changed(&mut self) {
@@ -1244,6 +1270,7 @@ impl NativeApp {
         self.workspace_backup.select(restored_backup);
         self.workspace_backup.summary = Some(summary);
         self.workspace_backup.restore_confirmation.clear();
+        self.refresh_trusted_devices();
     }
 
     fn files(&mut self, ui: &mut egui::Ui) {
@@ -2989,6 +3016,43 @@ impl NativeApp {
             }
 
             ui.add_space(14.0);
+            theme::small_label(ui, "PERSISTENT TRUSTED DEVICES");
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                if ui.button("REFRESH TRUST STORE").clicked() {
+                    self.refresh_trusted_devices();
+                }
+                theme::status_badge(
+                    ui,
+                    &format!("{} TRUSTED", self.trusted_devices.len()),
+                    if self.trusted_devices.is_empty() { MUTED } else { OK },
+                );
+            });
+
+            if let Some(error) = self.trusted_devices_error.as_ref() {
+                ui.label(egui::RichText::new(error).color(BAD).monospace());
+            } else if self.trusted_devices.is_empty() {
+                ui.label(
+                    egui::RichText::new("No persistent trusted-device public keys are stored.")
+                        .color(MUTED),
+                );
+            } else {
+                for trusted in &self.trusted_devices {
+                    ui.separator();
+                    theme::key_value(ui, "DEVICE", trusted.device_name());
+                    theme::key_value(ui, "KEY", "Ed25519");
+                    theme::key_value(ui, "FINGERPRINT", &trusted.fingerprint_hex());
+                }
+            }
+
+            ui.label(
+                egui::RichText::new(
+                    "Trusted public keys are stored under workspace:/identity and are included in generic Workspace backups. Revocation is not implemented yet; this view intentionally has no remove action.",
+                )
+                .color(MUTED),
+            );
+
+            ui.add_space(14.0);
             theme::small_label(ui, "DEVICE PAIRING");
             ui.add_space(4.0);
 
@@ -3000,17 +3064,54 @@ impl NativeApp {
                 return;
             }
 
-            if let Some(paired) = self.paired_device.as_ref() {
+            if let Some(paired) = self.paired_device.clone() {
                 theme::status_badge(ui, "PAIRED FOR THIS RUN", WARN);
                 theme::key_value(ui, "DEVICE", paired.device_name());
                 theme::key_value(ui, "KEY", "Ed25519");
                 theme::key_value(ui, "FINGERPRINT", &paired.fingerprint_hex());
-                ui.label(
-                    egui::RichText::new(
-                        "This approval is process-local only. Persistent trusted-device storage is the next M3 task.",
-                    )
-                    .color(MUTED),
-                );
+
+                let already_trusted = self
+                    .trusted_devices
+                    .iter()
+                    .any(|trusted| trusted.public_key() == paired.public_key());
+
+                if already_trusted {
+                    theme::status_badge(ui, "PERSISTENTLY TRUSTED", OK);
+                } else if workspace::summary(&self.workspace_root).initialized {
+                    ui.label(
+                        egui::RichText::new(
+                            "Run-local pairing is complete. Persisting trust stores only the approved Ed25519 public key, device name and derived fingerprint.",
+                        )
+                        .color(MUTED),
+                    );
+                    ui.add_space(6.0);
+                    if ui.button("TRUST DEVICE PERSISTENTLY").clicked() {
+                        match trusted_devices::register_candidate(&self.workspace_root, &paired) {
+                            Ok(trusted) => {
+                                self.trusted_devices.push(trusted);
+                                self.trusted_devices_error = None;
+                                self.notice =
+                                    format!("DEVICE PUBLIC KEY TRUSTED: {}", paired.device_name());
+                            }
+                            Err(trusted_devices::TrustedDeviceError::AlreadyTrusted) => {
+                                self.refresh_trusted_devices();
+                                self.notice = "DEVICE KEY ALREADY TRUSTED".to_string();
+                            }
+                            Err(error) => {
+                                self.trusted_devices_error = Some(error.to_string());
+                                self.notice = format!("TRUST STORE FAILED: {error}");
+                            }
+                        }
+                    }
+                } else {
+                    ui.label(
+                        egui::RichText::new(
+                            "Initialize the Workspace before persisting a trusted-device public key.",
+                        )
+                        .color(BAD),
+                    );
+                }
+
                 ui.add_space(6.0);
                 if ui.button("CLEAR RUN-LOCAL PAIRING").clicked() {
                     self.paired_device = None;

@@ -158,6 +158,6 @@ fn generic_backup_stays_outside_secret_boundary_and_completes_m2() {
     assert!(ROADMAP.contains("- [x] **Explicit LAN enable control**"));
     assert!(ROADMAP.contains("- [x] **Device pairing**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Persistent trusted-device public keys** — Exactly One Next Task"
+        "- [ ] **Device revocation** — Exactly One Next Task"
     ));
 }

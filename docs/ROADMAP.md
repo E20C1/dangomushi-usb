@@ -169,8 +169,14 @@ Both `Generate new password` and `Enter existing password` must converge on the 
   - pairing expires after five minutes, allows at most five cryptographic proof failures, and is one-time
   - successful proof still requires explicit desktop approval and produces only a run-local PairedDeviceCandidate
   - no trusted-device key is persisted and no LAN listener is opened by this task
-- [ ] **Persistent trusted-device public keys** — Exactly One Next Task
-- [ ] Device revocation
+- [x] **Persistent trusted-device public keys**
+  - explicit post-pairing trust action persists only device name, Ed25519 public key and derived fingerprint
+  - versioned bounded store lives under Workspace identity/ and rejects symlink/special-file layouts
+  - duplicate keys, malformed records, fingerprint mismatch and device-count overflow are rejected
+  - pending/previous files provide verified replacement and fail-closed interrupted-write recovery
+  - generic Workspace Backup includes the trust store because identity/ is a managed backup root
+  - no deletion/revocation action and no LAN listener are added by this task
+- [ ] **Device revocation** — Exactly One Next Task
 - [ ] Permission scopes
 - [ ] Reconnection without short fixed session expiry
 - [ ] Public-network safe default
