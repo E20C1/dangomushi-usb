@@ -142,7 +142,5 @@ fn docs_ui_and_roadmap_bound_direct_lan_before_internet_p2p() {
     assert!(UI.contains("DIRECT PEER LAN READY / EXPLICIT ONE-SHOT"));
     assert!(UI.contains("MOBILE LISTENER STILL LOCKED"));
     assert!(ROADMAP.contains("- [x] **Direct LAN path first**"));
-    assert!(ROADMAP.contains(
-        "- [ ] **Internet P2P only after a separate threat review** — Exactly One Next Task"
-    ));
+    assert!(ROADMAP.contains("- [x] **Internet P2P threat review**"));
 }

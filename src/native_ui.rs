@@ -5,6 +5,7 @@ use crate::document_search;
 use crate::file_browser::{self, EntryKind, FileEntry};
 use crate::file_compare;
 use crate::hash_verify;
+use crate::internet_p2p_policy;
 use crate::lan_access_control::LanEnableControl;
 use crate::network_safety::{self, NetworkEnvironment, NetworkSafetyAssessment};
 use crate::peer_identity;
@@ -3132,6 +3133,11 @@ impl NativeApp {
                 theme::status_badge(ui, "ENCRYPTED TRANSFER CORE READY", OK);
                 theme::status_badge(ui, "RECEIVED FILE INTEGRITY READY", OK);
                 theme::status_badge(ui, "DIRECT PEER LAN READY / EXPLICIT ONE-SHOT", OK);
+                theme::status_badge(
+                    ui,
+                    internet_p2p_policy::current_decision().label(),
+                    OK,
+                );
                 theme::key_value(ui, "KEY", "Ed25519");
                 theme::key_value(ui, "FINGERPRINT", &identity.fingerprint_hex());
             } else if let Some(error) = self.peer_identity_error.as_ref() {
@@ -3196,7 +3202,7 @@ impl NativeApp {
 
             ui.label(
                 egui::RichText::new(
-                    "Peer trust requires fresh Ed25519 proof-of-possession and a separate explicit trust action. Direct IPv4 peer LAN is READY only through explicit one-shot send/receive APIs, live LAN/network-safety checks and the existing encrypted-transfer/integrity gates. Peer discovery, filesystem receive writes and Internet transport remain unavailable.",
+                    "Peer trust requires fresh Ed25519 proof-of-possession and a separate explicit trust action. Direct IPv4 peer LAN remains explicit one-shot. The Internet P2P threat review is complete and keeps global peer transport DISABLED; there is no runtime override, rendezvous, relay, NAT traversal or public discovery.",
                 )
                 .color(MUTED),
             );

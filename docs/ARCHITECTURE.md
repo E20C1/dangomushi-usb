@@ -450,7 +450,19 @@ Direct LAN transport state is process-local and is not persisted into session st
 
 The local HTTP gateway in `src/server.rs` remains independently loopback-only on `127.0.0.1`.
 
-Internet P2P remains prohibited until the separate roadmap threat-review task is completed.
+Internet P2P remains disabled after a separate completed threat review.
+
+## Internet P2P threat-review decision
+
+The M4 Internet P2P threat review is recorded in `docs/INTERNET_P2P_THREAT_REVIEW.md` and codified by `src/internet_p2p_policy.rs`.
+
+The decision is **DEFER / DISABLE Internet P2P** for the current roadmap. The review does not authorize a public listener, global peer address, rendezvous/discovery service, relay, NAT traversal, automatic router/firewall mutation, or Internet peer transport.
+
+The review treats Internet P2P as a separate security and operations problem rather than an address-range extension of Direct LAN. New risks include unsolicited scanning, public endpoint exposure, denial of service, metadata/traffic correlation, NAT/interface ambiguity, rendezvous/relay trust, abuse handling, relay cost/availability, identity-key compromise from anywhere, protocol downgrade and central-service dependency.
+
+The repository-level policy is fail-closed: `internet_p2p_policy::internet_p2p_enabled()` always returns false, there is no runtime/configuration override, Direct LAN continues to reject global/CGNAT/IPv6 targets, and the local HTTP gateway remains loopback-only.
+
+M4 therefore closes with Direct LAN as its supported peer transport. A future Internet P2P implementation must return as a separately scoped milestone only after the threat-review prerequisites are satisfied and reviewed.
 
 ## Web gateway
 
