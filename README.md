@@ -4,7 +4,7 @@ DANGOMUSHI is a portable, local-first workspace intended to keep essential tools
 
 Repository: dangomushi-usb
 
-## Current milestone: M4 peer communication
+## Current milestone: M5 offline continuity
 
 The current implementation includes:
 
