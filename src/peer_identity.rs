@@ -570,7 +570,8 @@ mod tests {
     fn peer_fingerprint_is_domain_separated_and_deterministic() {
         let key = [7u8; PEER_PUBLIC_KEY_BYTES];
         assert_eq!(peer_fingerprint(&key), peer_fingerprint(&key));
-        let bare: [u8; 32] = Sha256::digest(key).into();\n        assert_ne!(peer_fingerprint(&key), bare);
+        let bare: [u8; 32] = Sha256::digest(key).into();
+        assert_ne!(peer_fingerprint(&key), bare);
     }
 
     #[test]
