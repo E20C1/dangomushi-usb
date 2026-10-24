@@ -326,6 +326,9 @@ fn map_integrity_error(_error: ReceivedFileIntegrityError) -> PeerLanError {
 
 fn configure_stream(stream: &TcpStream) -> Result<(), PeerLanError> {
     stream
+        .set_nonblocking(false)
+        .map_err(|_| PeerLanError::Io)?;
+    stream
         .set_read_timeout(Some(IO_TIMEOUT))
         .map_err(|_| PeerLanError::Io)?;
     stream
@@ -616,7 +619,6 @@ mod tests {
         fs::remove_dir_all(root).expect("cleanup");
     }
 
-    #[cfg(windows)]
     #[test]
     fn actual_tcp_text_transfer_round_trips_through_existing_crypto() {
         let pair = Pair::new("text");
@@ -666,7 +668,6 @@ mod tests {
         server.join().expect("server");
     }
 
-    #[cfg(windows)]
     #[test]
     fn actual_tcp_file_transfer_returns_only_verified_file() {
         let pair = Pair::new("file");
