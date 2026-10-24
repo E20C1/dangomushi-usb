@@ -3066,6 +3066,16 @@ impl NativeApp {
             );
             ui.add_space(10.0);
 
+            theme::small_label(ui, "MOBILE HANDOFF");
+            theme::status_badge(ui, "CORE READY / TRANSPORT LOCKED", OK);
+            ui.label(
+                egui::RichText::new(
+                    "Session navigation and existing UTF-8 Editor documents now have a transport-independent handoff boundary with live session.handoff / files.read / files.write checks and stale-save recovery. No LAN endpoint exists yet.",
+                )
+                .color(MUTED),
+            );
+            ui.add_space(10.0);
+
             if enabled {
                 if theme::pixel_button(
                     ui,

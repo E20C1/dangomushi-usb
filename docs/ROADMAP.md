@@ -206,13 +206,21 @@ Both `Generate new password` and `Enter existing password` must converge on the 
   - network-safety snapshots are ephemeral and never persisted as capabilities
   - a future non-loopback transport must re-probe immediately before bind and before accepting or authorizing each remote connection
   - src/server.rs remains loopback-only; no LAN listener is added by this task
-- [ ] **Mobile editor/session handoff** — Exactly One Next Task
+- [x] **Mobile editor/session handoff**
+  - transport-independent handoff core exposes validated navigation state plus existing UTF-8 Editor documents
+  - session capture requires `session.handoff`; editor reads require `session.handoff` + `files.read`; saves require `session.handoff` + `files.write`
+  - editor reads return a SHA-256 content revision; stale saves refuse overwrite and preserve submitted mobile text through the existing recovery-draft boundary
+  - the existing Text Editor relative-path, no-symlink, UTF-8 and 4 MiB rules remain authoritative
+  - handoff payloads, Editor text, revisions and authenticated principals remain ephemeral and are not added to `session.v1`
+  - no LAN listener, remote HTTP/WebSocket route, mobile web UI or transport protocol is added by this task
 
 No LAN listener should be merged before these security boundaries are implemented and tested.
 
+M3's transport-independent security and handoff boundaries are now complete. Any future remote transport must compose them without weakening live network-safety, trust, revocation, reconnect or permission checks.
+
 ## M4 — Peer communication
 
-- [ ] Trusted peer identity
+- [ ] **Trusted peer identity** — Exactly One Next Task
 - [ ] Encrypted text/file transfer
 - [ ] Integrity verification for received files
 - [ ] Direct LAN path first

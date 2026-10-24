@@ -206,9 +206,7 @@ fn architecture_keeps_trust_store_separate_and_advances_to_permission_scopes() {
 
     assert!(ROADMAP.contains("- [x] **Persistent trusted-device public keys**"));
     assert!(ROADMAP.contains("- [x] **Device revocation**"));
-    assert!(ROADMAP.contains(
-        "- [ ] **Mobile editor/session handoff** — Exactly One Next Task"
-    ));
+    assert!(ROADMAP.contains("- [x] **Mobile editor/session handoff**"));
     assert!(ROADMAP.contains(
         "No LAN listener should be merged before these security boundaries are implemented and tested."
     ));
