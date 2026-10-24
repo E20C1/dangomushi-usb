@@ -253,7 +253,7 @@ fn architecture_and_roadmap_advance_exactly_to_permission_scopes() {
 
     assert!(ROADMAP.contains("- [x] **Device revocation**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Public-network safe default** — Exactly One Next Task"
+        "- [ ] **Mobile editor/session handoff** — Exactly One Next Task"
     ));
     assert!(ROADMAP.contains(
         "No LAN listener should be merged before these security boundaries are implemented and tested."

@@ -328,7 +328,25 @@ Closing the transport discards the principal. Reconnecting later requires a fres
 
 Nothing from reconnection is written to `session.v1`, Workspace config, Generic Workspace Backup, Secret Backup / Restore or another durable store. The reconnect core is transport-free and does not add a LAN listener, HTTP route, socket binding, network framing, cookie policy or public-network classification.
 
-Public-network safe default is the next M3 task.
+### Public-network safe default
+
+The M3 network-exposure gate is implemented in `src/network_safety.rs`. Explicit LAN control remains operator intent only; it is not sufficient authority for any future non-loopback listener.
+
+A LAN exposure is eligible only when LAN intent is enabled for this run and a fresh current-network assessment is trusted. `Unknown` and `Public` always deny exposure. Probe failure, zero connected networks, unsupported platform and unexpected category values are also deny results.
+
+On Windows, DANGOMUSHI uses the operating system's Network List Manager through the `windows` crate. The probe runs on a fresh COM thread, enumerates all connected networks, and reads `INetwork::GetCategory` only. It never calls `SetCategory`, never shells out to PowerShell, and never infers firewall openings from the profile.
+
+The aggregate rule is conservative across all connected networks: any Public category makes the whole assessment Public; otherwise any Unknown makes it Unknown; only a non-empty set containing exclusively Private and/or DomainAuthenticated categories is Trusted. This avoids treating one trusted interface as permission to ignore a simultaneously connected untrusted interface.
+
+macOS and Linux intentionally return UnsupportedPlatform / Unknown in this milestone. The project does not invent a trusted/public semantic where no reviewed equivalent platform source has been established. Consequently, future LAN exposure remains fail-closed on those platforms while loopback behavior remains available.
+
+The native MOBILE view displays a snapshot for operator visibility, but a snapshot is never a durable capability. A future non-loopback transport must obtain a fresh assessment immediately before binding and again before accepting or authorizing each remote connection. A cached earlier Trusted result cannot authorize later work after a network transition. If a live re-check becomes Public, Unknown or fails, new remote work must be blocked.
+
+Network-safety state is process-local evidence only. It is not written to `session.v1`, Workspace config, Generic Workspace Backup, Secret Backup / Restore, trusted-device identity, revocation state or permission policy.
+
+This task does not create a LAN listener. `src/server.rs` remains bound to `127.0.0.1` and retains the existing loopback peer/Host restrictions. No wildcard bind, firewall mutation, UPnP/NAT-PMP mapping, public relay, TLS/cookie transport or mobile handoff endpoint is introduced.
+
+Mobile editor/session handoff is the next M3 task.
 
 ## Web gateway
 

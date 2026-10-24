@@ -197,8 +197,16 @@ Both `Generate new password` and `Enter existing password` must converge on the 
   - effective trust/revocation and current permission scopes are re-evaluated when the authenticated principal is used
   - reconnecting after transport loss requires a new key proof but not a new human pairing code while the key remains trusted
   - no public-network policy, remote API or LAN listener is added by this task
-- [ ] **Public-network safe default** — Exactly One Next Task
-- [ ] Mobile editor/session handoff
+- [x] **Public-network safe default**
+  - LAN exposure requires both explicit process-local LAN intent and a live trusted-network assessment
+  - Unknown, Public, probe failure, zero connected networks and unsupported platform all fail closed
+  - Windows reads all connected Network List Manager categories and denies if any connected network is Public or Unknown
+  - only all-Private / DomainAuthenticated Windows evidence is exposure-eligible
+  - macOS/Linux remain Unknown/deny until an equivalently trustworthy reviewed adapter exists
+  - network-safety snapshots are ephemeral and never persisted as capabilities
+  - a future non-loopback transport must re-probe immediately before bind and before accepting or authorizing each remote connection
+  - src/server.rs remains loopback-only; no LAN listener is added by this task
+- [ ] **Mobile editor/session handoff** — Exactly One Next Task
 
 No LAN listener should be merged before these security boundaries are implemented and tested.
 
