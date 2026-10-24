@@ -192,10 +192,8 @@ fn docs_and_roadmap_define_narrow_m5_boundary_and_advance_once() {
     }
 
     assert!(ROADMAP.contains("- [x] **Offline documentation packs**"));
+    assert!(ROADMAP.contains("- [x] **Reproducible dependency cache/vendor strategy**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Reproducible dependency cache/vendor strategy** — Exactly One Next Task"
-    ));
-    assert!(!ROADMAP.contains(
         "- [ ] **Recovery snapshots** — Exactly One Next Task"
     ));
 }
