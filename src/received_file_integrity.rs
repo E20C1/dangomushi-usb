@@ -5,6 +5,7 @@ use std::fmt;
 
 pub const RECEIVED_FILE_SHA256_BYTES: usize = 32;
 
+#[derive(PartialEq, Eq)]
 pub struct PendingReceivedFile {
     suggested_name: String,
     declared_len: u64,
@@ -84,6 +85,7 @@ impl fmt::Debug for PendingReceivedFile {
     }
 }
 
+#[derive(PartialEq, Eq)]
 pub struct VerifiedReceivedFile {
     suggested_name: String,
     bytes: Vec<u8>,
