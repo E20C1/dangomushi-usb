@@ -2949,7 +2949,7 @@ impl NativeApp {
             );
             ui.add_space(6.0);
             ui.label(
-                "LAN intent remains process-local. Restarting DANGOMUSHI returns this control to OFF.",
+                "LAN intent remains process-local and resets OFF on every launch.",
             );
             ui.add_space(6.0);
             ui.label(
