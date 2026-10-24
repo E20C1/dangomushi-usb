@@ -299,7 +299,7 @@ M3's transport-independent security and handoff boundaries are now complete. Any
   - copied directory trees reject symlinks, special files and non-UTF-8 path components
   - 64 KiB streaming copy hashes source and destination, detects observable per-file source changes and bounds file count/path/size totals
   - final `.dangomushi-recovery-snapshot` marker is written only after exact payload re-enumeration and records sorted path/length/SHA-256 entries plus a domain-separated snapshot digest
-  - CLI exposes creation only; restore/extract and public snapshot verification are intentionally deferred
+  - CLI exposes snapshot creation; public read-only verification is provided by the later Restore verification boundary, while restore/extract remains intentionally absent
   - snapshot includes Rust source/vendor recovery material but still does not preserve rustup installers, OS SDKs/native packages or platform linkers
 - [x] **Restore verification**
   - public read-only verifier accepts only a real non-symlink Recovery Snapshot directory with the exact versioned completion marker
