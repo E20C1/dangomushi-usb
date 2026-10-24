@@ -8,6 +8,7 @@ use crate::hash_verify;
 use crate::internet_p2p_policy;
 use crate::lan_access_control::LanEnableControl;
 use crate::network_safety::{self, NetworkEnvironment, NetworkSafetyAssessment};
+use crate::offline_docs;
 use crate::peer_identity;
 use crate::native_ui_theme::{self as theme, PixelIcon, BAD, BG, LINE, MUTED, OK, PANEL, TEXT, WARN};
 use crate::repository_git;
@@ -853,6 +854,7 @@ struct NativeApp {
     document_search: DocumentSearchState,
     repository_git: RepositoryUiState,
     workspace_backup: BackupUiState,
+    offline_doc_index: usize,
     notice: String,
     session_saved: SessionState,
     session_failed: Option<SessionState>,
@@ -895,6 +897,7 @@ impl NativeApp {
             document_search: DocumentSearchState::new(),
             repository_git,
             workspace_backup,
+            offline_doc_index: 0,
             notice: "READY".to_string(),
             session_saved: SessionState::default(),
             session_failed: None,
@@ -3656,6 +3659,65 @@ impl NativeApp {
             theme::key_value(ui, "PUBLIC INTERNET", "not exposed");
             theme::key_value(ui, "EXTERNAL CDN", "none");
             theme::key_value(ui, "WORKSPACE SOURCE", "local filesystem");
+        });
+
+        ui.add_space(10.0);
+        theme::panel(ui, |ui| {
+            theme::small_label(ui, "OFFLINE DOCUMENTATION");
+            match offline_docs::summary() {
+                Ok(summary) => {
+                    theme::status_badge(ui, "EMBEDDED / VERIFIED INVENTORY", OK);
+                    theme::key_value(ui, "PACK", summary.pack_id);
+                    theme::key_value(ui, "FORMAT", &summary.format_version.to_string());
+                    theme::key_value(ui, "DOCUMENTS", &summary.document_count.to_string());
+                    theme::key_value(ui, "BYTES", &summary.total_bytes.to_string());
+                    theme::key_value(ui, "SHA-256", &summary.sha256_hex());
+
+                    let documents = offline_docs::documents();
+                    if !documents.is_empty() {
+                        if self.offline_doc_index >= documents.len() {
+                            self.offline_doc_index = 0;
+                        }
+
+                        egui::ComboBox::from_id_salt("offline-doc-selector")
+                            .selected_text(documents[self.offline_doc_index].path)
+                            .width(420.0)
+                            .show_ui(ui, |ui| {
+                                for (index, document) in documents.iter().enumerate() {
+                                    ui.selectable_value(
+                                        &mut self.offline_doc_index,
+                                        index,
+                                        document.path,
+                                    );
+                                }
+                            });
+
+                        ui.add_space(6.0);
+                        let document = &documents[self.offline_doc_index];
+                        egui::ScrollArea::vertical()
+                            .id_salt("offline-doc-viewer")
+                            .max_height(360.0)
+                            .show(ui, |ui| {
+                                ui.label(
+                                    egui::RichText::new(document.content)
+                                        .monospace()
+                                        .size(11.0)
+                                        .color(TEXT),
+                                );
+                            });
+                    }
+                    ui.label(
+                        egui::RichText::new(
+                            "Read-only content is compiled into this executable. CLI: dangomushi docs list/show/export/verify.",
+                        )
+                        .color(MUTED),
+                    );
+                }
+                Err(error) => {
+                    theme::status_badge(ui, "OFFLINE DOCS INVALID", BAD);
+                    ui.label(egui::RichText::new(error.to_string()).color(BAD).monospace());
+                }
+            }
         });
     }
 }
