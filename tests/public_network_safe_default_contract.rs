@@ -125,11 +125,21 @@ fn native_ui_exposes_snapshot_and_fail_closed_decision() {
         "NETWORK SAFETY",
         "REFRESH NETWORK SAFETY",
         "LAN EXPOSURE",
-        "PUBLIC / UNTRUSTED",
-        "PRIVATE OR DOMAIN / TRUSTED",
-        "NETWORK UNKNOWN",
+        "environment().label()",
+        "source().label()",
     ] {
         assert!(UI.contains(required), "missing native safety UI: {required}");
+    }
+
+    for required in [
+        "PUBLIC / UNTRUSTED",
+        "PRIVATE OR DOMAIN / TRUSTED",
+        "BLOCKED / NETWORK UNKNOWN",
+    ] {
+        assert!(
+            SOURCE.contains(required),
+            "missing network-safety label: {required}"
+        );
     }
 }
 
