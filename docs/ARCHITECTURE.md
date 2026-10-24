@@ -260,6 +260,18 @@ Every application process starts with the control disabled. Only an explicit act
 
 Enabling the control does not modify the current gateway. src/server.rs remains bound to `127.0.0.1`, retains its loopback peer check and Host restriction, and exposes no new state-changing HTTP route. A future LAN listener must treat this explicit control as necessary operator intent but still remain blocked until the later M3 device-pairing, trusted-device, revocation, permission and public-network safety boundaries are implemented and tested.
 
+### Device pairing
+
+The M3 device-pairing core is implemented in src/device_pairing.rs and remains process-local. A pairing session can start only while LanEnableControl is enabled. Turning LAN control off clears the native run-local pairing state.
+
+A session creates two independent values from the operating-system CSPRNG: a 16-character base32-style human code carrying 80 bits of entropy and a 32-byte challenge. The session lasts at most five minutes and allows at most five failed cryptographic proofs.
+
+The raw human code is not designed to be a future LAN request field. The client derives an HMAC-SHA256 proof over a domain-separated transcript containing the random challenge, the claimed Ed25519 public key and the exact UTF-8 device name. The device also signs the proof-bound transcript with the corresponding Ed25519 private key. The core verifies HMAC and then uses ed25519-dalek strict verification so a successful submission proves both knowledge of the short-lived code and possession of the submitted private key.
+
+Successful cryptographic proof does not itself create durable trust. The native owner must explicitly approve the candidate, after which the core returns a process-local PairedDeviceCandidate containing the device name, Ed25519 public key and SHA-256 fingerprint. Writing that public key under Workspace identity storage belongs to the following Persistent trusted-device public keys task.
+
+Pairing state, pairing codes, pending candidates and run-local approval are not written to session.v1, config/, generic backups, Secret Backup / Restore, or the embedded web gateway. No non-loopback listener or pairing HTTP route is added in this task.
+
 ## Web gateway
 
 The embedded gateway currently serves only fixed assets and a read-only status endpoint.
