@@ -65,6 +65,10 @@ pub enum RecoverySnapshotError {
     WorkspaceUnavailable,
     WorkspaceBackupUnavailable,
     UnsafeWorkspaceBackup,
+    SnapshotUnavailable,
+    UnsafeSnapshotLayout,
+    InvalidSnapshotMarker,
+    UnsupportedSnapshotVersion,
     DestinationExists,
     DestinationInsideInput,
     UnsafeDestinationParent,
@@ -87,6 +91,10 @@ impl fmt::Display for RecoverySnapshotError {
             Self::WorkspaceUnavailable => "recovery workspace is unavailable",
             Self::WorkspaceBackupUnavailable => "selected Workspace backup is unavailable or invalid",
             Self::UnsafeWorkspaceBackup => "selected Workspace backup path is unsafe",
+            Self::SnapshotUnavailable => "recovery snapshot is unavailable",
+            Self::UnsafeSnapshotLayout => "recovery snapshot layout is unsafe",
+            Self::InvalidSnapshotMarker => "recovery snapshot marker is invalid",
+            Self::UnsupportedSnapshotVersion => "recovery snapshot format version is unsupported",
             Self::DestinationExists => "recovery snapshot destination already exists",
             Self::DestinationInsideInput => {
                 "recovery snapshot destination must be outside source and Workspace roots"
@@ -112,6 +120,15 @@ struct FileRecord {
     path: String,
     bytes: u64,
     sha256: [u8; 32],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ParsedSnapshotMarker {
+    app_version: String,
+    file_count: usize,
+    total_bytes: u64,
+    sha256: [u8; 32],
+    records: Vec<FileRecord>,
 }
 
 struct SnapshotBuilder {
@@ -224,6 +241,67 @@ pub fn create_snapshot(
             Err(error)
         }
     }
+}
+
+pub fn verify_snapshot(
+    snapshot_root: &Path,
+) -> Result<RecoverySnapshotSummary, RecoverySnapshotError> {
+    let metadata = fs::symlink_metadata(snapshot_root)
+        .map_err(|_| RecoverySnapshotError::SnapshotUnavailable)?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(RecoverySnapshotError::UnsafeSnapshotLayout);
+    }
+
+    let canonical_root =
+        fs::canonicalize(snapshot_root).map_err(|_| RecoverySnapshotError::SnapshotUnavailable)?;
+    if !canonical_root.is_dir() {
+        return Err(RecoverySnapshotError::SnapshotUnavailable);
+    }
+
+    let marker = read_snapshot_marker(&canonical_root)?;
+    validate_snapshot_semantics(&canonical_root, &marker.records)?;
+    verify_payload_exact(&canonical_root, &marker.records)?;
+
+    if marker.file_count != marker.records.len() {
+        return Err(RecoverySnapshotError::InvalidSnapshotMarker);
+    }
+    let total_bytes = marker.records.iter().try_fold(0u64, |total, record| {
+        total
+            .checked_add(record.bytes)
+            .ok_or(RecoverySnapshotError::SizeLimitExceeded)
+    })?;
+    if total_bytes != marker.total_bytes || total_bytes > MAX_SNAPSHOT_TOTAL_BYTES {
+        return Err(RecoverySnapshotError::InvalidSnapshotMarker);
+    }
+
+    let digest = snapshot_digest_for_version(&marker.app_version, &marker.records);
+    if digest != marker.sha256 {
+        return Err(RecoverySnapshotError::IntegrityFailed);
+    }
+
+    let workspace_backup_path = canonical_root
+        .join(RECOVERY_DIR)
+        .join(WORKSPACE_BACKUP_NAME);
+    let expected_backup = marker
+        .records
+        .iter()
+        .find(|record| record.path == format!("{RECOVERY_DIR}/{WORKSPACE_BACKUP_NAME}"))
+        .ok_or(RecoverySnapshotError::UnsafeSnapshotLayout)?;
+
+    let workspace_backup = workspace_backup::verify_backup_file(&workspace_backup_path)
+        .map_err(|_| RecoverySnapshotError::WorkspaceBackupUnavailable)?;
+
+    let (backup_bytes, backup_sha256) = hash_file(&workspace_backup_path)?;
+    if backup_bytes != expected_backup.bytes || backup_sha256 != expected_backup.sha256 {
+        return Err(RecoverySnapshotError::IntegrityFailed);
+    }
+
+    Ok(RecoverySnapshotSummary {
+        files: marker.file_count,
+        total_bytes: marker.total_bytes,
+        sha256: marker.sha256,
+        workspace_backup,
+    })
 }
 
 fn populate_snapshot(
