@@ -148,4 +148,4 @@ No new fields are added to `session.v1`, Generic Workspace Backup, Secret Backup
 
 This task does not make global-IP or Internet peer communication possible.
 
-The next roadmap task is **Internet P2P only after a separate threat review**. That task must be a threat review before any relay, NAT traversal, global listener, rendezvous, public discovery, or Internet transport implementation is allowed.
+The separate Internet P2P threat review is now complete. Its decision is **DEFER / DISABLE Internet P2P** for the current roadmap. No relay, NAT traversal, global listener, rendezvous, public discovery, automatic port mapping, or Internet transport implementation is authorized. M4 closes with Direct LAN as its supported peer transport; future Internet P2P work requires a new scoped milestone satisfying the review prerequisites.
