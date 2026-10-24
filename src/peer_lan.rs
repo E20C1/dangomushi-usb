@@ -167,6 +167,16 @@ fn receive_one_with_gate<G: ExposureGate>(
 
     let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, port))
         .map_err(|_| PeerLanError::BindFailed)?;
+    receive_one_from_listener_with_gate(workspace_root, lan_control, listener, wait, gate)
+}
+
+fn receive_one_from_listener_with_gate<G: ExposureGate>(
+    workspace_root: &Path,
+    lan_control: &LanEnableControl,
+    listener: TcpListener,
+    wait: Duration,
+    gate: &G,
+) -> Result<Option<LanReceivedTransfer>, PeerLanError> {
     listener
         .set_nonblocking(true)
         .map_err(|_| PeerLanError::Io)?;
@@ -570,9 +580,10 @@ mod tests {
         lan
     }
 
-    fn free_port() -> u16 {
-        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("reserve port");
-        listener.local_addr().expect("local address").port()
+    fn bound_test_listener() -> (TcpListener, u16) {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind test listener");
+        let port = listener.local_addr().expect("local address").port();
+        (listener, port)
     }
 
     #[test]
@@ -595,7 +606,7 @@ mod tests {
             receive_one_with_gate(
                 &root,
                 &lan,
-                free_port(),
+                0,
                 Duration::from_millis(1),
                 &AlwaysTrustedGate,
             )
@@ -608,24 +619,24 @@ mod tests {
     #[test]
     fn actual_tcp_text_transfer_round_trips_through_existing_crypto() {
         let pair = Pair::new("text");
-        let port = free_port();
+        let (listener, port) = bound_test_listener();
         let lan = enabled_lan();
         let receiver_root = pair.receiver_root.clone();
         let sender_fingerprint = *pair.sender.fingerprint();
         let (tx, rx) = mpsc::channel();
 
         let server = thread::spawn(move || {
-            let result = receive_one_with_gate(
+            let result = receive_one_from_listener_with_gate(
                 &receiver_root,
                 &lan,
-                port,
+                listener,
                 Duration::from_secs(5),
                 &AlwaysTrustedGate,
             );
             tx.send(result).expect("send result");
         });
 
-        thread::sleep(Duration::from_millis(100));
+        thread::sleep(Duration::from_millis(25));
         send_transfer_with_gate(
             &pair.sender_root,
             &enabled_lan(),
@@ -653,23 +664,23 @@ mod tests {
     #[test]
     fn actual_tcp_file_transfer_returns_only_verified_file() {
         let pair = Pair::new("file");
-        let port = free_port();
+        let (listener, port) = bound_test_listener();
         let lan = enabled_lan();
         let receiver_root = pair.receiver_root.clone();
         let (tx, rx) = mpsc::channel();
 
         let server = thread::spawn(move || {
-            tx.send(receive_one_with_gate(
+            tx.send(receive_one_from_listener_with_gate(
                 &receiver_root,
                 &lan,
-                port,
+                listener,
                 Duration::from_secs(5),
                 &AlwaysTrustedGate,
             ))
             .expect("send result");
         });
 
-        thread::sleep(Duration::from_millis(100));
+        thread::sleep(Duration::from_millis(25));
         let bytes = b"verified over direct LAN".to_vec();
         send_transfer_with_gate(
             &pair.sender_root,
@@ -704,7 +715,7 @@ mod tests {
             receive_one_with_gate(
                 &root,
                 &enabled_lan(),
-                free_port(),
+                0,
                 MAX_RECEIVE_WAIT + Duration::from_secs(1),
                 &AlwaysTrustedGate,
             )
