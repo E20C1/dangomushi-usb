@@ -364,6 +364,24 @@ Handoff snapshots, Editor text, content revisions and authenticated principals r
 
 This completes M3's transport-independent mobile security and handoff boundaries. Any future non-loopback transport must still perform the live network-safety checks defined above and must not weaken the trust, reconnect or permission checks when connecting this core to a remote client.
 
+## Trusted peer identity
+
+M4 begins with a separate DANGOMUSHI-to-DANGOMUSHI peer identity authority implemented by `src/peer_identity.rs` and `src/trusted_peers.rs`. It does not reuse M3 trusted-device records or M3 permission scopes.
+
+Local peer identity is an Ed25519 key generated from the operating-system CSPRNG and explicitly initialized once at `workspace/state/peer_identity.v1`. The fixed record stores the private seed, derived public key and a domain-separated SHA-256 peer fingerprint. Loads recompute both public key and fingerprint from the private seed and fail closed on mismatch. Initialization never silently rotates an existing identity; a verified pending first-write can be recovered, while ambiguous layouts are rejected.
+
+The private peer identity deliberately lives under `state/`, not the Generic Workspace Backup managed `identity/` root. Generic Backup manages only `state/autosave/`, so it neither copies nor replaces the peer private key. The current storage is not encrypted at rest; arbitrary read access to Workspace state can recover the peer private key and impersonate that peer.
+
+Peer proof-of-possession uses a fresh 256-bit CSPRNG challenge with a five-minute bound and strict Ed25519 verification over a domain-separated transcript containing the challenge, public key and validated peer display name. Successful proof produces a typed `VerifiedPeerCandidate`; network address, hostname, display name or a bare public key never creates trusted status.
+
+Persistent trusted-peer policy is an explicit second step stored at `workspace/state/trusted_peers.v1.json`. Records contain only peer name, public key and the separate peer fingerprint. The bounded versioned store verifies fingerprints, rejects duplicate keys, rejects unsafe file layouts and uses verified pending/previous replacement. Trust is not TOFU.
+
+Removing a peer deletes it from the current trusted-peer policy. Because that policy is outside Generic Workspace Backup, restoring an older generic snapshot cannot silently resurrect removed peer trust. Re-trusting the same key requires a new proof-of-possession flow and another explicit trust action.
+
+M3 device fingerprints and M4 peer fingerprints use different domain-separation strings and separate stores. Trust in one domain grants nothing in the other.
+
+This task remains transport-independent. `src/server.rs` is still loopback-only and no peer discovery, socket, transfer framing, encryption protocol or file receiver is introduced. Encrypted text/file transfer is the next M4 task and must authenticate the remote party against this peer-identity boundary before defining confidentiality or transfer semantics.
+
 ## Web gateway
 
 The embedded gateway currently serves only fixed assets and a read-only status endpoint.
