@@ -120,7 +120,7 @@ dangomushi doctor [PATH]\n  \
 dangomushi version\n\n\
 Desktop:\n  run the dangomushi-desktop binary built with --features desktop\n\n\
 Defaults:\n  port: {DEFAULT_PORT}\n  workspace: ./{DEFAULT_WORKSPACE}\n\n\
-Security:\n  the web gateway binds to 127.0.0.1 only. LAN access is intentionally not implemented yet.",
+Security:\n  the web gateway binds to 127.0.0.1 only. Direct peer LAN is a separate library path gated by explicit run-local LAN intent, live trusted-network checks and trusted-peer cryptography; this serve command never exposes it.",
         env!("CARGO_PKG_VERSION")
     )
 }
