@@ -15,6 +15,7 @@ pub mod file_browser;
 pub mod file_compare;
 pub mod password_generator;
 pub mod peer_identity;
+pub mod peer_transfer;
 pub mod recovery_codes;
 pub mod repository_git;
 pub mod secret_backup;
