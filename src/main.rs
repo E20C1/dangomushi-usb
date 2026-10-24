@@ -293,6 +293,7 @@ Usage:\n  dangomushi serve [--port PORT] [--workspace PATH]\n  \
 dangomushi init [PATH]\n  \
 dangomushi doctor [PATH]\n  \
 dangomushi docs list|show|export|verify ...\n  \
+dangomushi recovery snapshot create --backup backups/<NAME>.dgmwbk --destination <PATH> [--source PATH] [--workspace PATH]\n  \
 dangomushi version\n\n\
 Desktop:\n  run the dangomushi-desktop binary built with --features desktop\n\n\
 Defaults:\n  port: {DEFAULT_PORT}\n  workspace: ./{DEFAULT_WORKSPACE}\n\n\
@@ -310,6 +311,38 @@ mod tests {
         let options = parse_serve_options(vec![]).expect("parse defaults");
         assert_eq!(options.port, DEFAULT_PORT);
         assert_eq!(options.workspace, PathBuf::from(DEFAULT_WORKSPACE));
+    }
+
+    #[test]
+    fn recovery_snapshot_options_require_explicit_backup_and_destination() {
+        let options = parse_recovery_snapshot_options(&[
+            "--source".into(),
+            "source-tree".into(),
+            "--workspace".into(),
+            "portable-workspace".into(),
+            "--backup".into(),
+            "backups/workspace.dgmwbk".into(),
+            "--destination".into(),
+            "../recovery-copy".into(),
+        ])
+        .expect("parse recovery snapshot options");
+
+        assert_eq!(
+            options,
+            RecoverySnapshotOptions {
+                source: PathBuf::from("source-tree"),
+                workspace: PathBuf::from("portable-workspace"),
+                backup: PathBuf::from("backups/workspace.dgmwbk"),
+                destination: PathBuf::from("../recovery-copy"),
+            }
+        );
+
+        assert!(parse_recovery_snapshot_options(&[]).is_err());
+        assert!(parse_recovery_snapshot_options(&[
+            "--backup".into(),
+            "backups/workspace.dgmwbk".into(),
+        ])
+        .is_err());
     }
 
     #[test]
