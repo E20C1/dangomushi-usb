@@ -7,3 +7,6 @@ workspace/*
 !workspace/.gitkeep
 .DS_Store
 Thumbs.db
+vendor/
+vendor.pending/
+build/vendor-source-config.txt
