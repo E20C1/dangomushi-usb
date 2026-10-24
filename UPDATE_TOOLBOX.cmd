@@ -15,15 +15,15 @@ if errorlevel 1 (
 )
 
 echo [1/5] Running core tests...
-cargo test
+cargo test --locked
 if errorlevel 1 goto :fail
 
 echo [2/5] Building core CLI...
-cargo build --release --bin dangomushi
+cargo build --locked --release --bin dangomushi
 if errorlevel 1 goto :fail
 
 echo [3/5] Building native desktop shell...
-cargo build --release --features desktop --bin dangomushi-desktop
+cargo build --locked --release --features desktop --bin dangomushi-desktop
 if errorlevel 1 goto :fail
 
 echo [4/5] Staging application...
