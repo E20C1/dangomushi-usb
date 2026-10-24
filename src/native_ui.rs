@@ -1170,9 +1170,9 @@ impl NativeApp {
                 "NETWORK",
                 "LOCAL",
                 if self.lan_access.is_enabled() {
-                    "LAN control ON / listener locked"
+                    "LAN control ON / no background listener"
                 } else {
-                    "LAN control OFF / no LAN listener"
+                    "LAN control OFF / peer LAN blocked"
                 },
             );
             theme::metric(
@@ -3080,7 +3080,7 @@ impl NativeApp {
             );
             ui.add_space(6.0);
             ui.label(
-                "The gateway remains bound to 127.0.0.1. Enabling this control does not create a LAN listener; device pairing is prepared before any LAN listener is allowed.",
+                "The HTTP gateway remains bound to 127.0.0.1. Enabling this control alone does not create a LAN listener; M4 direct peer LAN requires a separate explicit one-shot receive/send operation and a fresh trusted-network check.",
             );
             ui.add_space(10.0);
 
@@ -3129,8 +3129,9 @@ impl NativeApp {
             theme::small_label(ui, "M4 PEER IDENTITY");
             if let Some(identity) = self.peer_identity {
                 theme::status_badge(ui, "LOCAL IDENTITY READY / TRANSPORT LOCKED", OK);
-                theme::status_badge(ui, "ENCRYPTED TRANSFER CORE READY / LAN LOCKED", OK);
-                theme::status_badge(ui, "RECEIVED FILE INTEGRITY READY / LAN LOCKED", OK);
+                theme::status_badge(ui, "ENCRYPTED TRANSFER CORE READY", OK);
+                theme::status_badge(ui, "RECEIVED FILE INTEGRITY READY", OK);
+                theme::status_badge(ui, "DIRECT PEER LAN READY / EXPLICIT ONE-SHOT", OK);
                 theme::key_value(ui, "KEY", "Ed25519");
                 theme::key_value(ui, "FINGERPRINT", &identity.fingerprint_hex());
             } else if let Some(error) = self.peer_identity_error.as_ref() {
@@ -3195,7 +3196,7 @@ impl NativeApp {
 
             ui.label(
                 egui::RichText::new(
-                    "Peer trust requires fresh Ed25519 proof-of-possession and a separate explicit trust action. No peer discovery or transfer transport exists yet. Encrypted transfer and received-file SHA-256 verification cores are READY, but no filesystem receiver or LAN transport is enabled.",
+                    "Peer trust requires fresh Ed25519 proof-of-possession and a separate explicit trust action. Direct IPv4 peer LAN is READY only through explicit one-shot send/receive APIs, live LAN/network-safety checks and the existing encrypted-transfer/integrity gates. Peer discovery, filesystem receive writes and Internet transport remain unavailable.",
                 )
                 .color(MUTED),
             );
@@ -3216,7 +3217,7 @@ impl NativeApp {
                     self.device_pairing.cancel();
                     self.pairing_invitation = None;
                     self.paired_device = None;
-                    self.notice = "LAN CONTROL OFF / PAIRING CLEARED / LOOPBACK ONLY".to_string();
+                    self.notice = "LAN CONTROL OFF / PAIRING CLEARED / PEER LAN BLOCKED".to_string();
                 }
             } else if theme::pixel_button(
                 ui,
@@ -3232,7 +3233,7 @@ impl NativeApp {
                 self.network_safety = network_safety::assess_current_network();
                 let exposure = network_safety::evaluate(&self.lan_access, self.network_safety);
                 self.notice = format!(
-                    "LAN CONTROL ON / {} / LISTENER STILL LOCKED",
+                    "LAN CONTROL ON / {} / MOBILE LISTENER STILL LOCKED / DIRECT PEER LAN REQUIRES EXPLICIT RECEIVE",
                     exposure.label()
                 );
             }

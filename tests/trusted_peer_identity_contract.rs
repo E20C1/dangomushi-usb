@@ -307,7 +307,7 @@ fn roadmap_advances_exactly_to_encrypted_transfer() {
         "INITIALIZE PEER IDENTITY",
         "LOCAL IDENTITY READY / TRANSPORT LOCKED",
         "TRUSTED PEER(S)",
-        "No peer discovery or transfer transport exists yet",
+        "DIRECT PEER LAN READY / EXPLICIT ONE-SHOT",
     ] {
         assert!(UI.contains(required), "missing peer UI evidence: {required}");
     }

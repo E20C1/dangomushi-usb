@@ -349,11 +349,39 @@ pub fn seal_transfer(
     encoded_offer: &[u8],
     payload: TransferPayload,
 ) -> Result<Vec<u8>, PeerTransferError> {
+    seal_transfer_internal(workspace_root, encoded_offer, None, payload)
+}
+
+pub fn seal_transfer_to(
+    workspace_root: &Path,
+    encoded_offer: &[u8],
+    expected_recipient_fingerprint: &[u8; PEER_FINGERPRINT_BYTES],
+    payload: TransferPayload,
+) -> Result<Vec<u8>, PeerTransferError> {
+    seal_transfer_internal(
+        workspace_root,
+        encoded_offer,
+        Some(expected_recipient_fingerprint),
+        payload,
+    )
+}
+
+fn seal_transfer_internal(
+    workspace_root: &Path,
+    encoded_offer: &[u8],
+    expected_recipient_fingerprint: Option<&[u8; PEER_FINGERPRINT_BYTES]>,
+    payload: TransferPayload,
+) -> Result<Vec<u8>, PeerTransferError> {
     let offer = PeerTransferOffer::decode(encoded_offer)?;
     let local = load_local_identity(workspace_root)?;
 
     if offer.expected_sender_fingerprint != *local.fingerprint() {
         return Err(PeerTransferError::AuthenticationFailed);
+    }
+    if let Some(expected_recipient_fingerprint) = expected_recipient_fingerprint {
+        if offer.recipient_fingerprint != *expected_recipient_fingerprint {
+            return Err(PeerTransferError::AuthenticationFailed);
+        }
     }
 
     let peers = trusted_peers::load(workspace_root)

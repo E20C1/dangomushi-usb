@@ -248,8 +248,19 @@ M3's transport-independent security and handoff boundaries are now complete. Any
   - verified metadata retains the trusted sender fingerprint, suggested filename, verified byte length and SHA-256
   - the digest authenticates equality with the trusted sender's signed/encrypted commitment; it is not malware scanning or content-safety approval
   - no filesystem receiver, destination selection, overwrite behavior or LAN listener is added
-- [ ] **Direct LAN path first** — Exactly One Next Task
-- [ ] Internet P2P only after a separate threat review
+- [x] **Direct LAN path first**
+  - first non-loopback peer transport is direct TCP over IPv4 only; no discovery, relay or NAT traversal
+  - public API requires explicit process-local LAN enablement plus a fresh current-network safety check
+  - Windows permits exposure only while all connected Network List Manager entries remain Private and/or DomainAuthenticated; macOS/Linux remain fail-closed
+  - receiver re-probes before bind, continuously while waiting, after accept, before signed offer, before encrypted payload authorization and before final acknowledgement
+  - sender re-probes before connect, after connect and before sealing/sending the encrypted envelope
+  - target/accepted addresses are restricted to IPv4 loopback, RFC1918 private or IPv4 link-local; global/CGNAT/IPv6 targets are rejected
+  - receive window is one-shot and bounded to five minutes; listener is dropped after the first accepted connection
+  - sender hello fingerprint is only a selector; current trusted-peer policy and the existing signed one-shot offer still provide cryptographic peer authentication
+  - `seal_transfer_to` binds the send to the caller's explicitly expected recipient fingerprint
+  - file transfers are acknowledged only after `PendingReceivedFile::verify` produces `VerifiedReceivedFile`
+  - no filesystem receive write, firewall mutation, UPnP/NAT-PMP, relay, public discovery or Internet transport is added
+- [ ] **Internet P2P only after a separate threat review** — Exactly One Next Task
 
 ## M5 — Offline continuity
 

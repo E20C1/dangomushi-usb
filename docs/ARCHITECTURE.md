@@ -420,7 +420,37 @@ No filesystem destination is selected and no received file is written by this ta
 
 Received file bytes and verification state remain ephemeral and are not added to session state, autosave, Generic Workspace Backup, Secret Backup, trusted-peer policy or M3 device state.
 
-`src/server.rs` remains loopback-only. Direct LAN path first is the next M4 task and must preserve this verification gate.
+`src/server.rs` remains loopback-only.
+
+## Direct LAN peer transport
+
+M4 direct LAN transport is implemented in `src/peer_lan.rs`. It is the first non-loopback peer path, but it remains deliberately narrower than a general network service.
+
+The transport is direct TCP over IPv4 only. It has no discovery, multicast, broadcast, firewall mutation, UPnP/NAT-PMP, relay, rendezvous, NAT traversal or global-address support.
+
+Production bind/connect operations require the process-local `LanEnableControl` to be enabled and call the live `network_safety::current_exposure_decision` rather than accepting a cached assessment. On Windows, all connected Network List Manager entries must therefore still be Private and/or DomainAuthenticated. Public, Unknown, probe-failure or empty evidence denies exposure. macOS/Linux remain fail-closed while their network-safety adapter is UnsupportedPlatform.
+
+The receiver uses a one-shot nonblocking listener with a maximum five-minute receive window. It re-probes network safety immediately before bind, every 50 ms while waiting, immediately after accept, before issuing the signed receive offer, before authenticating/opening the encrypted payload, and before the final success acknowledgement. After the first accepted connection the listener is dropped before that connection is processed.
+
+The sender re-probes before connect, immediately after connect and again before sealing/sending the encrypted envelope.
+
+The first transport accepts only IPv4 loopback, RFC1918 private and IPv4 link-local addresses. Global IPv4, CGNAT and IPv6 targets are rejected by the transport API. Loopback remains permitted for same-host use/testing but does not bypass the public API's explicit LAN-intent and live-safety checks.
+
+Wire framing is a small bounded layer around the existing M4 encrypted-transfer protocol. The sender first identifies its trusted-peer fingerprint. The receiver treats that fingerprint only as a selector, re-reads trusted-peer policy, creates the existing signed one-shot offer bound to that expected sender, and returns the offer. The sender uses `peer_transfer::seal_transfer_to`, which additionally requires the signed offer's recipient fingerprint to match the caller's explicitly expected recipient fingerprint. This prevents a target-address mix-up from silently redirecting a transfer to another trusted peer.
+
+All text/file content remains inside the existing ephemeral X25519 + HKDF-SHA256 + XChaCha20Poly1305 + Ed25519 envelope. The receiver performs another live network check before `peer_transfer::open_transfer`.
+
+File transfers are not acknowledged until `PendingReceivedFile::verify` succeeds and produces `VerifiedReceivedFile`. No filesystem destination is selected and no received file is written.
+
+TCP connect timeout is five seconds; connected read/write operations are bounded to ten seconds. Length-prefixed frames are rejected before allocation when they exceed the existing encrypted-transfer maximum.
+
+The default peer LAN port is 45822. The listener binds IPv4 wildcard only after the live safety gate succeeds. DANGOMUSHI does not modify OS firewall policy.
+
+Direct LAN transport state is process-local and is not persisted into session state, autosave, Generic Backup, Secret Backup, trusted-peer policy or M3 device state.
+
+The local HTTP gateway in `src/server.rs` remains independently loopback-only on `127.0.0.1`.
+
+Internet P2P remains prohibited until the separate roadmap threat-review task is completed.
 
 ## Web gateway
 
