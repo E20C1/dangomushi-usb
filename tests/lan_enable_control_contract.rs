@@ -101,7 +101,7 @@ fn architecture_and_roadmap_keep_listener_blocked_and_advance_to_pairing() {
     assert!(ROADMAP.contains("- [x] **Explicit LAN enable control**"));
     assert!(ROADMAP.contains("- [x] **Device pairing**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Mobile editor/session handoff** — Exactly One Next Task"
+        "- [x] **Mobile editor/session handoff**"
     ));
     assert!(ROADMAP.contains(
         "No LAN listener should be merged before these security boundaries are implemented and tested."
