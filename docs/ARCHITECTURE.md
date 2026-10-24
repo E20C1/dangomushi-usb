@@ -278,11 +278,23 @@ Approved run-local pairing candidates can be promoted through a second explicit 
 
 The store is bounded to 256 devices and 256 KiB, validates UTF-8 device-name rules, exact 32-byte public keys, recomputed fingerprints and duplicate keys on every load, and rejects symlink or special-file storage layouts. Replacement uses create-new pending output, full parse verification, a previous-file rollback slot, fsync of file content and best-effort directory synchronization. Interrupted-write recovery prefers the last verified committed store and never promotes a pending-only first write.
 
-Because identity/ is already a managed Generic Workspace Backup root, trusted public keys are intentionally included in generic snapshots and can be restored with them. This means an older backup can restore an older trust set. No LAN listener exists yet; the following Device revocation task must define fail-closed revoked-key behavior across restore before network authorization can rely on this store.
+Because identity/ is already a managed Generic Workspace Backup root, trusted public keys are intentionally included in generic snapshots and can be restored with them. Device revocation below adds a monotonic reconciliation rule so restoring an older trust set cannot remove an already-known local revocation.
 
 The trust store does not defend against an attacker who already has arbitrary write access to the Workspace filesystem. This task establishes bounded durable public-key identity, not a local tamper-proof hardware root.
 
-No removal or revocation operation and no non-loopback listener are added in this task.
+### Device revocation
+
+The M3 revocation authority is implemented in src/device_revocation.rs as a versioned tombstone ledger at workspace/identity/device_revocations.v1.json. Each tombstone is the domain-separated SHA-256 fingerprint of a revoked Ed25519 public key. The ledger is sorted, duplicate-free, bounded to 4,096 fingerprints and 512 KiB, and uses create-new pending output, verified replacement, previous-file rollback, file sync and best-effort directory synchronization.
+
+trusted_devices::load is an effective-trust read: both the trusted-device store and revocation ledger must verify successfully, and any trusted record whose fingerprint is tombstoned is filtered out. If revocation state is malformed or unsafe, trusted-device loading fails closed. register_candidate also checks the ledger, so the same public key cannot be trusted again after revocation. Re-adding the same physical device requires key rotation, a new pairing proof and a new explicit persistent-trust action.
+
+Revocation is an explicit native owner action. Selecting REVOKE DEVICE does not itself mutate durable state; the operator must type the exact confirmation word REVOKE before the tombstone is committed. There is no un-revoke operation in this milestone.
+
+Because the ledger lives under identity/, Generic Workspace Backup carries revocation state without changing the DGMWBK01 archive format. Before a verified staged restore replaces any managed root, workspace_backup calls the revocation layer to parse the live and staged ledgers, form their set union and write that union into staged identity. Therefore an older backup can restore a historical trusted-device record but cannot remove a fingerprint that has already been revoked locally. A backup created after revocation also carries that tombstone to another initialized Workspace. If either live or staged revocation state cannot be verified, restore aborts before managed-root replacement.
+
+A backup created before a later revocation cannot contain that future fact. If both the live Workspace and every post-revocation backup are lost, there is no external revocation authority from which DANGOMUSHI can reconstruct it. The local Workspace filesystem also remains outside a hardware tamper-proof trust model.
+
+No permission scopes, reconnect/session policy, non-loopback listener or network authorization is added by this task.
 
 ## Web gateway
 

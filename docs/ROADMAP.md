@@ -176,8 +176,14 @@ Both `Generate new password` and `Enter existing password` must converge on the 
   - pending/previous files provide verified replacement and fail-closed interrupted-write recovery
   - generic Workspace Backup includes the trust store because identity/ is a managed backup root
   - no deletion/revocation action and no LAN listener are added by this task
-- [ ] **Device revocation** — Exactly One Next Task
-- [ ] Permission scopes
+- [x] **Device revocation**
+  - explicit native revocation writes a durable public-key fingerprint tombstone
+  - effective trusted-device reads fail closed when revocation state cannot be verified
+  - revoked public keys cannot be registered again; re-trust requires device key rotation and new pairing
+  - Generic Workspace restore unions live and staged revocation ledgers before identity replacement
+  - older backups cannot remove a locally known revocation, while post-revocation backups carry tombstones portably
+  - no un-revoke action, permission scope, reconnect policy or LAN listener is added by this task
+- [ ] **Permission scopes** — Exactly One Next Task
 - [ ] Reconnection without short fixed session expiry
 - [ ] Public-network safe default
 - [ ] Mobile editor/session handoff

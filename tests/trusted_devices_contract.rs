@@ -157,23 +157,21 @@ fn persistent_trust_core_is_bounded_verified_and_identity_scoped() {
 }
 
 #[test]
-fn native_ui_requires_explicit_persistent_trust_and_offers_no_revocation_yet() {
+fn native_ui_keeps_persistent_trust_explicit_and_hands_revocation_to_its_own_boundary() {
     for required in [
         "PERSISTENT TRUSTED DEVICES",
         "TRUST DEVICE PERSISTENTLY",
         "REFRESH TRUST STORE",
         "workspace:/identity",
-        "Revocation is not implemented yet",
+        "REVOKE DEVICE",
         "trusted_devices::register_candidate",
+        "device_revocation::revoke",
     ] {
         assert!(
             UI.contains(required),
             "missing native trusted-device UI evidence: {required}"
         );
     }
-
-    assert!(!UI.contains("REVOKE DEVICE"));
-    assert!(!UI.contains("REMOVE TRUSTED DEVICE"));
 
     for forbidden in [
         "trusted_device=",
@@ -191,14 +189,14 @@ fn native_ui_requires_explicit_persistent_trust_and_offers_no_revocation_yet() {
 }
 
 #[test]
-fn architecture_advances_exactly_to_device_revocation() {
+fn architecture_keeps_trust_store_separate_and_advances_to_permission_scopes() {
     for required in [
         "workspace/identity/trusted_devices.v1.json",
         "bounded to 256 devices and 256 KiB",
         "never promotes a pending-only first write",
-        "older backup can restore an older trust set",
-        "following Device revocation task must define fail-closed revoked-key behavior",
-        "No removal or revocation operation",
+        "Device revocation below adds a monotonic reconciliation rule",
+        "trusted_devices::load is an effective-trust read",
+        "same public key cannot be trusted again after revocation",
     ] {
         assert!(
             ARCHITECTURE.contains(required),
@@ -207,8 +205,9 @@ fn architecture_advances_exactly_to_device_revocation() {
     }
 
     assert!(ROADMAP.contains("- [x] **Persistent trusted-device public keys**"));
+    assert!(ROADMAP.contains("- [x] **Device revocation**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Device revocation** — Exactly One Next Task"
+        "- [ ] **Permission scopes** — Exactly One Next Task"
     ));
     assert!(ROADMAP.contains(
         "No LAN listener should be merged before these security boundaries are implemented and tested."
