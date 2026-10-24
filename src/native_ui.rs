@@ -2953,7 +2953,7 @@ impl NativeApp {
             );
             ui.add_space(6.0);
             ui.label(
-                "The gateway remains bound to 127.0.0.1. Device pairing is prepared before any LAN listener is allowed.",
+                "The gateway remains bound to 127.0.0.1. Enabling this control does not create a LAN listener; device pairing is prepared before any LAN listener is allowed.",
             );
             ui.add_space(10.0);
 
