@@ -178,7 +178,8 @@ fn threat_review_covers_new_internet_authorities_and_sets_reconsideration_gates(
 
 #[test]
 fn ui_and_roadmap_make_disabled_decision_unambiguous_and_advance_to_m5() {
-    assert!(UI.contains("DISABLED / THREAT REVIEW COMPLETE"));
+    assert!(POLICY_SOURCE.contains("DISABLED / THREAT REVIEW COMPLETE"));
+    assert!(UI.contains("internet_p2p_policy::current_decision().label()"));
     assert!(UI.contains("Internet P2P threat review is complete"));
     assert!(!UI.contains("ENABLE INTERNET P2P"));
     assert!(!UI.contains("ENABLE P2P"));
