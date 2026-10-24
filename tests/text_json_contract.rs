@@ -98,6 +98,6 @@ fn secret_boundary_excludes_text_json_and_roadmap_keeps_it_complete() {
     assert!(ROADMAP.contains("- [x] **Explicit LAN enable control**"));
     assert!(ROADMAP.contains("- [x] **Device pairing**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Mobile editor/session handoff** — Exactly One Next Task"
+        "- [x] **Mobile editor/session handoff**"
     ));
 }
