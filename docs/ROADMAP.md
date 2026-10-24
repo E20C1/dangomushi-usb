@@ -271,10 +271,6 @@ M3's transport-independent security and handoff boundaries are now complete. Any
 ## M5 — Offline continuity
 
 - [ ] **Offline documentation packs** — Exactly One Next Task
-
-## M5 — Offline continuity
-
-- [ ] Offline documentation packs
 - [ ] Reproducible dependency cache/vendor strategy
 - [ ] Recovery snapshots
 - [ ] Restore verification
