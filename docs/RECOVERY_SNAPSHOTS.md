@@ -4,9 +4,9 @@
 
 M5 Recovery Snapshots create a self-contained offline recovery directory that combines the reviewed DANGOMUSHI source/build inputs, the generated Rust vendor cache, and one already-verified Generic Workspace Backup.
 
-The recovery snapshot is deliberately a higher-level recovery artifact. It does not replace Generic Workspace Backup, Secret Backup / Restore, or later Restore Verification.
+The recovery snapshot is deliberately a higher-level recovery artifact. It does not replace Generic Workspace Backup or Secret Backup / Restore.
 
-This task creates snapshots only. It does not restore from them.
+Snapshot creation does not restore from the artifact. Existing snapshots can now be checked through the separate read-only Restore Verification boundary.
 
 ## Snapshot contents
 
@@ -159,7 +159,7 @@ This provides integrity identification, not publisher authenticity. An attacker 
 
 ## CLI
 
-The headless CLI exposes creation only:
+The headless CLI exposes creation, while the separate Restore Verification path exposes read-only verification:
 
 ~~~text
 dangomushi recovery snapshot create \
@@ -178,7 +178,13 @@ workspace: ./workspace
 
 Both --backup and --destination are explicit and required.
 
-The selected Workspace Backup remains read-only during snapshot creation.
+Read-only verification is:
+
+~~~text
+dangomushi recovery snapshot verify --snapshot <PATH>
+~~~
+
+The selected Workspace Backup remains read-only during snapshot creation, and verification does not restore/extract files or mutate a Workspace.
 
 ## Buildability boundary
 
@@ -207,6 +213,6 @@ This preserves the security decisions already encoded in the separate backup sys
 
 ## Next boundary
 
-The next M5 task is **Restore verification**.
+Existing recovery snapshots are validated by **Restore Verification** before they are trusted as recovery input. That verifier strictly parses the completion marker, enforces the reviewed layout, re-hashes the exact payload and independently validates the embedded Generic Workspace Backup.
 
-That task must define how a recovery snapshot is read and validated before any reconstruction or restore is trusted. Recovery Snapshot creation intentionally does not add a restore/extract command yet.
+Recovery Snapshot creation still does not add a restore/extract command. Portable per-operating-system release bundles are the next M5 boundary.
