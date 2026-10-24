@@ -240,8 +240,15 @@ M3's transport-independent security and handoff boundaries are now complete. Any
   - strict versioned binary framing rejects truncation, trailing bytes, invalid lengths and over-limit payloads
   - file transfer returns only bytes plus a validated suggested filename; it never selects or writes a filesystem destination
   - no LAN listener, peer discovery, file receiver persistence or Internet P2P path is added
-- [ ] **Integrity verification for received files** — Exactly One Next Task
-- [ ] Direct LAN path first
+- [x] **Integrity verification for received files**
+  - sender computes SHA-256 over raw file bytes before encryption and includes the digest plus declared byte length inside the authenticated encrypted payload
+  - decrypted files become a `PendingReceivedFile`; raw bytes remain private until verification succeeds
+  - verification consumes the pending file, checks authenticated length, recomputes SHA-256 and fails closed on mismatch
+  - only `VerifiedReceivedFile` exposes received file bytes through the safe public API
+  - verified metadata retains the trusted sender fingerprint, suggested filename, verified byte length and SHA-256
+  - the digest authenticates equality with the trusted sender's signed/encrypted commitment; it is not malware scanning or content-safety approval
+  - no filesystem receiver, destination selection, overwrite behavior or LAN listener is added
+- [ ] **Direct LAN path first** — Exactly One Next Task
 - [ ] Internet P2P only after a separate threat review
 
 ## M5 — Offline continuity
