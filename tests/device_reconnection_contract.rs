@@ -364,9 +364,7 @@ fn architecture_and_roadmap_advance_exactly_to_public_network_safe_default() {
     assert!(ROADMAP.contains(
         "- [x] **Reconnection without short fixed session expiry**"
     ));
-    assert!(ROADMAP.contains(
-        "- [ ] **Mobile editor/session handoff** — Exactly One Next Task"
-    ));
+    assert!(ROADMAP.contains("- [x] **Mobile editor/session handoff**"));
     assert!(ROADMAP.contains(
         "No LAN listener should be merged before these security boundaries are implemented and tested."
     ));
