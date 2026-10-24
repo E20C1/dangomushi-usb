@@ -322,7 +322,7 @@ fn roadmap_closes_m3_and_advances_exactly_to_trusted_peer_identity() {
 
     assert!(ROADMAP.contains("- [x] **Mobile editor/session handoff**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Trusted peer identity** — Exactly One Next Task"
+        "- [x] **Trusted peer identity**"
     ));
     assert!(ROADMAP.contains(
         "No LAN listener should be merged before these security boundaries are implemented and tested."
