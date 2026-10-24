@@ -36,11 +36,12 @@ The current implementation includes:
 - An M3 process-local explicit LAN enable control in the native MOBILE view; it defaults OFF every launch, is not persisted, and does not open a LAN listener.
 - An M3 bounded device-pairing core with short-lived CSPRNG invitation, HMAC-SHA256 code proof, strict Ed25519 proof-of-possession and explicit run-local owner approval.
 - An M3 persistent trusted-device public-key store under workspace/identity with bounded versioned JSON, derived fingerprint verification, duplicate rejection and verified replacement/recovery.
+- An M3 durable device-revocation ledger that tombstones revoked Ed25519 fingerprints, rejects same-key re-trust, and unions revocation state across Generic Workspace restore.
 - No public bind, LAN bind, UPnP, NAT-PMP, reverse tunnel, CDN or external web request.
 - Windows double-click build/update entry point.
 - CI builds for Windows, macOS and Linux.
 
-M3 now has explicit LAN intent control, bounded device pairing, and persistent trusted-device public keys. Device revocation, authorization scopes and all actual LAN listening remain later work and are not faked as completed features.
+M3 now has explicit LAN intent control, bounded device pairing, persistent trusted-device public keys, and restore-monotonic device revocation. Permission scopes, reconnect policy, public-network safety and all actual LAN listening remain later work and are not faked as completed features.
 
 ## Editor safety model
 

@@ -38,7 +38,9 @@ Interrupted-write recovery is fail-closed: a pending-only first write is discard
 
 `workspace/identity/` is already included in Generic Workspace Backup, so trusted-device public keys are included in generic snapshots and may be restored with them.
 
-An older backup can therefore restore an older trust set. There is still no LAN listener at this milestone. The following Device revocation task must define fail-closed revoked-key behavior across backup restore before network authorization is allowed to depend on this store.
+Device revocation now provides the fail-closed restore authority. Before identity replacement, restore unions the currently live revocation ledger with the staged backup ledger. An old trusted-device record may therefore reappear physically after restore, but effective trust still filters it when its fingerprint has been revoked.
+
+See `docs/DEVICE_REVOCATION.md` for the tombstone and restore-monotonicity contract.
 
 ## Threat boundary
 
@@ -46,4 +48,4 @@ Public keys are identity/authorization material but are not secret values.
 
 The store does not claim protection from an attacker who already has arbitrary write access to the Workspace filesystem. It establishes bounded durable identity with corruption and layout checks, not a hardware-backed local trust root.
 
-No remove, revoke, permission-scope, LAN-listener or network-authorization operation is added by this task.
+Revocation is separate from permission scopes, LAN listening and network authorization.

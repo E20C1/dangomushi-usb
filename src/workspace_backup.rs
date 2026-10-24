@@ -1,3 +1,4 @@
+use crate::device_revocation;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::error::Error;
@@ -64,6 +65,7 @@ pub enum WorkspaceBackupError {
     SourceChanged,
     RestoreTargetUnsafe,
     RestoreFailed,
+    RevocationStateUnavailable,
     Io,
 }
 
@@ -85,6 +87,7 @@ impl fmt::Display for WorkspaceBackupError {
             Self::SourceChanged => "workspace changed while backup was being created",
             Self::RestoreTargetUnsafe => "workspace restore target is not in a safe state",
             Self::RestoreFailed => "workspace restore failed and rollback was attempted",
+            Self::RevocationStateUnavailable => "workspace restore could not verify device revocation state",
             Self::Io => "workspace backup I/O failed",
         };
         formatter.write_str(message)
@@ -227,6 +230,12 @@ pub fn restore_backup(
         let _ = fs::remove_dir_all(&staging_root);
         let _ = fs::remove_dir_all(&rollback_root);
         return Err(error);
+    }
+
+    if device_revocation::merge_for_workspace_restore(&canonical_workspace, &staging_root).is_err() {
+        let _ = fs::remove_dir_all(&staging_root);
+        let _ = fs::remove_dir_all(&rollback_root);
+        return Err(WorkspaceBackupError::RevocationStateUnavailable);
     }
 
     if let Err(error) = replace_managed_roots(

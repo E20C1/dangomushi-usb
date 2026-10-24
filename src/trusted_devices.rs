@@ -1,3 +1,4 @@
+use crate::device_revocation;
 use crate::device_pairing::{
     device_key_fingerprint, validate_device_name, PairedDeviceCandidate, PAIRING_PUBLIC_KEY_BYTES,
 };
@@ -76,6 +77,8 @@ pub enum TrustedDeviceError {
     InvalidFormat,
     FingerprintMismatch,
     AlreadyTrusted,
+    RevokedDevice,
+    RevocationStateUnavailable,
     DeviceLimitExceeded,
     StoreTooLarge,
     VerificationFailed,
@@ -90,6 +93,8 @@ impl fmt::Display for TrustedDeviceError {
             Self::InvalidFormat => "trusted-device store format is invalid",
             Self::FingerprintMismatch => "trusted-device fingerprint does not match its public key",
             Self::AlreadyTrusted => "device public key is already trusted",
+            Self::RevokedDevice => "device public key has been revoked and cannot be trusted again",
+            Self::RevocationStateUnavailable => "device revocation state could not be verified",
             Self::DeviceLimitExceeded => "trusted-device limit was exceeded",
             Self::StoreTooLarge => "trusted-device store exceeds its size limit",
             Self::VerificationFailed => "trusted-device replacement verification failed",
@@ -104,7 +109,13 @@ impl Error for TrustedDeviceError {}
 pub fn load(workspace_root: &Path) -> Result<TrustedDeviceStore, TrustedDeviceError> {
     let identity_root = checked_identity_root(workspace_root)?;
     recover_interrupted_write(&identity_root)?;
-    load_committed(&identity_root)
+    let mut store = load_committed(&identity_root)?;
+    let revocations = device_revocation::load(workspace_root)
+        .map_err(|_| TrustedDeviceError::RevocationStateUnavailable)?;
+    store
+        .devices
+        .retain(|device| !revocations.contains(device.fingerprint()));
+    Ok(store)
 }
 
 pub fn register_candidate(
@@ -115,8 +126,18 @@ pub fn register_candidate(
     recover_interrupted_write(&identity_root)?;
 
     let mut store = load_committed(&identity_root)?;
+    let revocations = device_revocation::load(workspace_root)
+        .map_err(|_| TrustedDeviceError::RevocationStateUnavailable)?;
+    store
+        .devices
+        .retain(|device| !revocations.contains(device.fingerprint()));
+
     let trusted = TrustedDevice::from_candidate(candidate);
     trusted.validate()?;
+
+    if revocations.contains(trusted.fingerprint()) {
+        return Err(TrustedDeviceError::RevokedDevice);
+    }
 
     if store.devices.iter().any(|existing| {
         existing.public_key == trusted.public_key || existing.fingerprint == trusted.fingerprint

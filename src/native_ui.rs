@@ -1,4 +1,5 @@
 use crate::device_pairing::{DevicePairing, PairedDeviceCandidate, PairingInvitation, PairingStatus};
+use crate::device_revocation;
 use crate::document_search;
 use crate::file_browser::{self, EntryKind, FileEntry};
 use crate::file_compare;
@@ -831,6 +832,8 @@ struct NativeApp {
     paired_device: Option<PairedDeviceCandidate>,
     trusted_devices: Vec<TrustedDevice>,
     trusted_devices_error: Option<String>,
+    pending_revocation: Option<[u8; 32]>,
+    revocation_confirmation: String,
     text_json: TextJsonState,
     file_compare: FileCompareState,
     document_search: DocumentSearchState,
@@ -862,6 +865,8 @@ impl NativeApp {
             paired_device: None,
             trusted_devices: Vec::new(),
             trusted_devices_error: None,
+            pending_revocation: None,
+            revocation_confirmation: String::new(),
             text_json: TextJsonState::new(),
             file_compare: FileCompareState::new(),
             document_search: DocumentSearchState::new(),
@@ -1270,6 +1275,8 @@ impl NativeApp {
         self.workspace_backup.select(restored_backup);
         self.workspace_backup.summary = Some(summary);
         self.workspace_backup.restore_confirmation.clear();
+        self.pending_revocation = None;
+        self.revocation_confirmation.clear();
         self.refresh_trusted_devices();
     }
 
@@ -3033,24 +3040,90 @@ impl NativeApp {
                 ui.label(egui::RichText::new(error).color(BAD).monospace());
             } else if self.trusted_devices.is_empty() {
                 ui.label(
-                    egui::RichText::new("No persistent trusted-device public keys are stored.")
+                    egui::RichText::new("No effective trusted-device public keys are stored.")
                         .color(MUTED),
                 );
             } else {
-                for trusted in &self.trusted_devices {
+                let trusted_snapshot = self.trusted_devices.clone();
+                for trusted in trusted_snapshot {
                     ui.separator();
                     theme::key_value(ui, "DEVICE", trusted.device_name());
                     theme::key_value(ui, "KEY", "Ed25519");
                     theme::key_value(ui, "FINGERPRINT", &trusted.fingerprint_hex());
+                    if ui.button("REVOKE DEVICE").clicked() {
+                        self.pending_revocation = Some(*trusted.fingerprint());
+                        self.revocation_confirmation.clear();
+                        self.notice =
+                            format!("REVOCATION SELECTED: {}", trusted.device_name());
+                    }
                 }
             }
 
             ui.label(
                 egui::RichText::new(
-                    "Trusted public keys are stored under workspace:/identity and are included in generic Workspace backups. Revocation is not implemented yet; this view intentionally has no remove action.",
+                    "Trusted public keys and durable revocation tombstones live under workspace:/identity and are included in generic Workspace backups. Restore unions revocation state before identity replacement, so an older backup cannot remove a local tombstone.",
                 )
                 .color(MUTED),
             );
+
+            if let Some(fingerprint) = self.pending_revocation {
+                ui.add_space(8.0);
+                theme::status_badge(ui, "REVOCATION PENDING", WARN);
+                let target_name = self
+                    .trusted_devices
+                    .iter()
+                    .find(|trusted| trusted.fingerprint() == &fingerprint)
+                    .map(|trusted| trusted.device_name().to_string())
+                    .unwrap_or_else(|| "selected device".to_string());
+                theme::key_value(ui, "DEVICE", &target_name);
+                ui.label(
+                    egui::RichText::new(
+                        "TYPE REVOKE TO CONFIRM. This public key cannot be trusted again; re-adding the same physical device requires key rotation and a new pairing.",
+                    )
+                    .color(BAD),
+                );
+                ui.text_edit_singleline(&mut self.revocation_confirmation);
+                ui.horizontal(|ui| {
+                    let confirmed = self.revocation_confirmation.trim() == "REVOKE";
+                    if ui
+                        .add_enabled(confirmed, egui::Button::new("CONFIRM REVOCATION"))
+                        .clicked()
+                    {
+                        match device_revocation::revoke(&self.workspace_root, &fingerprint) {
+                            Ok(revoked) => {
+                                if self
+                                    .paired_device
+                                    .as_ref()
+                                    .is_some_and(|paired| paired.fingerprint() == revoked.fingerprint())
+                                {
+                                    self.paired_device = None;
+                                    self.device_pairing.cancel();
+                                    self.pairing_invitation = None;
+                                }
+                                self.pending_revocation = None;
+                                self.revocation_confirmation.clear();
+                                self.refresh_trusted_devices();
+                                self.notice =
+                                    format!("DEVICE KEY REVOKED: {}", revoked.device_name());
+                            }
+                            Err(device_revocation::DeviceRevocationError::AlreadyRevoked) => {
+                                self.pending_revocation = None;
+                                self.revocation_confirmation.clear();
+                                self.refresh_trusted_devices();
+                                self.notice = "DEVICE KEY ALREADY REVOKED".to_string();
+                            }
+                            Err(error) => {
+                                self.notice = format!("DEVICE REVOCATION FAILED: {error}");
+                            }
+                        }
+                    }
+                    if ui.button("CANCEL REVOCATION").clicked() {
+                        self.pending_revocation = None;
+                        self.revocation_confirmation.clear();
+                        self.notice = "DEVICE REVOCATION CANCELLED".to_string();
+                    }
+                });
+            }
 
             ui.add_space(14.0);
             theme::small_label(ui, "DEVICE PAIRING");
@@ -3096,6 +3169,13 @@ impl NativeApp {
                             Err(trusted_devices::TrustedDeviceError::AlreadyTrusted) => {
                                 self.refresh_trusted_devices();
                                 self.notice = "DEVICE KEY ALREADY TRUSTED".to_string();
+                            }
+                            Err(trusted_devices::TrustedDeviceError::RevokedDevice) => {
+                                self.paired_device = None;
+                                self.device_pairing.cancel();
+                                self.pairing_invitation = None;
+                                self.notice =
+                                    "DEVICE KEY REVOKED / ROTATE KEY AND PAIR AGAIN".to_string();
                             }
                             Err(error) => {
                                 self.trusted_devices_error = Some(error.to_string());

@@ -161,7 +161,7 @@ fn bounded_pairing_contract_advances_only_to_persistent_trusted_keys() {
     assert!(ROADMAP.contains("- [x] **Explicit LAN enable control**"));
     assert!(ROADMAP.contains("- [x] **Device pairing**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Device revocation** — Exactly One Next Task"
+        "- [ ] **Permission scopes** — Exactly One Next Task"
     ));
     assert!(ROADMAP.contains(
         "No LAN listener should be merged before these security boundaries are implemented and tested."
