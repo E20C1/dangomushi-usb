@@ -98,6 +98,6 @@ fn secret_boundary_excludes_text_json_and_roadmap_keeps_it_complete() {
     assert!(ROADMAP.contains("- [x] **Explicit LAN enable control**"));
     assert!(ROADMAP.contains("- [x] **Device pairing**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Reconnection without short fixed session expiry** — Exactly One Next Task"
+        "- [ ] **Public-network safe default** — Exactly One Next Task"
     ));
 }

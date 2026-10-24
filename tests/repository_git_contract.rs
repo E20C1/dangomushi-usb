@@ -161,7 +161,7 @@ fn repositories_stay_outside_secret_boundary_after_backup_advances() {
     assert!(ROADMAP.contains("- [x] **Explicit LAN enable control**"));
     assert!(ROADMAP.contains("- [x] **Device pairing**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Reconnection without short fixed session expiry** — Exactly One Next Task"
+        "- [ ] **Public-network safe default** — Exactly One Next Task"
     ));
     assert!(ROADMAP.contains("- [x] **Backup and restore workflow**"));
 }

@@ -83,6 +83,6 @@ fn roadmap_keeps_hash_verify_complete_after_later_m2_tools_advance() {
     assert!(ROADMAP.contains("- [x] **Explicit LAN enable control**"));
     assert!(ROADMAP.contains("- [x] **Device pairing**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Reconnection without short fixed session expiry** — Exactly One Next Task"
+        "- [ ] **Public-network safe default** — Exactly One Next Task"
     ));
 }

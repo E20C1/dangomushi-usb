@@ -3090,6 +3090,7 @@ impl NativeApp {
                     theme::key_value(ui, "DEVICE", trusted.device_name());
                     theme::key_value(ui, "KEY", "Ed25519");
                     theme::key_value(ui, "FINGERPRINT", &trusted.fingerprint_hex());
+                    theme::key_value(ui, "RECONNECT", "FRESH KEY PROOF / NO FIXED TTL");
 
                     if self.permission_store_error.is_none() {
                         let scopes = self
@@ -3138,6 +3139,12 @@ impl NativeApp {
             ui.label(
                 egui::RichText::new(
                     "Trusted public keys and durable revocation tombstones live under workspace:/identity and are included in generic Workspace backups. Device permissions live under workspace:/state, remain DEFAULT DENY unless explicitly saved, and are intentionally excluded from generic Workspace backups.",
+                )
+                .color(MUTED),
+            );
+            ui.label(
+                egui::RichText::new(
+                    "Reconnection uses a fresh Ed25519 challenge for every connection. No persistent bearer token or fixed authenticated-session expiry is created; live trust, revocation and permissions remain authoritative.",
                 )
                 .color(MUTED),
             );
