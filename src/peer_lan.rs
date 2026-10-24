@@ -637,17 +637,21 @@ mod tests {
         });
 
         thread::sleep(Duration::from_millis(25));
-        send_transfer_with_gate(
+        let send_result = send_transfer_with_gate(
             &pair.sender_root,
             &enabled_lan(),
             SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port)),
             pair.receiver.fingerprint(),
             TransferPayload::Text("LAN encrypted text".to_string()),
             &AlwaysTrustedGate,
-        )
-        .expect("send");
+        );
+        let receive_result = rx.recv_timeout(Duration::from_secs(5)).expect("receive result");
+        assert!(
+            send_result.is_ok(),
+            "send failed: {send_result:?}; receiver returned: {receive_result:?}"
+        );
 
-        match rx.recv_timeout(Duration::from_secs(5)).expect("receive result").expect("receive") {
+        match receive_result.expect("receive") {
             Some(LanReceivedTransfer::Text {
                 sender_fingerprint: actual,
                 text,
@@ -682,7 +686,7 @@ mod tests {
 
         thread::sleep(Duration::from_millis(25));
         let bytes = b"verified over direct LAN".to_vec();
-        send_transfer_with_gate(
+        let send_result = send_transfer_with_gate(
             &pair.sender_root,
             &enabled_lan(),
             SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port)),
@@ -692,10 +696,14 @@ mod tests {
                 bytes: bytes.clone(),
             },
             &AlwaysTrustedGate,
-        )
-        .expect("send");
+        );
+        let receive_result = rx.recv_timeout(Duration::from_secs(5)).expect("receive result");
+        assert!(
+            send_result.is_ok(),
+            "send failed: {send_result:?}; receiver returned: {receive_result:?}"
+        );
 
-        match rx.recv_timeout(Duration::from_secs(5)).expect("receive result").expect("receive") {
+        match receive_result.expect("receive") {
             Some(LanReceivedTransfer::File(file)) => {
                 assert_eq!(file.suggested_name(), "verified.bin");
                 assert_eq!(file.bytes(), bytes.as_slice());
