@@ -301,5 +301,13 @@ M3's transport-independent security and handoff boundaries are now complete. Any
   - final `.dangomushi-recovery-snapshot` marker is written only after exact payload re-enumeration and records sorted path/length/SHA-256 entries plus a domain-separated snapshot digest
   - CLI exposes creation only; restore/extract and public snapshot verification are intentionally deferred
   - snapshot includes Rust source/vendor recovery material but still does not preserve rustup installers, OS SDKs/native packages or platform linkers
-- [ ] **Restore verification** — Exactly One Next Task
-- [ ] Portable release bundles per operating system
+- [x] **Restore verification**
+  - public read-only verifier accepts only a real non-symlink Recovery Snapshot directory with the exact versioned completion marker
+  - marker parser enforces canonical fields, bounded counts/sizes, lowercase hexadecimal records, strict sorted unique paths and the snapshot-record digest schema
+  - payload paths must remain inside the reviewed Recovery Snapshot allowlist; required fixed files/directories are present and unexpected files or empty directory trees fail closed
+  - every payload file is streamed and checked against marker byte length and SHA-256 before the aggregate domain-separated snapshot digest is recomputed
+  - embedded `recovery/workspace.dgmwbk` is independently passed through the existing Generic Workspace Backup archive verifier and re-hashed afterward
+  - verification uses the snapshot marker's recorded application version when recomputing the aggregate digest, allowing older format-v1 snapshots to be checked by a newer verifier
+  - CLI exposes `recovery snapshot verify --snapshot <PATH>`; verification remains read-only and adds no restore/extract/staging authority
+  - no Secret Backup restore, Workspace mutation, Cargo execution, network access or session persistence is introduced
+- [ ] **Portable release bundles per operating system** — Exactly One Next Task
