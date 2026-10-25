@@ -89,10 +89,13 @@ fn smoke_uses_bounded_rebuild_local_process_state() {
 
 #[test]
 fn smoke_does_not_pull_workspace_restore_secret_or_network_authority_forward() {
-    let production = CORE
-        .split("#[cfg(test)]")
+    let smoke = CORE
+        .split("pub fn smoke_verify_rebuild")
+        .nth(1)
+        .expect("smoke function")
+        .split("pub struct FreshWorkspaceRestoreSummary")
         .next()
-        .expect("production source");
+        .expect("smoke function end");
 
     for forbidden in [
         "workspace_backup::restore_backup",
@@ -105,7 +108,7 @@ fn smoke_does_not_pull_workspace_restore_secret_or_network_authority_forward() {
         "server::",
     ] {
         assert!(
-            !production.contains(forbidden),
+            !smoke.contains(forbidden),
             "smoke gained forbidden later authority: {forbidden}"
         );
     }
@@ -157,10 +160,8 @@ fn documentation_states_execution_limitations_and_advances_once() {
     }
 
     assert!(ROADMAP.contains("- [x] **Recovered application smoke verification**"));
+    assert!(ROADMAP.contains("- [x] **Workspace restore into a fresh destination**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Workspace restore into a fresh destination** — Exactly One Next Task"
-    ));
-    assert!(!ROADMAP.contains(
         "- [ ] **Reconstruction verification** — Exactly One Next Task"
     ));
 }
