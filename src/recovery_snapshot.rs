@@ -97,7 +97,7 @@ impl fmt::Display for RecoverySnapshotError {
             Self::UnsupportedSnapshotVersion => "recovery snapshot format version is unsupported",
             Self::DestinationExists => "recovery snapshot destination already exists",
             Self::DestinationInsideInput => {
-                "recovery snapshot destination must be outside source and Workspace roots"
+                "recovery destination must be outside the snapshot and protected source/Workspace roots"
             }
             Self::UnsafeDestinationParent => "recovery snapshot destination parent is unsafe",
             Self::UnsupportedEntry => "recovery snapshot source contains an unsupported entry",
@@ -304,6 +304,7 @@ pub fn verify_snapshot(
     })
 }
 
+
 fn populate_snapshot(
     canonical_source: &Path,
     workspace_backup_path: &Path,
@@ -353,6 +354,108 @@ fn populate_snapshot(
     builder.finish(destination, workspace_summary)
 }
 
+pub fn stage_verified_snapshot(
+    snapshot_root: &Path,
+    destination: &Path,
+    protected_source_root: Option<&Path>,
+    protected_workspace_root: Option<&Path>,
+) -> Result<RecoverySnapshotSummary, RecoverySnapshotError> {
+    // The existing public verifier is the trust gate. No destination mutation
+    // is allowed before this call succeeds.
+    let source_summary = verify_snapshot(snapshot_root)?;
+
+    let canonical_snapshot =
+        fs::canonicalize(snapshot_root).map_err(|_| RecoverySnapshotError::SnapshotUnavailable)?;
+    let marker = read_snapshot_marker(&canonical_snapshot)?;
+    if marker.file_count != source_summary.files
+        || marker.total_bytes != source_summary.total_bytes
+        || marker.sha256 != source_summary.sha256
+    {
+        return Err(RecoverySnapshotError::IntegrityFailed);
+    }
+
+    let marker_source = canonical_snapshot.join(SNAPSHOT_MARKER);
+    let (marker_bytes, marker_sha256) = hash_file(&marker_source)?;
+
+    let protected_source = checked_optional_protected_root(
+        protected_source_root,
+        RecoverySnapshotError::SourceUnavailable,
+    )?;
+    let protected_workspace = checked_optional_protected_root(
+        protected_workspace_root,
+        RecoverySnapshotError::WorkspaceUnavailable,
+    )?;
+
+    let mut protected_roots = vec![canonical_snapshot.as_path()];
+    if let Some(root) = protected_source.as_deref() {
+        protected_roots.push(root);
+    }
+    if let Some(root) = protected_workspace.as_deref() {
+        protected_roots.push(root);
+    }
+
+    let (canonical_destination_parent, destination_path) =
+        checked_new_destination_path(destination, &protected_roots)?;
+
+    fs::create_dir(&destination_path).map_err(|error| {
+        if error.kind() == io::ErrorKind::AlreadyExists {
+            RecoverySnapshotError::DestinationExists
+        } else {
+            RecoverySnapshotError::Io
+        }
+    })?;
+
+    let result = (|| {
+        for expected in &marker.records {
+            if !is_allowed_snapshot_file(&expected.path) {
+                return Err(RecoverySnapshotError::UnsafeSnapshotLayout);
+            }
+
+            let source = join_relative(&canonical_snapshot, &expected.path)?;
+            let target = join_relative(&destination_path, &expected.path)?;
+            ensure_target_parent(&destination_path, &target)?;
+
+            let copied = copy_regular_file(&source, &target, &expected.path)?;
+            if &copied != expected {
+                return Err(RecoverySnapshotError::SourceChanged);
+            }
+        }
+
+        // The completion marker is copied last so an interrupted staging
+        // directory is never presented as a completed Recovery Snapshot.
+        let marker_target = destination_path.join(SNAPSHOT_MARKER);
+        let copied_marker = copy_regular_file(
+            &marker_source,
+            &marker_target,
+            SNAPSHOT_MARKER,
+        )?;
+        if copied_marker.bytes != marker_bytes || copied_marker.sha256 != marker_sha256 {
+            return Err(RecoverySnapshotError::SourceChanged);
+        }
+
+        sync_directory(&destination_path)?;
+        let staged_summary = verify_snapshot(&destination_path)?;
+        if staged_summary != source_summary {
+            return Err(RecoverySnapshotError::IntegrityFailed);
+        }
+
+        if let Some(parent) = destination_path.parent() {
+            sync_directory(parent)?;
+        }
+
+        Ok(staged_summary)
+    })();
+
+    match result {
+        Ok(summary) => Ok(summary),
+        Err(error) => {
+            let _ = fs::remove_dir_all(&destination_path);
+            let _ = sync_directory(&canonical_destination_parent);
+            Err(error)
+        }
+    }
+}
+
 fn checked_source_root(path: &Path) -> Result<PathBuf, RecoverySnapshotError> {
     let metadata = fs::symlink_metadata(path)
         .map_err(|_| RecoverySnapshotError::SourceUnavailable)?;
@@ -397,6 +500,16 @@ fn checked_destination_path(
     canonical_source: &Path,
     canonical_workspace: &Path,
 ) -> Result<(PathBuf, PathBuf), RecoverySnapshotError> {
+    checked_new_destination_path(
+        destination,
+        &[canonical_source, canonical_workspace],
+    )
+}
+
+fn checked_new_destination_path(
+    destination: &Path,
+    protected_roots: &[&Path],
+) -> Result<(PathBuf, PathBuf), RecoverySnapshotError> {
     if destination.as_os_str().is_empty() {
         return Err(RecoverySnapshotError::UnsafeDestinationParent);
     }
@@ -428,11 +541,34 @@ fn checked_destination_path(
         fs::canonicalize(parent).map_err(|_| RecoverySnapshotError::UnsafeDestinationParent)?;
     let final_path = canonical_parent.join(name);
 
-    if final_path.starts_with(canonical_source) || final_path.starts_with(canonical_workspace) {
+    if protected_roots
+        .iter()
+        .any(|root| final_path.starts_with(root))
+    {
         return Err(RecoverySnapshotError::DestinationInsideInput);
     }
 
     Ok((canonical_parent, final_path))
+}
+
+fn checked_optional_protected_root(
+    path: Option<&Path>,
+    unavailable: RecoverySnapshotError,
+) -> Result<Option<PathBuf>, RecoverySnapshotError> {
+    let Some(path) = path else {
+        return Ok(None);
+    };
+
+    let metadata = fs::symlink_metadata(path).map_err(|_| unavailable)?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(unavailable);
+    }
+
+    let canonical = fs::canonicalize(path).map_err(|_| unavailable)?;
+    if !canonical.is_dir() {
+        return Err(unavailable);
+    }
+    Ok(Some(canonical))
 }
 
 fn ensure_fixed_file(path: &Path) -> Result<(), RecoverySnapshotError> {

@@ -122,7 +122,8 @@ fn m5_closes_and_m6_starts_only_after_an_explicit_boundary() {
     assert!(ROADMAP.contains("- [x] **Portable release bundles per operating system**"));
     assert!(ROADMAP.contains("M5 Offline continuity is complete"));
     assert!(ROADMAP.contains("## M6 — Offline reconstruction"));
+    assert!(ROADMAP.contains("- [x] **Verified snapshot staging materialization**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Verified snapshot staging materialization** — Exactly One Next Task"
+        "- [ ] **Frozen rebuild from staged source/vendor** — Exactly One Next Task"
     ));
 }

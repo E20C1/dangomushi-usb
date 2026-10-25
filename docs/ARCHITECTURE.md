@@ -620,13 +620,21 @@ M5 Offline continuity is complete.
 
 M6 is explicitly scoped to reconstruction from an already-verified Recovery Snapshot.
 
-The first authorized implementation task is **Verified snapshot staging materialization**. It must invoke the existing read-only Recovery Snapshot verifier before creating a destination and may only materialize payload paths already authorized by the snapshot format.
+The first M6 implementation task, **Verified snapshot staging materialization**, is complete.
 
-The staging destination must be explicit and create-new, have a real non-symlink parent, and remain outside the source Recovery Snapshot, any configured live Workspace, and the active source tree when that root is separately supplied. Path aliasing or containment ambiguity must fail closed.
+`recovery_snapshot::stage_verified_snapshot` first invokes the existing read-only `verify_snapshot` trust gate and completes that verification before any destination creation. It then re-reads the authenticated marker and binds staging to the initially verified file count, total bytes and aggregate snapshot SHA-256.
 
-This first task may materialize reviewed first-party source/build inputs, the matching vendor/ cache, and the verified recovery/workspace.dgmwbk as an inert file. It does not restore that backup, run Cargo or other child processes, restore Secret Backup ciphertext, mutate identities, open network sockets, or alter a live Workspace.
+The destination is explicit and create-new, has a real non-symlink parent, and must remain outside the source Recovery Snapshot plus any live Workspace or active source root supplied by the caller. Parent canonicalization is performed before the final destination path is accepted.
 
-Later M6 tasks are ordered separately: frozen rebuild from staged source/vendor, recovered application smoke verification, Workspace restore into a fresh destination, then reconstruction verification. Later authority must not be pulled into the staging task.
+Only the marker-authenticated Recovery Snapshot payload records are copied. Each regular file uses the existing 64 KiB streaming copy/hash boundary, detects observable source length/modification changes, hashes the destination, and must equal the record from the initially verified marker. No recursive "copy whatever exists now" traversal is used for staging.
+
+The original `.dangomushi-recovery-snapshot` completion marker is copied only after every payload record has been materialized. The completed destination is then independently passed through the full `verify_snapshot` boundary, including exact layout/path checks, per-file SHA-256, aggregate digest and nested Generic Workspace Backup verification. Its resulting summary must equal the source summary captured before destination mutation.
+
+The staged first-party source/build inputs, matching `vendor/` cache and `recovery/workspace.dgmwbk` remain inert files. This task does not restore that backup, run Cargo or other child processes, restore Secret Backup ciphertext, mutate identities, open network sockets, or alter a live Workspace.
+
+The CLI exposes `dangomushi recovery snapshot stage --snapshot <PATH> --destination <PATH>`, with optional `--source` and `--workspace` protected roots when those live roots exist.
+
+The next M6 task is frozen rebuild from staged source/vendor. Recovered application smoke verification, Workspace restore into a fresh destination, and reconstruction verification remain later separate authorities.
 
 Secret Backup / Restore remains an independent authenticated flow and is not auto-discovered by reconstruction. Release signing/provenance, automatic updates, mobile editor/session LAN transport, and Internet P2P remain separate future milestones. The M4 Internet P2P disable/defer decision remains unchanged.
 

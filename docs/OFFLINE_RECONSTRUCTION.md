@@ -6,7 +6,7 @@ M5 established that DANGOMUSHI can preserve its documentation, Rust dependency s
 
 M6 addresses the remaining recovery gap: turning an already-verified Recovery Snapshot into a fresh reconstructed environment without mutating the currently running source tree or Workspace.
 
-This document defines the M6 authority boundary only. It does not add a staging command, filesystem reconstruction, Cargo execution, Workspace restore, Secret Backup restore, or network access by itself.
+M6 now includes the first implementation boundary: verified snapshot staging materialization. It still does not authorize Cargo execution, Workspace restore, Secret Backup restore, or network access.
 
 ## Why this milestone comes next
 
@@ -28,43 +28,49 @@ Each item is a separate Exactly One Task. Later items must not be pulled into an
 
 ## First boundary: verified snapshot staging materialization
 
-The first M6 implementation task will copy a Recovery Snapshot into a new staging root suitable for later reconstruction.
+Verified snapshot staging is implemented by:
 
-Before any destination mutation, the source Recovery Snapshot must pass the existing read-only verify_snapshot boundary.
+~~~text
+recovery_snapshot::stage_verified_snapshot(...)
+~~~
 
-The staging destination must:
+and the CLI:
 
-- be explicit,
-- not already exist,
-- have a real non-symlink parent,
-- remain outside the source Recovery Snapshot,
-- remain outside any configured live Workspace,
-- remain outside the currently running source tree when that tree is separately supplied,
-- reject path aliasing or containment ambiguity.
+~~~text
+dangomushi recovery snapshot stage \
+  --snapshot <PATH> \
+  --destination <PATH> \
+  [--source <ACTIVE-SOURCE-ROOT>] \
+  [--workspace <LIVE-WORKSPACE-ROOT>]
+~~~
 
-Only paths already authorized by the Recovery Snapshot format may be materialized.
+Before any destination mutation, the source Recovery Snapshot must pass the existing read-only verify_snapshot boundary. Verification therefore completes before the staging path is created or otherwise mutated.
 
-The staging task may copy:
+The staging destination:
 
-- reviewed first-party source/build inputs,
-- the matching vendor/ dependency snapshot,
-- the already-verified recovery/workspace.dgmwbk file as an inert artifact.
+- is explicit,
+- must not already exist,
+- must have a real non-symlink parent,
+- must remain outside the source Recovery Snapshot,
+- must remain outside any supplied live Workspace,
+- must remain outside any supplied active source tree,
+- is resolved through its canonical parent before containment checks.
 
-It must not:
+`--source` and `--workspace` are optional because a clean reconstruction machine may have neither live root. When such roots do exist, callers should supply them so staging cannot be placed inside them. In this boundary, the destination must remain outside any configured live Workspace, where a configured Workspace means the live root supplied through `--workspace` (or the equivalent library argument).
 
-- restore workspace.dgmwbk,
-- read or restore Secret Backup ciphertext,
-- discover Vault/Credential/Recovery Code state,
-- mutate an existing Workspace,
-- run Cargo or another child process,
-- install Rust or operating-system packages,
-- open network sockets,
-- create or trust new identities,
-- enable LAN or Internet transport.
+After initial verification, the authenticated snapshot marker is read again and staging remains bound to the initially verified file count, total bytes and aggregate SHA-256. Only marker records already accepted by the Recovery Snapshot allowlist are materialized.
+
+Every payload file is copied with the existing bounded 64 KiB streaming copy path. The copier checks the source regular-file type, size limit, observable length/modification changes, streamed SHA-256 and the resulting destination SHA-256. The copied record must exactly equal the corresponding initially verified marker record.
+
+The completion marker is copied last. An interrupted staging directory therefore lacks the marker or otherwise fails the normal verifier rather than being presented as complete.
+
+After all payload plus marker bytes exist, the destination is independently verified again by the existing full Recovery Snapshot verifier. That second verification repeats exact layout checks, symlink/special-file rejection, all payload hashes, aggregate snapshot digest, and independent Generic Workspace Backup archive verification. The staged summary must exactly equal the initially verified source summary.
+
+The staged tree contains reviewed first-party source/build inputs, the matching `vendor/` dependency snapshot, and the already-verified `recovery/workspace.dgmwbk` as an inert file.
+
+Staging does not restore `workspace.dgmwbk`, read or restore Secret Backup ciphertext, discover Vault/Credential/Recovery Code state, mutate an existing Workspace, run Cargo or another child process, install packages, open network sockets, create identities, or enable LAN/Internet transport.
 
 The source snapshot remains read-only.
-
-The staging copy must retain the fail-closed path, symlink, special-file, count, size, and SHA-256 semantics already established by Recovery Snapshot verification. The implementation task must define how destination bytes are independently rechecked before the staging result can be accepted.
 
 ## Later M6 boundaries
 
@@ -122,6 +128,8 @@ Internet P2P remains disabled under the M4 threat-review decision.
 
 ## Exactly One Next Task
 
-The next authorized implementation task is **Verified snapshot staging materialization**.
+Verified snapshot staging materialization is complete.
 
-No Cargo execution, Workspace restore, Secret restore, release signing, mobile transport, or other post-M5 authority is authorized by this boundary task.
+The next authorized implementation task is **Frozen rebuild from staged source/vendor**.
+
+That task may add bounded Cargo execution against the staged source and staged `vendor/`, but it must preserve offline/frozen dependency resolution and must not pull smoke verification, Workspace restore, Secret restore, release signing, mobile transport, or network authority forward.
