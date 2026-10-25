@@ -310,4 +310,15 @@ M3's transport-independent security and handoff boundaries are now complete. Any
   - verification uses the snapshot marker's recorded application version when recomputing the aggregate digest, allowing older format-v1 snapshots to be checked by a newer verifier
   - CLI exposes `recovery snapshot verify --snapshot <PATH>`; verification remains read-only and adds no restore/extract/staging authority
   - no Secret Backup restore, Workspace mutation, Cargo execution, network access or session persistence is introduced
-- [ ] **Portable release bundles per operating system** — Exactly One Next Task
+- [x] **Portable release bundles per operating system**
+  - Windows produces a ZIP with `app/Dangomushi.exe` and `app/dangomushi-cli.exe`; Linux produces a tar.gz with the matching executable pair; macOS produces a tar.gz containing `app/Dangomushi.app` plus the CLI
+  - every archive has one version/OS/architecture-scoped root, a fixed START_HERE guide and canonical `RELEASE-MANIFEST.json`
+  - manifest records bind each allowed payload path to byte length, SHA-256 and executable metadata; archive verification rejects unexpected/missing/duplicate/traversal/non-regular entries
+  - archive-level `.sha256` sidecar is verified before internal manifest/payload verification
+  - bundle payload explicitly excludes Workspace data, backups, Recovery Snapshots, vendor/source/build trees, Cargo caches and identity/secret state
+  - macOS .app execution maps back to the same bundle-root sibling `workspace/` used by Windows/Linux portable layout
+  - CI builds and verifies a platform-native bundle on Windows, Ubuntu and macOS; main pushes upload only the already-verified archive and checksum sidecar
+  - packaging normalizes archive metadata but does not claim bit-for-bit reproducible compiled binaries
+  - current bundles are not Authenticode-signed, macOS code-signed or notarized; SHA-256 verifies equality, not publisher identity
+
+M5 Offline continuity is complete. No post-M5 implementation task is authorized by this roadmap yet.
