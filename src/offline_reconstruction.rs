@@ -810,10 +810,20 @@ pub fn restore_workspace_into_fresh_destination(
         return Err(FreshWorkspaceRestoreError::WorkspaceBackupMismatch);
     }
 
-    let after_staging = recovery_snapshot::verify_snapshot(&canonical_staging)
-        .map_err(|_| FreshWorkspaceRestoreError::StagingChanged)?;
-    let backup_after = workspace_backup::verify_backup_file(&backup_path)
-        .map_err(|_| FreshWorkspaceRestoreError::StagingChanged)?;
+    let after_staging = match recovery_snapshot::verify_snapshot(&canonical_staging) {
+        Ok(summary) => summary,
+        Err(_) => {
+            let _ = fs::remove_dir_all(&destination_path);
+            return Err(FreshWorkspaceRestoreError::StagingChanged);
+        }
+    };
+    let backup_after = match workspace_backup::verify_backup_file(&backup_path) {
+        Ok(summary) => summary,
+        Err(_) => {
+            let _ = fs::remove_dir_all(&destination_path);
+            return Err(FreshWorkspaceRestoreError::StagingChanged);
+        }
+    };
     if after_staging != smoke.source_snapshot || backup_after != backup_before {
         let _ = fs::remove_dir_all(&destination_path);
         return Err(FreshWorkspaceRestoreError::StagingChanged);
