@@ -345,8 +345,17 @@ M5 Offline continuity is complete.
   - expected rebuilt binaries are real regular files, size bounded and SHA-256 recorded in a completion marker written only after both builds succeed
   - build output never executes the rebuilt binaries and never restores the embedded Workspace Backup
   - Cargo/build.rs execution is not an OS sandbox; verified snapshot integrity is not publisher authenticity and malicious reviewed build inputs could still execute code or attempt direct network access
-- [ ] **Recovered application smoke verification** — Exactly One Next Task
-- [ ] Workspace restore into a fresh destination
+- [x] **Recovered application smoke verification**
+  - smoke requires the staged Recovery Snapshot to pass full verification again before any rebuilt binary is executed
+  - frozen rebuild marker is strictly parsed and bound to the verified source-snapshot SHA-256, pinned toolchain, current OS/architecture and fixed CLI/desktop artifact paths
+  - both rebuilt binaries must be real regular files whose byte length and SHA-256 exactly match the rebuild marker before execution
+  - CLI smoke executes only the fixed `version` command; desktop smoke executes only the non-GUI `--recovery-smoke-check` entrypoint
+  - process current directory plus HOME/XDG/APPDATA/TEMP-style state is redirected to a create-new rebuild-local smoke sandbox that is removed afterward
+  - smoke processes have null stdin, bounded stdout/stderr and a 15-second timeout; unexpected output, stderr, exit failure or timeout fail closed
+  - rebuild marker/artifact hashes and the complete staged Recovery Snapshot are checked again after execution so observable mutation fails verification
+  - no Workspace restore, Secret Backup restore, arbitrary command/argument execution, GUI startup, LAN listener or Internet P2P authority is added
+  - smoke execution is executable-code authority and is not an OS sandbox; snapshot/rebuild hashes prove equality, not publisher authenticity
+- [ ] **Workspace restore into a fresh destination** — Exactly One Next Task
 - [ ] Reconstruction verification
 
 M6 is intentionally limited to offline reconstruction from already-verified Recovery Snapshots. Release signing/provenance, automatic updates, mobile LAN transport and Internet P2P remain separate future security/network milestones.
