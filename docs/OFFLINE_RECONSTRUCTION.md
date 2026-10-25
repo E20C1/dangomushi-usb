@@ -6,7 +6,7 @@ M5 established that DANGOMUSHI can preserve its documentation, Rust dependency s
 
 M6 addresses the remaining recovery gap: turning an already-verified Recovery Snapshot into a fresh reconstructed environment without mutating the currently running source tree or Workspace.
 
-M6 now includes the first implementation boundary: verified snapshot staging materialization. It still does not authorize Cargo execution, Workspace restore, Secret Backup restore, or network access.
+M6 now includes verified snapshot staging materialization and a frozen rebuild boundary. Cargo execution is authorized only through the fixed staged-source rebuild path; rebuilt application execution, Workspace restore, Secret Backup restore, and network transport remain out of scope.
 
 ## Why this milestone comes next
 
@@ -76,11 +76,46 @@ The source snapshot remains read-only.
 
 ### Frozen rebuild from staged source/vendor
 
-A later task may run the existing pinned Rust/Cargo build path from the staged source using the staged vendor/ cache and the existing offline Cargo source replacement.
+Frozen rebuild is implemented by:
 
-That task must not silently download missing crates or alter Cargo.lock.
+~~~text
+offline_reconstruction::frozen_rebuild(...)
+~~~
 
-The current limitation remains: Rust toolchain installers, OS SDKs, native development libraries, linkers, and platform runtime components are not contained in the Recovery Snapshot.
+and the CLI:
+
+~~~text
+dangomushi recovery snapshot rebuild \
+  --staging <PATH> \
+  --destination <PATH> \
+  [--source <ACTIVE-SOURCE-ROOT>] \
+  [--workspace <LIVE-WORKSPACE-ROOT>]
+~~~
+
+Before any rebuild destination mutation, the staged tree must pass the existing complete Recovery Snapshot verifier. The staged `rust-toolchain.toml` and `.cargo/vendor-config.toml` are then required to exactly match the reviewed Rust 1.99.1 / crates.io-to-vendor offline baseline.
+
+The rebuild destination is create-new, must have a real non-symlink parent, and must remain outside the staging tree plus any supplied live source or Workspace roots. Cargo output is forced into that separate destination rather than allowing `target/` to modify the verified staging tree.
+
+The core runs exactly two fixed Cargo release builds:
+
+~~~text
+dangomushi
+dangomushi-desktop --features desktop
+~~~
+
+Both use the staged manifest and vendor configuration with `--frozen`. No arbitrary Cargo subcommand, package, feature set, command line, target directory or child executable is accepted from the caller.
+
+Cargo-affecting environment overrides are removed before launch, including `CARGO_*`, compiler/wrapper/RUSTFLAGS variables and `RUSTUP_TOOLCHAIN`. The child receives an isolated `CARGO_HOME` under the create-new rebuild destination and `CARGO_NET_OFFLINE=true`. Parent-directory `.cargo/config` and `.cargo/config.toml` files outside the staging tree are rejected so ambient Cargo configuration is not silently merged into reconstruction.
+
+After both Cargo invocations complete, the entire staged Recovery Snapshot is verified again. Any source/vendor/lock/marker mutation observable through that verifier fails the rebuild and the incomplete destination is removed.
+
+The expected CLI and desktop release artifacts must be real non-symlink regular files and are bounded to 2 GiB each. Their exact byte length and SHA-256 are recorded in a final `.dangomushi-frozen-rebuild` marker written only after both builds and post-build staging verification succeed. The temporary isolated Cargo home is removed before completion.
+
+The rebuild does not execute either rebuilt application. **Recovered application smoke verification** remains the next separate task. It also does not restore `recovery/workspace.dgmwbk`, inspect Secret Backup data, mutate an existing Workspace, alter identity/trust state, or enable LAN/Internet transport.
+
+Cargo/build.rs execution is executable-code authority. `--frozen`, the staged vendor config and `CARGO_NET_OFFLINE=true` prevent Cargo dependency resolution from falling back to registries, but this boundary does not provide an OS-level network sandbox for arbitrary build scripts or proc-macros. A malicious source/vendor snapshot could contain executable build logic. Recovery Snapshot SHA-256 proves equality with the accepted snapshot, not publisher authenticity.
+
+The current external-prerequisite limitation also remains: Rust toolchain installers, OS SDKs, native development libraries, linkers, and platform runtime components are not contained in the Recovery Snapshot.
 
 ### Recovered application smoke verification
 
@@ -128,8 +163,8 @@ Internet P2P remains disabled under the M4 threat-review decision.
 
 ## Exactly One Next Task
 
-Verified snapshot staging materialization is complete.
+Verified snapshot staging materialization and frozen staged rebuild are complete.
 
-The next authorized implementation task is **Frozen rebuild from staged source/vendor**.
+The next authorized implementation task is **Recovered application smoke verification**.
 
-That task may add bounded Cargo execution against the staged source and staged `vendor/`, but it must preserve offline/frozen dependency resolution and must not pull smoke verification, Workspace restore, Secret restore, release signing, mobile transport, or network authority forward.
+That task may execute only the already-produced, integrity-recorded rebuilt application artifacts through a bounded temporary/staging-local smoke path. Workspace restore, Secret restore, release signing, mobile transport, and Internet P2P remain separate later authorities.
