@@ -223,10 +223,14 @@ pub fn restore_backup_file_into_fresh_workspace(
     backup_path: &Path,
     destination: &Path,
 ) -> Result<WorkspaceBackupSummary, WorkspaceBackupError> {
-    // The external archive must pass the complete Generic Workspace Backup
-    // verifier before the fresh destination is created.
-    let expected = verify_archive_path(backup_path, None)?;
+    // The external archive must remain byte-identical across the complete
+    // preflight verifier before the fresh destination is created.
     let source_before = hash_backup_source(backup_path)?;
+    let expected = verify_archive_path(backup_path, None)?;
+    let source_verified = hash_backup_source(backup_path)?;
+    if source_verified != source_before {
+        return Err(WorkspaceBackupError::SourceChanged);
+    }
     let (destination_parent, destination_path) = checked_fresh_workspace_destination(destination)?;
 
     fs::create_dir(&destination_path).map_err(|error| {
