@@ -1601,4 +1601,94 @@ mod tests {
         fs::remove_dir_all(root).expect("cleanup root");
         fs::remove_dir_all(outside).expect("cleanup outside");
     }
+
+    #[test]
+    fn external_backup_restores_only_into_a_fresh_workspace() {
+        let source = temporary_workspace("fresh-source");
+        fs::create_dir_all(source.join("state/autosave")).expect("autosave");
+        fs::write(source.join("data/documents/note.txt"), "recovered\n").expect("document");
+        fs::write(source.join("identity/device.txt"), "trusted-public-state").expect("identity");
+        fs::write(source.join("config/settings.toml"), "mode = \"recovered\"\n").expect("config");
+        fs::write(source.join("state/autosave/draft.txt"), "draft").expect("draft");
+        fs::write(source.join("state/session.v1"), "must-not-be-backed-up").expect("session");
+
+        let created = create_backup(&source).expect("create");
+        let backup_path = source.join(&created.relative_path);
+        let expected = verify_backup_file(&backup_path).expect("verify");
+
+        let destination = source.with_extension("fresh-restored");
+        let restored =
+            restore_backup_file_into_fresh_workspace(&backup_path, &destination).expect("restore");
+        assert_eq!(restored, expected);
+        assert!(workspace::doctor(&destination).ok());
+        assert_eq!(
+            fs::read_to_string(destination.join("data/documents/note.txt")).expect("document"),
+            "recovered\n"
+        );
+        assert_eq!(
+            fs::read_to_string(destination.join("identity/device.txt")).expect("identity"),
+            "trusted-public-state"
+        );
+        assert_eq!(
+            fs::read_to_string(destination.join("config/settings.toml")).expect("config"),
+            "mode = \"recovered\"\n"
+        );
+        assert_eq!(
+            fs::read_to_string(destination.join("state/autosave/draft.txt")).expect("draft"),
+            "draft"
+        );
+        assert!(!destination.join("state/session.v1").exists());
+        assert_eq!(
+            fs::read_dir(destination.join("backups"))
+                .expect("backups")
+                .count(),
+            0,
+            "external recovery archive must not be silently copied into the restored Workspace"
+        );
+
+        fs::remove_dir_all(source).expect("cleanup source");
+        fs::remove_dir_all(destination).expect("cleanup destination");
+    }
+
+    #[test]
+    fn fresh_restore_refuses_existing_destination_without_mutation() {
+        let source = temporary_workspace("fresh-existing-source");
+        fs::write(source.join("data/documents/note.txt"), "backup").expect("document");
+        let created = create_backup(&source).expect("create");
+        let backup_path = source.join(&created.relative_path);
+
+        let destination = source.with_extension("fresh-existing-destination");
+        fs::create_dir_all(&destination).expect("destination");
+        fs::write(destination.join("sentinel.txt"), "keep").expect("sentinel");
+
+        assert_eq!(
+            restore_backup_file_into_fresh_workspace(&backup_path, &destination).unwrap_err(),
+            WorkspaceBackupError::FreshRestoreDestinationExists
+        );
+        assert_eq!(
+            fs::read_to_string(destination.join("sentinel.txt")).expect("sentinel"),
+            "keep"
+        );
+
+        fs::remove_dir_all(source).expect("cleanup source");
+        fs::remove_dir_all(destination).expect("cleanup destination");
+    }
+
+    #[test]
+    fn invalid_external_backup_fails_before_fresh_destination_creation() {
+        let source = temporary_workspace("fresh-invalid-source");
+        fs::write(source.join("data/documents/note.txt"), "backup").expect("document");
+        let created = create_backup(&source).expect("create");
+        let backup_path = source.join(&created.relative_path);
+        let mut bytes = fs::read(&backup_path).expect("read");
+        bytes[bytes.len() / 2] ^= 0x55;
+        fs::write(&backup_path, bytes).expect("tamper");
+
+        let destination = source.with_extension("fresh-invalid-destination");
+        assert!(restore_backup_file_into_fresh_workspace(&backup_path, &destination).is_err());
+        assert!(!destination.exists());
+
+        fs::remove_dir_all(source).expect("cleanup source");
+    }
+
 }
