@@ -129,12 +129,14 @@ def macos_plist(version: str) -> str:
 
 def collect_records(bundle_root: Path, executable_paths: set[str]) -> list[dict]:
     records = []
-    for path in sorted(p for p in bundle_root.rglob("*") if p.is_file()):
-        if path.name == "RELEASE-MANIFEST.json":
-            continue
+    files = [
+        (path.relative_to(bundle_root).as_posix(), path)
+        for path in bundle_root.rglob("*")
+        if path.is_file() and path.name != "RELEASE-MANIFEST.json"
+    ]
+    for relative, path in sorted(files, key=lambda item: item[0]):
         if path.is_symlink():
             fail(f"bundle staging contains a symlink: {path}")
-        relative = path.relative_to(bundle_root).as_posix()
         pure = PurePosixPath(relative)
         if pure.is_absolute() or ".." in pure.parts or "." in pure.parts:
             fail(f"invalid bundle path: {relative}")
@@ -162,7 +164,17 @@ def write_manifest(bundle_root: Path, version: str, os_name: str, arch: str, bun
     (bundle_root / "RELEASE-MANIFEST.json").write_text(encoded, encoding="utf-8", newline="\n")
 
 def archive_files(bundle_root: Path) -> list[Path]:
-    return sorted(p for p in bundle_root.rglob("*") if p.is_file())
+    return [
+        path
+        for _, path in sorted(
+            (
+                (path.relative_to(bundle_root).as_posix(), path)
+                for path in bundle_root.rglob("*")
+                if path.is_file()
+            ),
+            key=lambda item: item[0],
+        )
+    ]
 
 def write_zip(bundle_root: Path, bundle_id: str, output: Path, executable_paths: set[str]) -> None:
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
