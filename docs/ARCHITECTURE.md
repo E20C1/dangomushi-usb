@@ -646,11 +646,25 @@ The child Cargo environment removes inherited `CARGO_*`, rustc/rustdoc wrapper a
 
 After Cargo/build-script execution completes, the entire staged Recovery Snapshot is re-verified and must equal the pre-build summary. Expected binaries are required to be real regular files, are size-bounded, hashed with SHA-256, and recorded in a completion marker written last. Incomplete destinations are removed on in-process failure.
 
-This task deliberately does not execute rebuilt binaries. Smoke verification is the next M6 boundary. It also does not restore the embedded Workspace Backup or Secret Backup, mutate live Workspace/identity state, or expose network transport.
+The frozen rebuild task itself does not execute rebuilt binaries. It also does not restore the embedded Workspace Backup or Secret Backup, mutate live Workspace/identity state, or expose network transport.
 
 Cargo `--frozen` and the vendor source replacement prevent Cargo dependency fetching, but arbitrary build.rs/proc-macro code is executable code and is not isolated by an OS-level network sandbox here. Recovery Snapshot integrity also remains distinct from publisher authenticity.
 
-The next M6 task is recovered application smoke verification. Workspace restore into a fresh destination and reconstruction verification remain later separate authorities.
+The third M6 task, **Recovered application smoke verification**, is also implemented by `src/offline_reconstruction.rs`.
+
+`smoke_verify_rebuild` starts by running the complete Recovery Snapshot verifier over the staging root. It strictly parses the bounded frozen-rebuild marker, requires its source snapshot SHA-256 to equal that verified staging summary, requires the pinned Rust 1.99.1 marker value and current host OS/architecture, and accepts only the fixed CLI/desktop release paths.
+
+Both recorded binaries are real-file/size checked and re-hashed before execution. Their byte lengths and SHA-256 values must exactly equal the rebuild marker.
+
+Smoke execution has no caller-selected command surface. The CLI runs only `version`. The desktop binary runs only `--recovery-smoke-check`, a dedicated entrypoint in `src/bin/dangomushi-desktop.rs` that returns before eframe/native UI initialization.
+
+A create-new `.dangomushi-recovery-smoke` directory under the rebuild root is used as the child current directory and temporary application-state root. HOME/USERPROFILE, XDG state, APPDATA/LOCALAPPDATA and temporary-directory variables are redirected there and inherited `DANGOMUSHI_*` variables are removed. stdin is null; stdout/stderr are bounded files; each process has a 15-second timeout; exact version-bound stdout plus empty stderr is required.
+
+After the smoke processes exit, the temporary directory is removed, the rebuild marker is byte-compared with its pre-execution form, both binaries are re-hashed again, and staging passes the complete Recovery Snapshot verifier again with the same summary. Observable mutation fails closed.
+
+This is intentionally a bounded execution gate, not an OS sandbox. Hash-consistent malicious recovered code could still attempt direct operating-system actions. No Workspace restore, Secret restore, arbitrary command execution, normal desktop GUI startup, LAN listener or Internet P2P path is authorized here.
+
+The next M6 task is Workspace restore into a fresh destination. Reconstruction verification remains the final separate M6 authority.
 
 Secret Backup / Restore remains an independent authenticated flow and is not auto-discovered by reconstruction. Release signing/provenance, automatic updates, mobile editor/session LAN transport, and Internet P2P remain separate future milestones. The M4 Internet P2P disable/defer decision remains unchanged.
 
