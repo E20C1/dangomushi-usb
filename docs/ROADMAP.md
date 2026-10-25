@@ -355,7 +355,16 @@ M5 Offline continuity is complete.
   - rebuild marker/artifact hashes and the complete staged Recovery Snapshot are checked again after execution so observable mutation fails verification
   - no Workspace restore, Secret Backup restore, arbitrary command/argument execution, GUI startup, LAN listener or Internet P2P authority is added
   - smoke execution is executable-code authority and is not an OS sandbox; snapshot/rebuild hashes prove equality, not publisher authenticity
-- [ ] **Workspace restore into a fresh destination** — Exactly One Next Task
-- [ ] Reconstruction verification
+- [x] **Workspace restore into a fresh destination**
+  - restore requires the verified staging tree plus the matching frozen rebuild and reruns the recovered-application smoke gate before any Workspace destination mutation
+  - destination is explicit, create-new, non-symlink-parented and outside staging, rebuild and any supplied live source/Workspace roots
+  - only the fixed staged `recovery/workspace.dgmwbk` is accepted; its Generic Workspace Backup summary must match the verified Recovery Snapshot metadata
+  - external backup restore reuses the existing Generic Workspace Backup verifier, extraction, restore staging/rollback and device-revocation merge path rather than defining a second archive format
+  - fresh Workspace initialization happens only after the backup has verified; any restore failure removes the entire new destination
+  - source backup bytes are hashed before/after restore and re-verified; staging is fully re-verified after restore and mismatch removes the fresh destination
+  - restore preserves Generic Backup scope: data/repositories/identity/config/autosave return, while session state, permission policy, peer private identity and other excluded state do not appear
+  - the embedded recovery backup is not silently copied into the new Workspace backups directory
+  - Secret Backup remains separate; no Vault/Credential/Recovery Code restoration, existing-Workspace merge/overwrite, network access or release-signing authority is added
+- [ ] **Reconstruction verification** — Exactly One Next Task
 
 M6 is intentionally limited to offline reconstruction from already-verified Recovery Snapshots. Release signing/provenance, automatic updates, mobile LAN transport and Internet P2P remain separate future security/network milestones.
