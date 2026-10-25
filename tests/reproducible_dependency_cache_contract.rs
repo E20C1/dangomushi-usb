@@ -130,7 +130,5 @@ fn docs_keep_cache_scope_narrow_and_advance_exactly_once() {
     assert!(ROADMAP.contains("- [x] **Reproducible dependency cache/vendor strategy**"));
     assert!(ROADMAP.contains("- [x] **Recovery snapshots**"));
     assert!(ROADMAP.contains("- [x] **Restore verification**"));
-    assert!(ROADMAP.contains(
-        "- [ ] **Portable release bundles per operating system** — Exactly One Next Task"
-    ));
+    assert!(ROADMAP.contains("- [x] **Portable release bundles per operating system**"));
 }
