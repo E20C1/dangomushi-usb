@@ -118,8 +118,11 @@ fn docs_are_explicit_about_unsigned_and_non_hermetic_release_limits() {
 }
 
 #[test]
-fn m5_closes_without_inventing_an_unauthorized_next_task() {
+fn m5_closes_and_m6_starts_only_after_an_explicit_boundary() {
     assert!(ROADMAP.contains("- [x] **Portable release bundles per operating system**"));
     assert!(ROADMAP.contains("M5 Offline continuity is complete"));
-    assert!(!ROADMAP.contains("— Exactly One Next Task"));
+    assert!(ROADMAP.contains("## M6 — Offline reconstruction"));
+    assert!(ROADMAP.contains(
+        "- [ ] **Verified snapshot staging materialization** — Exactly One Next Task"
+    ));
 }
