@@ -630,11 +630,27 @@ Only the marker-authenticated Recovery Snapshot payload records are copied. Each
 
 The original `.dangomushi-recovery-snapshot` completion marker is copied only after every payload record has been materialized. The completed destination is then independently passed through the full `verify_snapshot` boundary, including exact layout/path checks, per-file SHA-256, aggregate digest and nested Generic Workspace Backup verification. Its resulting summary must equal the source summary captured before destination mutation.
 
-The staged first-party source/build inputs, matching `vendor/` cache and `recovery/workspace.dgmwbk` remain inert files. This task does not restore that backup, run Cargo or other child processes, restore Secret Backup ciphertext, mutate identities, open network sockets, or alter a live Workspace.
+The staged first-party source/build inputs, matching `vendor/` cache and `recovery/workspace.dgmwbk` remain inert files. Staging itself does not restore that backup, run Cargo or other child processes, restore Secret Backup ciphertext, mutate identities, open network sockets, or alter a live Workspace.
 
 The CLI exposes `dangomushi recovery snapshot stage --snapshot <PATH> --destination <PATH>`, with optional `--source` and `--workspace` protected roots when those live roots exist.
 
-The next M6 task is frozen rebuild from staged source/vendor. Recovered application smoke verification, Workspace restore into a fresh destination, and reconstruction verification remain later separate authorities.
+The second M6 task, **Frozen rebuild from staged source/vendor**, is implemented by `src/offline_reconstruction.rs`.
+
+`offline_reconstruction::frozen_rebuild` first runs the complete Recovery Snapshot verifier against the staging root and does so before creating the rebuild destination. The staged toolchain and vendor-config files must exactly match the reviewed Rust 1.99.1 / offline-vendor baseline.
+
+The create-new rebuild destination is separate from staging and from any supplied active source/Workspace roots. Cargo's target directory is forced below this destination, so normal compilation output cannot populate the marker-authenticated staging tree.
+
+Only fixed `cargo +1.99.1 --config .cargo/vendor-config.toml build --frozen --release` invocations are permitted: one for `dangomushi`, one for `dangomushi-desktop` with the fixed desktop feature. Callers cannot provide arbitrary Cargo arguments or commands.
+
+The child Cargo environment removes inherited `CARGO_*`, rustc/rustdoc wrapper and flag overrides, and `RUSTUP_TOOLCHAIN`; it receives an isolated `CARGO_HOME` and explicit Cargo offline mode. Ambient parent Cargo config files are rejected. This narrows accidental host configuration influence but is not an operating-system sandbox.
+
+After Cargo/build-script execution completes, the entire staged Recovery Snapshot is re-verified and must equal the pre-build summary. Expected binaries are required to be real regular files, are size-bounded, hashed with SHA-256, and recorded in a completion marker written last. Incomplete destinations are removed on in-process failure.
+
+This task deliberately does not execute rebuilt binaries. Smoke verification is the next M6 boundary. It also does not restore the embedded Workspace Backup or Secret Backup, mutate live Workspace/identity state, or expose network transport.
+
+Cargo `--frozen` and the vendor source replacement prevent Cargo dependency fetching, but arbitrary build.rs/proc-macro code is executable code and is not isolated by an OS-level network sandbox here. Recovery Snapshot integrity also remains distinct from publisher authenticity.
+
+The next M6 task is recovered application smoke verification. Workspace restore into a fresh destination and reconstruction verification remain later separate authorities.
 
 Secret Backup / Restore remains an independent authenticated flow and is not auto-discovered by reconstruction. Release signing/provenance, automatic updates, mobile editor/session LAN transport, and Internet P2P remain separate future milestones. The M4 Internet P2P disable/defer decision remains unchanged.
 

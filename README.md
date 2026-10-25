@@ -52,11 +52,12 @@ The current implementation includes:
 - An M5 read-only Restore Verification gate that strictly parses recovery manifests, rejects unreviewed layout entries, re-hashes every payload, recomputes the aggregate snapshot digest, and independently validates the embedded Generic Workspace Backup before recovery input is trusted.
 - M5 portable per-OS release bundles: Windows ZIP, Linux tar.gz and macOS tar.gz/.app packages with exact manifest verification, archive SHA-256 sidecars and no bundled Workspace/secret/recovery state.
 - An M6 verified snapshot staging materialization path that requires the existing Recovery Snapshot verifier before destination creation, copies only authenticated payload records into a create-new staging root, copies the completion marker last, and re-verifies the staged root before acceptance.
+- An M6 frozen rebuild path that re-verifies staging, builds CLI/desktop only from the pinned Rust 1.99.1 + staged vendor cache with Cargo --frozen into a separate create-new target root, re-verifies staging afterward, and records rebuilt binary SHA-256 without executing them.
 - No public/global peer address support, peer discovery, firewall mutation, UPnP, NAT-PMP, reverse tunnel, relay, CDN or external web request.
 - Windows double-click build/update entry point.
 - CI builds for Windows, macOS and Linux.
 
-M3's transport-independent mobile security and handoff foundation is complete. M4 is complete with trusted-peer identity, encrypted transfer, received-file verification and fail-closed Direct LAN. M5 Offline continuity is complete through embedded documentation, reproducible Cargo dependencies, recovery snapshots, read-only Restore Verification and portable per-OS release bundles. M6 now has verified snapshot staging materialization; the next task is a frozen rebuild from staged source/vendor, while Workspace restore, Secret recovery and network authority remain out of scope.
+M3's transport-independent mobile security and handoff foundation is complete. M4 is complete with trusted-peer identity, encrypted transfer, received-file verification and fail-closed Direct LAN. M5 Offline continuity is complete through embedded documentation, reproducible Cargo dependencies, recovery snapshots, read-only Restore Verification and portable per-OS release bundles. M6 now has verified snapshot staging plus frozen rebuild from staged source/vendor; recovered application smoke verification is next, while Workspace restore, Secret recovery and network authority remain out of scope.
 
 ## Editor safety model
 
@@ -205,6 +206,18 @@ cargo run -- recovery snapshot stage \
 ~~~
 
 Staging runs the existing verifier before creating the destination, copies only authenticated snapshot records, copies the completion marker last, and verifies the staged copy again. The embedded Workspace Backup remains inert; staging does not run Cargo or restore a Workspace.
+
+To perform the frozen rebuild from that verified staging tree into a separate create-new output:
+
+~~~text
+cargo run -- recovery snapshot rebuild \
+  --staging <STAGING-PATH> \
+  --destination <REBUILD-PATH> \
+  [--source <ACTIVE-SOURCE-ROOT>] \
+  [--workspace <LIVE-WORKSPACE-ROOT>]
+~~~
+
+The rebuild uses only the fixed Rust 1.99.1 / staged vendor Cargo path with `--frozen`, places `target/` outside staging, re-verifies staging after Cargo completes, and writes SHA-256 records for the rebuilt CLI/desktop binaries. It does not execute those binaries or restore the embedded Workspace Backup.
 
 ## Portable release bundles
 

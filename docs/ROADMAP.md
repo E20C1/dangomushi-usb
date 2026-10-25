@@ -334,8 +334,18 @@ M5 Offline continuity is complete.
   - the completed staging root is independently passed through the full Recovery Snapshot verifier again; summary digest/count/bytes must equal the initial verified source
   - staged source/vendor and the embedded Generic Workspace Backup remain inert files; no Workspace restore occurs in this task
   - no Cargo/process execution, Secret Backup handling, network access, identity mutation or release-signing authority is added
-- [ ] **Frozen rebuild from staged source/vendor** — Exactly One Next Task
-- [ ] Recovered application smoke verification
+- [x] **Frozen rebuild from staged source/vendor**
+  - rebuild requires the staged tree to pass the complete Recovery Snapshot verifier before destination mutation
+  - staged rust-toolchain.toml and .cargo/vendor-config.toml must exactly match the reviewed Rust 1.99.1/offline-vendor baseline
+  - rebuild destination is create-new and remains outside staging plus any supplied live source/Workspace roots
+  - Cargo runs fixed release builds only for dangomushi and dangomushi-desktop with --frozen, staged vendor config and an external target directory
+  - Cargo environment overrides/wrappers/target-dir variables are removed; an isolated CARGO_HOME and CARGO_NET_OFFLINE=true are forced
+  - ambient parent .cargo/config or config.toml is rejected rather than merged into reconstruction
+  - staged source is fully re-verified after Cargo/build-script execution; observable source/vendor mutation fails and discards rebuild output
+  - expected rebuilt binaries are real regular files, size bounded and SHA-256 recorded in a completion marker written only after both builds succeed
+  - build output never executes the rebuilt binaries and never restores the embedded Workspace Backup
+  - Cargo/build.rs execution is not an OS sandbox; verified snapshot integrity is not publisher authenticity and malicious reviewed build inputs could still execute code or attempt direct network access
+- [ ] **Recovered application smoke verification** — Exactly One Next Task
 - [ ] Workspace restore into a fresh destination
 - [ ] Reconstruction verification
 

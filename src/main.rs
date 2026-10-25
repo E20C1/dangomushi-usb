@@ -1,4 +1,4 @@
-use dangomushi::{offline_docs, recovery_snapshot, server, workspace};
+use dangomushi::{offline_docs, offline_reconstruction, recovery_snapshot, server, workspace};
 use std::env;
 use std::path::PathBuf;
 use std::process;
@@ -29,6 +29,14 @@ struct RecoverySnapshotVerifyOptions {
 #[derive(Debug, PartialEq, Eq)]
 struct RecoverySnapshotStageOptions {
     snapshot: PathBuf,
+    destination: PathBuf,
+    source: Option<PathBuf>,
+    workspace: Option<PathBuf>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct RecoverySnapshotRebuildOptions {
+    staging: PathBuf,
     destination: PathBuf,
     source: Option<PathBuf>,
     workspace: Option<PathBuf>,
@@ -154,6 +162,37 @@ fn run_recovery(args: Vec<String>) -> Result<(), String> {
             println!(
                 "workspace_backup_bytes: {}",
                 summary.workspace_backup.total_file_bytes
+            );
+            Ok(())
+        }
+        "rebuild" => {
+            let options = parse_recovery_snapshot_rebuild_options(&args[2..])?;
+            let summary = offline_reconstruction::frozen_rebuild(
+                &options.staging,
+                &options.destination,
+                options.source.as_deref(),
+                options.workspace.as_deref(),
+            )
+            .map_err(|error| format!("frozen reconstruction rebuild failed: {error}"))?;
+
+            println!("DANGOMUSHI FROZEN REBUILD COMPLETE");
+            println!("staging: {}", options.staging.display());
+            println!("destination: {}", options.destination.display());
+            println!("source_snapshot_sha256: {}", summary.source_snapshot.sha256_hex());
+            println!("toolchain: {}", summary.toolchain);
+            println!("os: {}", summary.os);
+            println!("arch: {}", summary.arch);
+            println!(
+                "cli: {} | {} bytes | {}",
+                summary.cli.relative_path,
+                summary.cli.bytes,
+                summary.cli.sha256_hex()
+            );
+            println!(
+                "desktop: {} | {} bytes | {}",
+                summary.desktop.relative_path,
+                summary.desktop.bytes,
+                summary.desktop.sha256_hex()
             );
             Ok(())
         }
@@ -313,8 +352,65 @@ fn parse_recovery_snapshot_stage_options(
     })
 }
 
+fn parse_recovery_snapshot_rebuild_options(
+    args: &[String],
+) -> Result<RecoverySnapshotRebuildOptions, String> {
+    let mut staging = None;
+    let mut destination = None;
+    let mut source = None;
+    let mut workspace = None;
+    let mut index = 0;
+
+    while index < args.len() {
+        let flag = args[index].as_str();
+        if matches!(flag, "--help" | "-h") {
+            return Err(recovery_help_text());
+        }
+
+        index += 1;
+        let value = args
+            .get(index)
+            .ok_or_else(|| format!("{flag} requires a value\n\n{}", recovery_help_text()))?;
+
+        match flag {
+            "--staging" => staging = Some(PathBuf::from(value)),
+            "--destination" => destination = Some(PathBuf::from(value)),
+            "--source" => source = Some(PathBuf::from(value)),
+            "--workspace" => workspace = Some(PathBuf::from(value)),
+            _ => {
+                return Err(format!(
+                    "unknown recovery snapshot rebuild option: {flag}\n\n{}",
+                    recovery_help_text()
+                ))
+            }
+        }
+
+        index += 1;
+    }
+
+    let staging = staging.ok_or_else(|| {
+        format!(
+            "--staging is required for frozen reconstruction rebuild\n\n{}",
+            recovery_help_text()
+        )
+    })?;
+    let destination = destination.ok_or_else(|| {
+        format!(
+            "--destination is required for frozen reconstruction rebuild\n\n{}",
+            recovery_help_text()
+        )
+    })?;
+
+    Ok(RecoverySnapshotRebuildOptions {
+        staging,
+        destination,
+        source,
+        workspace,
+    })
+}
+
 fn recovery_help_text() -> String {
-    "Usage:\n  dangomushi recovery snapshot create --backup backups/<NAME>.dgmwbk --destination <PATH> [--source <SOURCE-ROOT>] [--workspace <WORKSPACE-ROOT>]\n  dangomushi recovery snapshot verify --snapshot <PATH>\n  dangomushi recovery snapshot stage --snapshot <PATH> --destination <PATH> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n\nDefaults for create:\n  source: .\n  workspace: ./workspace\n\nCreate requires a generated vendor/ directory and a verified Generic Workspace Backup. Verify is read-only. Stage first runs the existing verifier before creating its destination, then copies only the authenticated snapshot payload plus completion marker and verifies the staged copy again. Supply --source and/or --workspace when those live roots exist so the destination is rejected inside them. Stage does not run Cargo or restore the embedded Workspace Backup.".to_string()
+    "Usage:\n  dangomushi recovery snapshot create --backup backups/<NAME>.dgmwbk --destination <PATH> [--source <SOURCE-ROOT>] [--workspace <WORKSPACE-ROOT>]\n  dangomushi recovery snapshot verify --snapshot <PATH>\n  dangomushi recovery snapshot stage --snapshot <PATH> --destination <PATH> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n  dangomushi recovery snapshot rebuild --staging <PATH> --destination <PATH> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n\nDefaults for create:\n  source: .\n  workspace: ./workspace\n\nCreate requires a generated vendor/ directory and a verified Generic Workspace Backup. Verify is read-only. Stage verifies before materializing authenticated payload. Rebuild verifies the staged snapshot before creating a separate target directory, uses only the pinned Cargo toolchain plus staged vendor config with --frozen, and does not execute rebuilt binaries or restore Workspace data. Supply --source and/or --workspace when live roots exist so staging/rebuild outputs are rejected inside them.".to_string()
 }
 
 fn run_docs(args: Vec<String>) -> Result<(), String> {
@@ -451,6 +547,7 @@ dangomushi docs list|show|export|verify ...\n  \
 dangomushi recovery snapshot create --backup backups/<NAME>.dgmwbk --destination <PATH> [--source PATH] [--workspace PATH]\n  \
 dangomushi recovery snapshot verify --snapshot <PATH>\n  \
 dangomushi recovery snapshot stage --snapshot <PATH> --destination <PATH> [--source PATH] [--workspace PATH]\n  \
+dangomushi recovery snapshot rebuild --staging <PATH> --destination <PATH> [--source PATH] [--workspace PATH]\n  \
 dangomushi version\n\n\
 Desktop:\n  run the dangomushi-desktop binary built with --features desktop\n\n\
 Defaults:\n  port: {DEFAULT_PORT}\n  workspace: ./{DEFAULT_WORKSPACE}\n\n\
@@ -547,6 +644,38 @@ mod tests {
         assert!(parse_recovery_snapshot_stage_options(&[
             "--snapshot".into(),
             "../verified-snapshot".into(),
+        ])
+        .is_err());
+    }
+
+    #[test]
+    fn recovery_snapshot_rebuild_requires_staging_and_destination() {
+        let options = parse_recovery_snapshot_rebuild_options(&[
+            "--staging".into(),
+            "../staged-reconstruction".into(),
+            "--destination".into(),
+            "../rebuild-output".into(),
+            "--source".into(),
+            "../active-source".into(),
+            "--workspace".into(),
+            "../live-workspace".into(),
+        ])
+        .expect("parse recovery rebuild options");
+
+        assert_eq!(
+            options,
+            RecoverySnapshotRebuildOptions {
+                staging: PathBuf::from("../staged-reconstruction"),
+                destination: PathBuf::from("../rebuild-output"),
+                source: Some(PathBuf::from("../active-source")),
+                workspace: Some(PathBuf::from("../live-workspace")),
+            }
+        );
+
+        assert!(parse_recovery_snapshot_rebuild_options(&[]).is_err());
+        assert!(parse_recovery_snapshot_rebuild_options(&[
+            "--staging".into(),
+            "../staged-reconstruction".into(),
         ])
         .is_err());
     }
