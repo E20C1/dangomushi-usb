@@ -304,6 +304,56 @@ pub fn verify_snapshot(
     })
 }
 
+
+fn populate_snapshot(
+    canonical_source: &Path,
+    workspace_backup_path: &Path,
+    destination: &Path,
+    workspace_summary: WorkspaceBackupSummary,
+) -> Result<RecoverySnapshotSummary, RecoverySnapshotError> {
+    let mut builder = SnapshotBuilder::new();
+
+    for relative in SOURCE_FILES {
+        let source = canonical_source.join(relative);
+        ensure_fixed_file(&source)?;
+        let target = destination.join(relative);
+        ensure_target_parent(destination, &target)?;
+        builder.push(copy_regular_file(&source, &target, relative)?)?;
+    }
+
+    for relative in SOURCE_DIRS {
+        let source = canonical_source.join(relative);
+        if *relative == "vendor" {
+            ensure_fixed_directory(&source)
+                .map_err(|_| RecoverySnapshotError::VendorUnavailable)?;
+        } else {
+            ensure_fixed_directory(&source)?;
+        }
+
+        let target = destination.join(relative);
+        fs::create_dir_all(&target).map_err(|_| RecoverySnapshotError::Io)?;
+        copy_tree(
+            canonical_source,
+            &source,
+            destination,
+            relative,
+            &mut builder,
+        )?;
+    }
+
+    let recovery_dir = destination.join(RECOVERY_DIR);
+    fs::create_dir(&recovery_dir).map_err(|_| RecoverySnapshotError::Io)?;
+    let backup_relative = format!("{RECOVERY_DIR}/{WORKSPACE_BACKUP_NAME}");
+    let backup_target = recovery_dir.join(WORKSPACE_BACKUP_NAME);
+    builder.push(copy_regular_file(
+        workspace_backup_path,
+        &backup_target,
+        &backup_relative,
+    )?)?;
+
+    builder.finish(destination, workspace_summary)
+}
+
 pub fn stage_verified_snapshot(
     snapshot_root: &Path,
     destination: &Path,
@@ -404,55 +454,6 @@ pub fn stage_verified_snapshot(
             Err(error)
         }
     }
-}
-
-fn populate_snapshot(
-    canonical_source: &Path,
-    workspace_backup_path: &Path,
-    destination: &Path,
-    workspace_summary: WorkspaceBackupSummary,
-) -> Result<RecoverySnapshotSummary, RecoverySnapshotError> {
-    let mut builder = SnapshotBuilder::new();
-
-    for relative in SOURCE_FILES {
-        let source = canonical_source.join(relative);
-        ensure_fixed_file(&source)?;
-        let target = destination.join(relative);
-        ensure_target_parent(destination, &target)?;
-        builder.push(copy_regular_file(&source, &target, relative)?)?;
-    }
-
-    for relative in SOURCE_DIRS {
-        let source = canonical_source.join(relative);
-        if *relative == "vendor" {
-            ensure_fixed_directory(&source)
-                .map_err(|_| RecoverySnapshotError::VendorUnavailable)?;
-        } else {
-            ensure_fixed_directory(&source)?;
-        }
-
-        let target = destination.join(relative);
-        fs::create_dir_all(&target).map_err(|_| RecoverySnapshotError::Io)?;
-        copy_tree(
-            canonical_source,
-            &source,
-            destination,
-            relative,
-            &mut builder,
-        )?;
-    }
-
-    let recovery_dir = destination.join(RECOVERY_DIR);
-    fs::create_dir(&recovery_dir).map_err(|_| RecoverySnapshotError::Io)?;
-    let backup_relative = format!("{RECOVERY_DIR}/{WORKSPACE_BACKUP_NAME}");
-    let backup_target = recovery_dir.join(WORKSPACE_BACKUP_NAME);
-    builder.push(copy_regular_file(
-        workspace_backup_path,
-        &backup_target,
-        &backup_relative,
-    )?)?;
-
-    builder.finish(destination, workspace_summary)
 }
 
 fn checked_source_root(path: &Path) -> Result<PathBuf, RecoverySnapshotError> {
