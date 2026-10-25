@@ -280,7 +280,7 @@ fn cli_docs_and_roadmap_advance_exactly_to_frozen_rebuild() {
         "copied last",
         "verified again",
         "does not restore",
-        "does not run Cargo",
+        "run Cargo or another child process",
     ] {
         assert!(
             DOC.contains(required) || ARCHITECTURE.contains(required),
