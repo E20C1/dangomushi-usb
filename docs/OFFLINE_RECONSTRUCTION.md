@@ -44,7 +44,7 @@ dangomushi recovery snapshot stage \
   [--workspace <LIVE-WORKSPACE-ROOT>]
 ~~~
 
-Before any destination mutation, the source Recovery Snapshot must pass the existing read-only `verify_snapshot` boundary. Verification therefore completes before the staging path is created or otherwise mutated.
+Before any destination mutation, the source Recovery Snapshot must pass the existing read-only verify_snapshot boundary. Verification therefore completes before the staging path is created or otherwise mutated.
 
 The staging destination:
 
