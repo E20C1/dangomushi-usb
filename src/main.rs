@@ -42,6 +42,12 @@ struct RecoverySnapshotRebuildOptions {
     workspace: Option<PathBuf>,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct RecoverySnapshotSmokeOptions {
+    staging: PathBuf,
+    rebuild: PathBuf,
+}
+
 fn main() {
     if let Err(message) = run() {
         eprintln!("dangomushi: {message}");
@@ -180,6 +186,36 @@ fn run_recovery(args: Vec<String>) -> Result<(), String> {
             println!("destination: {}", options.destination.display());
             println!("source_snapshot_sha256: {}", summary.source_snapshot.sha256_hex());
             println!("toolchain: {}", summary.toolchain);
+            println!("os: {}", summary.os);
+            println!("arch: {}", summary.arch);
+            println!(
+                "cli: {} | {} bytes | {}",
+                summary.cli.relative_path,
+                summary.cli.bytes,
+                summary.cli.sha256_hex()
+            );
+            println!(
+                "desktop: {} | {} bytes | {}",
+                summary.desktop.relative_path,
+                summary.desktop.bytes,
+                summary.desktop.sha256_hex()
+            );
+            Ok(())
+        }
+        "smoke" => {
+            let options = parse_recovery_snapshot_smoke_options(&args[2..])?;
+            let summary = offline_reconstruction::smoke_verify_rebuild(
+                &options.staging,
+                &options.rebuild,
+            )
+            .map_err(|error| format!("recovered application smoke verification failed: {error}"))?;
+
+            println!("DANGOMUSHI RECOVERED APPLICATION SMOKE VERIFIED");
+            println!("staging: {}", options.staging.display());
+            println!("rebuild: {}", options.rebuild.display());
+            println!("source_snapshot_sha256: {}", summary.source_snapshot.sha256_hex());
+            println!("rebuild_runner_version: {}", summary.rebuild_runner_version);
+            println!("app_version: {}", summary.app_version);
             println!("os: {}", summary.os);
             println!("arch: {}", summary.arch);
             println!(
@@ -409,8 +445,56 @@ fn parse_recovery_snapshot_rebuild_options(
     })
 }
 
+fn parse_recovery_snapshot_smoke_options(
+    args: &[String],
+) -> Result<RecoverySnapshotSmokeOptions, String> {
+    let mut staging = None;
+    let mut rebuild = None;
+    let mut index = 0;
+
+    while index < args.len() {
+        let flag = args[index].as_str();
+        if matches!(flag, "--help" | "-h") {
+            return Err(recovery_help_text());
+        }
+
+        index += 1;
+        let value = args
+            .get(index)
+            .ok_or_else(|| format!("{flag} requires a value\n\n{}", recovery_help_text()))?;
+
+        match flag {
+            "--staging" => staging = Some(PathBuf::from(value)),
+            "--rebuild" => rebuild = Some(PathBuf::from(value)),
+            _ => {
+                return Err(format!(
+                    "unknown recovery snapshot smoke option: {flag}\n\n{}",
+                    recovery_help_text()
+                ))
+            }
+        }
+
+        index += 1;
+    }
+
+    let staging = staging.ok_or_else(|| {
+        format!(
+            "--staging is required for recovered application smoke verification\n\n{}",
+            recovery_help_text()
+        )
+    })?;
+    let rebuild = rebuild.ok_or_else(|| {
+        format!(
+            "--rebuild is required for recovered application smoke verification\n\n{}",
+            recovery_help_text()
+        )
+    })?;
+
+    Ok(RecoverySnapshotSmokeOptions { staging, rebuild })
+}
+
 fn recovery_help_text() -> String {
-    "Usage:\n  dangomushi recovery snapshot create --backup backups/<NAME>.dgmwbk --destination <PATH> [--source <SOURCE-ROOT>] [--workspace <WORKSPACE-ROOT>]\n  dangomushi recovery snapshot verify --snapshot <PATH>\n  dangomushi recovery snapshot stage --snapshot <PATH> --destination <PATH> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n  dangomushi recovery snapshot rebuild --staging <PATH> --destination <PATH> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n\nDefaults for create:\n  source: .\n  workspace: ./workspace\n\nCreate requires a generated vendor/ directory and a verified Generic Workspace Backup. Verify is read-only. Stage verifies before materializing authenticated payload. Rebuild verifies the staged snapshot before creating a separate target directory, uses only the pinned Cargo toolchain plus staged vendor config with --frozen, and does not execute rebuilt binaries or restore Workspace data. Supply --source and/or --workspace when live roots exist so staging/rebuild outputs are rejected inside them.".to_string()
+    "Usage:\n  dangomushi recovery snapshot create --backup backups/<NAME>.dgmwbk --destination <PATH> [--source <SOURCE-ROOT>] [--workspace <WORKSPACE-ROOT>]\n  dangomushi recovery snapshot verify --snapshot <PATH>\n  dangomushi recovery snapshot stage --snapshot <PATH> --destination <PATH> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n  dangomushi recovery snapshot rebuild --staging <PATH> --destination <PATH> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n  dangomushi recovery snapshot smoke --staging <PATH> --rebuild <PATH>\n\nDefaults for create:\n  source: .\n  workspace: ./workspace\n\nCreate requires a generated vendor/ directory and a verified Generic Workspace Backup. Verify is read-only. Stage verifies before materializing authenticated payload. Rebuild verifies the staged snapshot before creating a separate target directory, uses only the pinned Cargo toolchain plus staged vendor config with --frozen, and does not execute rebuilt binaries or restore Workspace data. Smoke re-verifies staging and rebuild integrity, then executes only the fixed CLI version and non-GUI desktop recovery-smoke entrypoints inside a temporary rebuild-local sandbox. Supply --source and/or --workspace when live roots exist so staging/rebuild outputs are rejected inside them.".to_string()
 }
 
 fn run_docs(args: Vec<String>) -> Result<(), String> {
@@ -548,6 +632,7 @@ dangomushi recovery snapshot create --backup backups/<NAME>.dgmwbk --destination
 dangomushi recovery snapshot verify --snapshot <PATH>\n  \
 dangomushi recovery snapshot stage --snapshot <PATH> --destination <PATH> [--source PATH] [--workspace PATH]\n  \
 dangomushi recovery snapshot rebuild --staging <PATH> --destination <PATH> [--source PATH] [--workspace PATH]\n  \
+dangomushi recovery snapshot smoke --staging <PATH> --rebuild <PATH>\n  \
 dangomushi version\n\n\
 Desktop:\n  run the dangomushi-desktop binary built with --features desktop\n\n\
 Defaults:\n  port: {DEFAULT_PORT}\n  workspace: ./{DEFAULT_WORKSPACE}\n\n\
@@ -674,6 +759,32 @@ mod tests {
 
         assert!(parse_recovery_snapshot_rebuild_options(&[]).is_err());
         assert!(parse_recovery_snapshot_rebuild_options(&[
+            "--staging".into(),
+            "../staged-reconstruction".into(),
+        ])
+        .is_err());
+    }
+
+    #[test]
+    fn recovery_snapshot_smoke_requires_staging_and_rebuild() {
+        let options = parse_recovery_snapshot_smoke_options(&[
+            "--staging".into(),
+            "../staged-reconstruction".into(),
+            "--rebuild".into(),
+            "../rebuild-output".into(),
+        ])
+        .expect("parse recovery smoke options");
+
+        assert_eq!(
+            options,
+            RecoverySnapshotSmokeOptions {
+                staging: PathBuf::from("../staged-reconstruction"),
+                rebuild: PathBuf::from("../rebuild-output"),
+            }
+        );
+
+        assert!(parse_recovery_snapshot_smoke_options(&[]).is_err());
+        assert!(parse_recovery_snapshot_smoke_options(&[
             "--staging".into(),
             "../staged-reconstruction".into(),
         ])

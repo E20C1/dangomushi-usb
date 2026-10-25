@@ -52,12 +52,13 @@ The current implementation includes:
 - An M5 read-only Restore Verification gate that strictly parses recovery manifests, rejects unreviewed layout entries, re-hashes every payload, recomputes the aggregate snapshot digest, and independently validates the embedded Generic Workspace Backup before recovery input is trusted.
 - M5 portable per-OS release bundles: Windows ZIP, Linux tar.gz and macOS tar.gz/.app packages with exact manifest verification, archive SHA-256 sidecars and no bundled Workspace/secret/recovery state.
 - An M6 verified snapshot staging materialization path that requires the existing Recovery Snapshot verifier before destination creation, copies only authenticated payload records into a create-new staging root, copies the completion marker last, and re-verifies the staged root before acceptance.
-- An M6 frozen rebuild path that re-verifies staging, builds CLI/desktop only from the pinned Rust 1.99.1 + staged vendor cache with Cargo --frozen into a separate create-new target root, re-verifies staging afterward, and records rebuilt binary SHA-256 without executing them.
+- An M6 frozen rebuild from staged source/vendor path that re-verifies staging, builds CLI/desktop only from the pinned Rust 1.99.1 + staged vendor cache with Cargo --frozen into a separate create-new target root, re-verifies staging afterward, and records rebuilt binary SHA-256 without executing them.
+- An M6 recovered-application smoke gate that re-verifies staging and rebuild SHA-256 records, executes only CLI `version` plus a non-GUI desktop recovery-smoke entrypoint in a rebuild-local temporary sandbox, then re-verifies staged source and rebuilt artifacts.
 - No public/global peer address support, peer discovery, firewall mutation, UPnP, NAT-PMP, reverse tunnel, relay, CDN or external web request.
 - Windows double-click build/update entry point.
 - CI builds for Windows, macOS and Linux.
 
-M3's transport-independent mobile security and handoff foundation is complete. M4 is complete with trusted-peer identity, encrypted transfer, received-file verification and fail-closed Direct LAN. M5 Offline continuity is complete through embedded documentation, reproducible Cargo dependencies, recovery snapshots, read-only Restore Verification and portable per-OS release bundles. M6 now has verified snapshot staging plus frozen rebuild from staged source/vendor; recovered application smoke verification is next, while Workspace restore, Secret recovery and network authority remain out of scope.
+M3's transport-independent mobile security and handoff foundation is complete. M4 is complete with trusted-peer identity, encrypted transfer, received-file verification and fail-closed Direct LAN. M5 Offline continuity is complete through embedded documentation, reproducible Cargo dependencies, recovery snapshots, read-only Restore Verification and portable per-OS release bundles. M6 now has verified snapshot staging, frozen rebuild and recovered-application smoke verification; Workspace restore into a fresh destination is next, while Secret recovery and network authority remain out of scope.
 
 ## Editor safety model
 
@@ -218,6 +219,16 @@ cargo run -- recovery snapshot rebuild \
 ~~~
 
 The rebuild uses only the fixed Rust 1.99.1 / staged vendor Cargo path with `--frozen`, places `target/` outside staging, re-verifies staging after Cargo completes, and writes SHA-256 records for the rebuilt CLI/desktop binaries. It does not execute those binaries or restore the embedded Workspace Backup.
+
+Smoke-test those rebuilt binaries without touching a live Workspace:
+
+~~~text
+cargo run -- recovery snapshot smoke \\
+  --staging <STAGING-PATH> \\
+  --rebuild <REBUILD-PATH>
+~~~
+
+Smoke verification rechecks the staged Recovery Snapshot and rebuild marker/artifact hashes, then runs only CLI `version` and the desktop binary's non-GUI `--recovery-smoke-check` entrypoint. Process state is redirected into a temporary rebuild-local sandbox and removed afterward. This executes recovered code, so it is not an OS sandbox or publisher-authenticity guarantee.
 
 ## Portable release bundles
 

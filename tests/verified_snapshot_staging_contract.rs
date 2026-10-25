@@ -291,7 +291,8 @@ fn cli_docs_and_roadmap_advance_exactly_to_frozen_rebuild() {
     assert!(README.contains("verified snapshot staging materialization"));
     assert!(ROADMAP.contains("- [x] **Verified snapshot staging materialization**"));
     assert!(ROADMAP.contains("- [x] **Frozen rebuild from staged source/vendor**"));
+    assert!(ROADMAP.contains("- [x] **Recovered application smoke verification**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Recovered application smoke verification** — Exactly One Next Task"
+        "- [ ] **Workspace restore into a fresh destination** — Exactly One Next Task"
     ));
 }

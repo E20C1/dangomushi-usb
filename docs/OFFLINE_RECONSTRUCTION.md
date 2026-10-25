@@ -6,7 +6,7 @@ M5 established that DANGOMUSHI can preserve its documentation, Rust dependency s
 
 M6 addresses the remaining recovery gap: turning an already-verified Recovery Snapshot into a fresh reconstructed environment without mutating the currently running source tree or Workspace.
 
-M6 now includes verified snapshot staging materialization and a frozen rebuild boundary. Cargo execution is authorized only through the fixed staged-source rebuild path; rebuilt application execution, Workspace restore, Secret Backup restore, and network transport remain out of scope.
+M6 now includes verified snapshot staging materialization, a frozen rebuild boundary, and recovered application smoke verification. Cargo execution is authorized only through the fixed staged-source rebuild path, and rebuilt application execution is authorized only through the fixed smoke-verification entrypoints. Workspace restore, Secret Backup restore, and network transport remain out of scope.
 
 ## Why this milestone comes next
 
@@ -121,9 +121,47 @@ The current external-prerequisite limitation also remains: Rust toolchain instal
 
 ### Recovered application smoke verification
 
-A later task will define a bounded smoke test for rebuilt CLI/desktop artifacts before they are treated as recovered application binaries.
+Recovered application smoke verification is implemented by:
 
-Smoke verification must use temporary or staging-local state rather than a live Workspace.
+~~~text
+offline_reconstruction::smoke_verify_rebuild(...)
+~~~
+
+and the CLI:
+
+~~~text
+dangomushi recovery snapshot smoke \
+  --staging <PATH> \
+  --rebuild <PATH>
+~~~
+
+The staged tree must first pass the complete Recovery Snapshot verifier again. The frozen rebuild completion marker is then read as a bounded real regular file and strictly parsed. Its source-snapshot SHA-256 must equal the newly verified staging summary; its toolchain must remain Rust 1.99.1; and its OS/architecture must match the host that is about to execute the binaries.
+
+The marker may name only the fixed release artifact paths produced by the previous task:
+
+~~~text
+target/release/dangomushi[.exe]
+target/release/dangomushi-desktop[.exe]
+~~~
+
+Both artifacts are required to be real non-symlink regular files and are re-hashed before execution. Their exact byte lengths and SHA-256 values must match the frozen rebuild marker.
+
+The staged Cargo.toml supplies the expected rebuilt application version. Smoke execution is fixed and caller arguments cannot select another command:
+
+- the CLI is executed only as `dangomushi version`,
+- the desktop binary is executed only as `dangomushi-desktop --recovery-smoke-check`.
+
+The desktop smoke flag exits before eframe/native GUI initialization. It prints one version-bound success line and opens no application window.
+
+Before process launch, a fixed create-new `.dangomushi-recovery-smoke` sandbox is created under the rebuild root. The child current directory is that sandbox. HOME, USERPROFILE, XDG config/cache/data, APPDATA/LOCALAPPDATA and temporary-directory environment variables are redirected there, while inherited DANGOMUSHI_* variables are removed. stdin is null.
+
+stdout and stderr go to create-new files inside the smoke sandbox, are bounded to 64 KiB each, and are validated against exact expected output. Each child has a 15-second timeout. Non-zero exit, timeout, stderr output or unexpected stdout fails closed. The sandbox is removed after the attempt and is never used as a Workspace.
+
+After execution, the rebuild completion marker and both artifact hashes are checked again. The complete staged Recovery Snapshot is also independently re-verified and must equal its pre-execution summary. Observable mutation of staged source/vendor, the rebuild marker or either executable therefore fails smoke verification.
+
+This task does not restore `recovery/workspace.dgmwbk`, create or merge a live Workspace, restore Secret Backup ciphertext, execute arbitrary caller-supplied commands/arguments, start the normal desktop GUI, open a LAN listener, or enable Internet P2P.
+
+Smoke verification intentionally executes recovered native code and therefore is executable-code authority. Environment redirection, fixed entrypoints and timeouts narrow expected side effects, but this is not an operating-system sandbox. A malicious but hash-consistent reconstructed binary could still attempt direct filesystem/network/system actions. Recovery Snapshot and rebuild SHA-256 values prove equality with the accepted recovery inputs, not publisher authenticity.
 
 ### Workspace restore into a fresh destination
 
@@ -165,8 +203,8 @@ Internet P2P remains disabled under the M4 threat-review decision.
 
 ## Exactly One Next Task
 
-Verified snapshot staging materialization and frozen staged rebuild are complete.
+Verified snapshot staging materialization, frozen staged rebuild, and recovered application smoke verification are complete.
 
-The next authorized implementation task is **Recovered application smoke verification**.
+The next authorized implementation task is **Workspace restore into a fresh destination**.
 
-That task may execute only the already-produced, integrity-recorded rebuilt application artifacts through a bounded temporary/staging-local smoke path. Workspace restore, Secret restore, release signing, mobile transport, and Internet P2P remain separate later authorities.
+That task may use only the embedded, already-verified Generic Workspace Backup and must preserve its existing restore boundary. Secret restore, release signing, mobile transport, and Internet P2P remain separate later authorities.

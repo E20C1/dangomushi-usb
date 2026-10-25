@@ -102,10 +102,8 @@ fn cli_exposes_only_fixed_rebuild_operation_and_roadmap_advances_once() {
     assert!(!MAIN.contains("--command"));
 
     assert!(ROADMAP.contains("- [x] **Frozen rebuild from staged source/vendor**"));
+    assert!(ROADMAP.contains("- [x] **Recovered application smoke verification**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Recovered application smoke verification** — Exactly One Next Task"
-    ));
-    assert!(!ROADMAP.contains(
         "- [ ] **Workspace restore into a fresh destination** — Exactly One Next Task"
     ));
 }
@@ -189,6 +187,14 @@ fn real_frozen_rebuild_from_verified_staging() {
         staged
     );
     assert!(!rebuild.join(".cargo-home").exists());
+
+    let smoke = offline_reconstruction::smoke_verify_rebuild(&staging, &rebuild)
+        .expect("recovered application smoke verification");
+    assert_eq!(smoke.source_snapshot, staged);
+    assert_eq!(smoke.app_version, env!("CARGO_PKG_VERSION"));
+    assert_eq!(smoke.cli, summary.cli);
+    assert_eq!(smoke.desktop, summary.desktop);
+    assert!(!rebuild.join(".dangomushi-recovery-smoke").exists());
 
     fs::remove_dir_all(parent).expect("cleanup");
 }

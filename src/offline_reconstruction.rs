@@ -15,8 +15,14 @@ pub const REBUILD_FORMAT_VERSION: u16 = 1;
 pub const PINNED_RUST_TOOLCHAIN: &str = "1.99.1";
 pub const MAX_REBUILD_BINARY_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 pub const REBUILD_TIMEOUT: Duration = Duration::from_secs(30 * 60);
+pub const SMOKE_TIMEOUT: Duration = Duration::from_secs(15);
+pub const MAX_SMOKE_OUTPUT_BYTES: u64 = 64 * 1024;
+pub const MAX_REBUILD_MARKER_BYTES: u64 = 64 * 1024;
 
 const IO_BUFFER_BYTES: usize = 64 * 1024;
+const SMOKE_SANDBOX_DIR: &str = ".dangomushi-recovery-smoke";
+const REBUILD_MARKER_MAGIC: &str = "DANGOMUSHI_FROZEN_REBUILD_V1";
+const REBUILD_MARKER_KIND: &str = "dangomushi-frozen-rebuild";
 const TOOLCHAIN_FILE: &str = "rust-toolchain.toml";
 const VENDOR_CONFIG_FILE: &str = ".cargo/vendor-config.toml";
 const EXPECTED_TOOLCHAIN: &str =
@@ -480,6 +486,518 @@ fn write_rebuild_marker(
         .map_err(|_| FrozenRebuildError::Io)?;
     file.sync_all().map_err(|_| FrozenRebuildError::Io)?;
     Ok(())
+}
+
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecoveredSmokeSummary {
+    pub source_snapshot: RecoverySnapshotSummary,
+    pub rebuild_runner_version: String,
+    pub app_version: String,
+    pub os: String,
+    pub arch: String,
+    pub cli: RebuiltArtifact,
+    pub desktop: RebuiltArtifact,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecoveredSmokeError {
+    StagingVerificationFailed,
+    UnsafeRebuildRoot,
+    RebuildMarkerMissing,
+    InvalidRebuildMarker,
+    PlatformMismatch,
+    SourceSnapshotMismatch,
+    InvalidStagedManifest,
+    ArtifactInvalid,
+    ArtifactMismatch,
+    SmokeStateExists,
+    ProcessLaunchFailed,
+    ProcessTimedOut,
+    ProcessFailed,
+    UnexpectedOutput,
+    RebuildChanged,
+    StagingChanged,
+    Io,
+}
+
+impl fmt::Display for RecoveredSmokeError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let message = match self {
+            Self::StagingVerificationFailed => {
+                "staged Recovery Snapshot failed verification before smoke execution"
+            }
+            Self::UnsafeRebuildRoot => "rebuild root is unsafe or overlaps verified staging",
+            Self::RebuildMarkerMissing => "frozen rebuild completion marker is missing",
+            Self::InvalidRebuildMarker => "frozen rebuild completion marker is invalid",
+            Self::PlatformMismatch => "rebuilt artifacts do not target the current OS/architecture",
+            Self::SourceSnapshotMismatch => {
+                "frozen rebuild marker does not match the verified staged snapshot"
+            }
+            Self::InvalidStagedManifest => "staged Cargo.toml package version is invalid",
+            Self::ArtifactInvalid => "recovered application artifact is missing or unsafe",
+            Self::ArtifactMismatch => {
+                "recovered application artifact does not match rebuild integrity metadata"
+            }
+            Self::SmokeStateExists => "recovery smoke sandbox already exists",
+            Self::ProcessLaunchFailed => "recovered application smoke process could not be launched",
+            Self::ProcessTimedOut => "recovered application smoke process timed out",
+            Self::ProcessFailed => "recovered application smoke process returned failure",
+            Self::UnexpectedOutput => "recovered application smoke output was unexpected",
+            Self::RebuildChanged => "rebuild marker or recovered artifacts changed during smoke execution",
+            Self::StagingChanged => "verified staging changed during smoke execution",
+            Self::Io => "recovered application smoke verification I/O failed",
+        };
+        formatter.write_str(message)
+    }
+}
+
+impl Error for RecoveredSmokeError {}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ParsedRebuildMarker {
+    runner_version: String,
+    source_snapshot_sha256: [u8; 32],
+    toolchain: String,
+    os: String,
+    arch: String,
+    cli: RebuiltArtifact,
+    desktop: RebuiltArtifact,
+}
+
+pub fn smoke_verify_rebuild(
+    staged_root: &Path,
+    rebuild_root: &Path,
+) -> Result<RecoveredSmokeSummary, RecoveredSmokeError> {
+    let before_staging = recovery_snapshot::verify_snapshot(staged_root)
+        .map_err(|_| RecoveredSmokeError::StagingVerificationFailed)?;
+
+    let staged_metadata =
+        fs::symlink_metadata(staged_root).map_err(|_| RecoveredSmokeError::StagingVerificationFailed)?;
+    if staged_metadata.file_type().is_symlink() || !staged_metadata.is_dir() {
+        return Err(RecoveredSmokeError::StagingVerificationFailed);
+    }
+    let canonical_staging =
+        fs::canonicalize(staged_root).map_err(|_| RecoveredSmokeError::StagingVerificationFailed)?;
+
+    let rebuild_metadata =
+        fs::symlink_metadata(rebuild_root).map_err(|_| RecoveredSmokeError::UnsafeRebuildRoot)?;
+    if rebuild_metadata.file_type().is_symlink() || !rebuild_metadata.is_dir() {
+        return Err(RecoveredSmokeError::UnsafeRebuildRoot);
+    }
+    let canonical_rebuild =
+        fs::canonicalize(rebuild_root).map_err(|_| RecoveredSmokeError::UnsafeRebuildRoot)?;
+    if canonical_rebuild.starts_with(&canonical_staging)
+        || canonical_staging.starts_with(&canonical_rebuild)
+    {
+        return Err(RecoveredSmokeError::UnsafeRebuildRoot);
+    }
+
+    let marker_path = canonical_rebuild.join(REBUILD_MARKER);
+    let marker_before = read_bounded_regular(
+        &marker_path,
+        MAX_REBUILD_MARKER_BYTES,
+        RecoveredSmokeError::RebuildMarkerMissing,
+    )?;
+    let marker = parse_rebuild_marker(&marker_before)?;
+
+    if marker.toolchain != PINNED_RUST_TOOLCHAIN
+        || marker.os != std::env::consts::OS
+        || marker.arch != std::env::consts::ARCH
+    {
+        return Err(RecoveredSmokeError::PlatformMismatch);
+    }
+    if marker.source_snapshot_sha256 != before_staging.sha256 {
+        return Err(RecoveredSmokeError::SourceSnapshotMismatch);
+    }
+
+    let expected_cli_path = format!("target/release/{}", executable_name("dangomushi"));
+    let expected_desktop_path =
+        format!("target/release/{}", executable_name("dangomushi-desktop"));
+    if marker.cli.relative_path != expected_cli_path
+        || marker.desktop.relative_path != expected_desktop_path
+    {
+        return Err(RecoveredSmokeError::InvalidRebuildMarker);
+    }
+
+    verify_recorded_artifact(&canonical_rebuild, &marker.cli)?;
+    verify_recorded_artifact(&canonical_rebuild, &marker.desktop)?;
+    let app_version = staged_package_version(&canonical_staging)?;
+
+    let sandbox = canonical_rebuild.join(SMOKE_SANDBOX_DIR);
+    match fs::symlink_metadata(&sandbox) {
+        Ok(_) => return Err(RecoveredSmokeError::SmokeStateExists),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(_) => return Err(RecoveredSmokeError::Io),
+    }
+    fs::create_dir(&sandbox).map_err(|error| {
+        if error.kind() == io::ErrorKind::AlreadyExists {
+            RecoveredSmokeError::SmokeStateExists
+        } else {
+            RecoveredSmokeError::Io
+        }
+    })?;
+
+    let smoke_result = (|| {
+        let cli_path = canonical_rebuild.join(&marker.cli.relative_path);
+        let desktop_path = canonical_rebuild.join(&marker.desktop.relative_path);
+
+        let cli_stdout = run_smoke_command(
+            &cli_path,
+            &["version"],
+            &sandbox,
+            "cli",
+        )?;
+        let expected_cli = format!("dangomushi {app_version}\n");
+        if normalize_newlines(&cli_stdout) != expected_cli {
+            return Err(RecoveredSmokeError::UnexpectedOutput);
+        }
+
+        let desktop_stdout = run_smoke_command(
+            &desktop_path,
+            &["--recovery-smoke-check"],
+            &sandbox,
+            "desktop",
+        )?;
+        let expected_desktop =
+            format!("dangomushi-desktop {app_version} recovery-smoke-ok\n");
+        if normalize_newlines(&desktop_stdout) != expected_desktop {
+            return Err(RecoveredSmokeError::UnexpectedOutput);
+        }
+
+        Ok(())
+    })();
+
+    let cleanup_result = fs::remove_dir_all(&sandbox).map_err(|_| RecoveredSmokeError::Io);
+    if let Err(error) = smoke_result {
+        let _ = cleanup_result;
+        return Err(error);
+    }
+    cleanup_result?;
+
+    let marker_after = read_bounded_regular(
+        &marker_path,
+        MAX_REBUILD_MARKER_BYTES,
+        RecoveredSmokeError::RebuildChanged,
+    )?;
+    if marker_after != marker_before {
+        return Err(RecoveredSmokeError::RebuildChanged);
+    }
+
+    verify_recorded_artifact(&canonical_rebuild, &marker.cli)
+        .map_err(|_| RecoveredSmokeError::RebuildChanged)?;
+    verify_recorded_artifact(&canonical_rebuild, &marker.desktop)
+        .map_err(|_| RecoveredSmokeError::RebuildChanged)?;
+
+    let after_staging = recovery_snapshot::verify_snapshot(&canonical_staging)
+        .map_err(|_| RecoveredSmokeError::StagingChanged)?;
+    if after_staging != before_staging {
+        return Err(RecoveredSmokeError::StagingChanged);
+    }
+
+    Ok(RecoveredSmokeSummary {
+        source_snapshot: before_staging,
+        rebuild_runner_version: marker.runner_version,
+        app_version,
+        os: marker.os,
+        arch: marker.arch,
+        cli: marker.cli,
+        desktop: marker.desktop,
+    })
+}
+
+fn parse_rebuild_marker(bytes: &[u8]) -> Result<ParsedRebuildMarker, RecoveredSmokeError> {
+    let text = std::str::from_utf8(bytes).map_err(|_| RecoveredSmokeError::InvalidRebuildMarker)?;
+    let normalized = normalize_newlines(text);
+    if !normalized.ends_with('\n') {
+        return Err(RecoveredSmokeError::InvalidRebuildMarker);
+    }
+    let lines: Vec<&str> = normalized.trim_end_matches('\n').split('\n').collect();
+    if lines.len() != 10
+        || lines[0] != REBUILD_MARKER_MAGIC
+        || lines[1] != format!("kind={REBUILD_MARKER_KIND}")
+        || lines[2] != format!("format={REBUILD_FORMAT_VERSION}")
+    {
+        return Err(RecoveredSmokeError::InvalidRebuildMarker);
+    }
+
+    let runner_version = parse_marker_string(lines[3], "runner_version=")?;
+    let source_snapshot_sha256 =
+        parse_lower_hex_32(parse_marker_value(lines[4], "source_snapshot_sha256=")?)?;
+    let toolchain = parse_marker_string(lines[5], "toolchain=")?;
+    let os = parse_marker_string(lines[6], "os=")?;
+    let arch = parse_marker_string(lines[7], "arch=")?;
+    let cli = parse_artifact_record(lines[8], "cli=")?;
+    let desktop = parse_artifact_record(lines[9], "desktop=")?;
+
+    Ok(ParsedRebuildMarker {
+        runner_version,
+        source_snapshot_sha256,
+        toolchain,
+        os,
+        arch,
+        cli,
+        desktop,
+    })
+}
+
+fn parse_marker_value<'a>(
+    line: &'a str,
+    prefix: &str,
+) -> Result<&'a str, RecoveredSmokeError> {
+    line.strip_prefix(prefix)
+        .filter(|value| !value.is_empty())
+        .ok_or(RecoveredSmokeError::InvalidRebuildMarker)
+}
+
+fn parse_marker_string(line: &str, prefix: &str) -> Result<String, RecoveredSmokeError> {
+    let value = parse_marker_value(line, prefix)?;
+    if value.len() > 128
+        || !value.is_ascii()
+        || value.bytes().any(|byte| byte.is_ascii_control() || byte == b'|')
+    {
+        return Err(RecoveredSmokeError::InvalidRebuildMarker);
+    }
+    Ok(value.to_string())
+}
+
+fn parse_artifact_record(
+    line: &str,
+    prefix: &str,
+) -> Result<RebuiltArtifact, RecoveredSmokeError> {
+    let value = parse_marker_value(line, prefix)?;
+    let mut parts = value.split('|');
+    let relative_path = parts.next().ok_or(RecoveredSmokeError::InvalidRebuildMarker)?;
+    let bytes_text = parts.next().ok_or(RecoveredSmokeError::InvalidRebuildMarker)?;
+    let sha_text = parts.next().ok_or(RecoveredSmokeError::InvalidRebuildMarker)?;
+    if parts.next().is_some()
+        || relative_path.is_empty()
+        || relative_path.len() > 512
+        || relative_path.contains('\\')
+        || relative_path.starts_with('/')
+        || relative_path.split('/').any(|part| part.is_empty() || part == "." || part == "..")
+    {
+        return Err(RecoveredSmokeError::InvalidRebuildMarker);
+    }
+
+    let bytes = bytes_text
+        .parse::<u64>()
+        .map_err(|_| RecoveredSmokeError::InvalidRebuildMarker)?;
+    if bytes == 0 || bytes > MAX_REBUILD_BINARY_BYTES {
+        return Err(RecoveredSmokeError::InvalidRebuildMarker);
+    }
+    let sha256 = parse_lower_hex_32(sha_text)?;
+
+    Ok(RebuiltArtifact {
+        relative_path: relative_path.to_string(),
+        bytes,
+        sha256,
+    })
+}
+
+fn parse_lower_hex_32(value: &str) -> Result<[u8; 32], RecoveredSmokeError> {
+    if value.len() != 64
+        || value
+            .bytes()
+            .any(|byte| !matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+    {
+        return Err(RecoveredSmokeError::InvalidRebuildMarker);
+    }
+
+    let mut output = [0_u8; 32];
+    for (index, pair) in value.as_bytes().chunks_exact(2).enumerate() {
+        let high = hex_nibble(pair[0]).ok_or(RecoveredSmokeError::InvalidRebuildMarker)?;
+        let low = hex_nibble(pair[1]).ok_or(RecoveredSmokeError::InvalidRebuildMarker)?;
+        output[index] = (high << 4) | low;
+    }
+    Ok(output)
+}
+
+fn hex_nibble(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        _ => None,
+    }
+}
+
+fn verify_recorded_artifact(
+    rebuild_root: &Path,
+    expected: &RebuiltArtifact,
+) -> Result<(), RecoveredSmokeError> {
+    let path = rebuild_root.join(&expected.relative_path);
+    let actual = hash_artifact(&path, &expected.relative_path)
+        .map_err(|_| RecoveredSmokeError::ArtifactInvalid)?;
+    if actual != *expected {
+        return Err(RecoveredSmokeError::ArtifactMismatch);
+    }
+    Ok(())
+}
+
+fn staged_package_version(staged_root: &Path) -> Result<String, RecoveredSmokeError> {
+    let path = staged_root.join("Cargo.toml");
+    let bytes = read_bounded_regular(
+        &path,
+        1024 * 1024,
+        RecoveredSmokeError::InvalidStagedManifest,
+    )?;
+    let text =
+        String::from_utf8(bytes).map_err(|_| RecoveredSmokeError::InvalidStagedManifest)?;
+    let normalized = normalize_newlines(&text);
+    let mut in_package = false;
+
+    for line in normalized.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') {
+            in_package = trimmed == "[package]";
+            continue;
+        }
+        if !in_package {
+            continue;
+        }
+        let Some(rest) = trimmed.strip_prefix("version") else {
+            continue;
+        };
+        let Some(rest) = rest.trim_start().strip_prefix('=') else {
+            continue;
+        };
+        let value = rest.trim();
+        if value.len() < 3
+            || !value.starts_with('"')
+            || !value.ends_with('"')
+        {
+            return Err(RecoveredSmokeError::InvalidStagedManifest);
+        }
+        let version = &value[1..value.len() - 1];
+        if version.is_empty()
+            || version.len() > 64
+            || !version.is_ascii()
+            || version
+                .bytes()
+                .any(|byte| !(byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'+')))
+        {
+            return Err(RecoveredSmokeError::InvalidStagedManifest);
+        }
+        return Ok(version.to_string());
+    }
+
+    Err(RecoveredSmokeError::InvalidStagedManifest)
+}
+
+fn run_smoke_command(
+    executable: &Path,
+    args: &[&str],
+    sandbox: &Path,
+    label: &str,
+) -> Result<String, RecoveredSmokeError> {
+    let stdout_path = sandbox.join(format!("{label}.stdout"));
+    let stderr_path = sandbox.join(format!("{label}.stderr"));
+    let stdout = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&stdout_path)
+        .map_err(|_| RecoveredSmokeError::Io)?;
+    let stderr = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&stderr_path)
+        .map_err(|_| RecoveredSmokeError::Io)?;
+
+    let mut command = Command::new(executable);
+    command
+        .args(args)
+        .current_dir(sandbox)
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(stdout))
+        .stderr(Stdio::from(stderr));
+
+    sanitize_smoke_environment(&mut command, sandbox);
+
+    let mut child = command
+        .spawn()
+        .map_err(|_| RecoveredSmokeError::ProcessLaunchFailed)?;
+    let started = Instant::now();
+
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) if status.success() => break,
+            Ok(Some(_)) => return Err(RecoveredSmokeError::ProcessFailed),
+            Ok(None) => {
+                if started.elapsed() >= SMOKE_TIMEOUT {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(RecoveredSmokeError::ProcessTimedOut);
+                }
+                thread::sleep(Duration::from_millis(50));
+            }
+            Err(_) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(RecoveredSmokeError::ProcessFailed);
+            }
+        }
+    }
+
+    let stdout = read_bounded_regular(
+        &stdout_path,
+        MAX_SMOKE_OUTPUT_BYTES,
+        RecoveredSmokeError::UnexpectedOutput,
+    )?;
+    let stderr = read_bounded_regular(
+        &stderr_path,
+        MAX_SMOKE_OUTPUT_BYTES,
+        RecoveredSmokeError::UnexpectedOutput,
+    )?;
+    if !stderr.is_empty() {
+        return Err(RecoveredSmokeError::UnexpectedOutput);
+    }
+
+    String::from_utf8(stdout).map_err(|_| RecoveredSmokeError::UnexpectedOutput)
+}
+
+fn sanitize_smoke_environment(command: &mut Command, sandbox: &Path) {
+    for (key, _) in std::env::vars_os() {
+        if key.to_string_lossy().starts_with("DANGOMUSHI_") {
+            command.env_remove(&key);
+        }
+    }
+
+    command
+        .env("HOME", sandbox)
+        .env("USERPROFILE", sandbox)
+        .env("XDG_CONFIG_HOME", sandbox)
+        .env("XDG_CACHE_HOME", sandbox)
+        .env("XDG_DATA_HOME", sandbox)
+        .env("APPDATA", sandbox)
+        .env("LOCALAPPDATA", sandbox)
+        .env("TMPDIR", sandbox)
+        .env("TMP", sandbox)
+        .env("TEMP", sandbox);
+}
+
+fn read_bounded_regular(
+    path: &Path,
+    limit: u64,
+    missing_error: RecoveredSmokeError,
+) -> Result<Vec<u8>, RecoveredSmokeError> {
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Err(missing_error),
+        Err(_) => return Err(RecoveredSmokeError::Io),
+    };
+    if metadata.file_type().is_symlink() || !metadata.is_file() || metadata.len() > limit {
+        return Err(missing_error);
+    }
+
+    let mut file = File::open(path).map_err(|_| RecoveredSmokeError::Io)?;
+    let mut bytes = Vec::with_capacity(metadata.len().min(limit) as usize);
+    file.take(limit + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| RecoveredSmokeError::Io)?;
+    if bytes.len() as u64 > limit || bytes.len() as u64 != metadata.len() {
+        return Err(missing_error);
+    }
+    Ok(bytes)
 }
 
 fn executable_name(base: &str) -> String {

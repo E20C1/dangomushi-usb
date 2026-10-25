@@ -48,6 +48,9 @@ jobs:
       - name: Native desktop release build
         run: cargo build --locked --release --features desktop --bin dangomushi-desktop
 
+      - name: Verify recovered smoke entrypoints
+        run: python scripts/verify-smoke-entrypoints.py
+
       - name: Build portable release bundle
         run: python scripts/build-release-bundle.py
 
@@ -133,5 +136,5 @@ jobs:
       - name: Generate locked vendor snapshot
         run: sh scripts/vendor-dependencies.sh
 
-      - name: Exercise verified staging and nested frozen rebuild
+      - name: Exercise verified staging, frozen rebuild, and recovered smoke verification
         run: cargo --config .cargo/vendor-config.toml test --frozen --test frozen_staged_rebuild_contract real_frozen_rebuild_from_verified_staging -- --ignored --exact --nocapture
