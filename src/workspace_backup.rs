@@ -1681,7 +1681,8 @@ mod tests {
         let created = create_backup(&source).expect("create");
         let backup_path = source.join(&created.relative_path);
         let mut bytes = fs::read(&backup_path).expect("read");
-        bytes[bytes.len() / 2] ^= 0x55;
+        let index = bytes.len() / 2;
+        bytes[index] ^= 0x55;
         fs::write(&backup_path, bytes).expect("tamper");
 
         let destination = source.with_extension("fresh-invalid-destination");
