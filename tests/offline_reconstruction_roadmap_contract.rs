@@ -12,6 +12,7 @@ fn m6_is_explicitly_authorized_after_m5_completion() {
     assert!(ROADMAP.contains("## M6 — Offline reconstruction"));
     assert!(ROADMAP.contains("- [x] **Verified snapshot staging materialization**"));
     assert!(ROADMAP.contains("- [x] **Frozen rebuild from staged source/vendor**"));
+    assert!(ROADMAP.contains("- [x] **Recovered application smoke verification**"));
     assert!(README.contains("## Current milestone: M6 offline reconstruction"));
 }
 
@@ -33,16 +34,17 @@ fn first_m6_task_is_staging_only_and_does_not_pull_later_authority_forward() {
 
     for later in [
         "- [x] **Frozen rebuild from staged source/vendor**",
-        "- [ ] **Recovered application smoke verification** — Exactly One Next Task",
-        "- [ ] Workspace restore into a fresh destination",
+        "- [x] **Recovered application smoke verification**",
+        "- [ ] **Workspace restore into a fresh destination** — Exactly One Next Task",
         "- [ ] Reconstruction verification",
     ] {
         assert!(ROADMAP.contains(later), "missing later M6 task: {later}");
     }
 
     assert!(ROADMAP.contains("- [x] **Frozen rebuild from staged source/vendor**"));
+    assert!(ROADMAP.contains("- [x] **Recovered application smoke verification**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Recovered application smoke verification** — Exactly One Next Task"
+        "- [ ] **Workspace restore into a fresh destination** — Exactly One Next Task"
     ));
 }
 
