@@ -111,7 +111,9 @@ After both Cargo invocations complete, the entire staged Recovery Snapshot is ve
 
 The expected CLI and desktop release artifacts must be real non-symlink regular files and are bounded to 2 GiB each. Their exact byte length and SHA-256 are recorded in a final `.dangomushi-frozen-rebuild` marker written only after both builds and post-build staging verification succeed. The temporary isolated Cargo home is removed before completion.
 
-The rebuild does not execute either rebuilt application. **Recovered application smoke verification** remains the next separate task. It also does not restore `recovery/workspace.dgmwbk`, inspect Secret Backup data, mutate an existing Workspace, alter identity/trust state, or enable LAN/Internet transport.
+The rebuild output remains outside the verified staging tree, and the implementation re-verifies the staged Recovery Snapshot after Cargo/build.rs execution. The rebuild does not execute either rebuilt application. **Recovered application smoke verification** remains the next separate task. It also does not restore `recovery/workspace.dgmwbk`, inspect Secret Backup data, mutate an existing Workspace, alter identity/trust state, or enable LAN/Internet transport.
+
+This boundary does not provide an OS-level network sandbox. Cargo/build.rs execution is executable-code authority; `--frozen`, the staged vendor config and `CARGO_NET_OFFLINE=true` constrain Cargo dependency fetching, but arbitrary build scripts or proc-macros could still attempt direct network access through the operating system.
 
 Cargo/build.rs execution is executable-code authority. `--frozen`, the staged vendor config and `CARGO_NET_OFFLINE=true` prevent Cargo dependency resolution from falling back to registries, but this boundary does not provide an OS-level network sandbox for arbitrary build scripts or proc-macros. A malicious source/vendor snapshot could contain executable build logic. Recovery Snapshot SHA-256 proves equality with the accepted snapshot, not publisher authenticity.
 
