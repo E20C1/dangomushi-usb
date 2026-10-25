@@ -205,5 +205,30 @@ fn real_frozen_rebuild_from_verified_staging() {
     assert_eq!(smoke.desktop, summary.desktop);
     assert!(!rebuild.join(".dangomushi-recovery-smoke").exists());
 
+    let restored_workspace = parent.join("restored-workspace");
+    let restored = offline_reconstruction::restore_workspace_into_fresh_destination(
+        &staging,
+        &rebuild,
+        &restored_workspace,
+        Some(&source),
+        Some(&workspace_root),
+    )
+    .expect("fresh Workspace reconstruction restore");
+    assert_eq!(restored.source_snapshot, staged);
+    assert_eq!(restored.workspace_backup, staged.workspace_backup);
+    assert!(workspace::doctor(&restored_workspace).ok());
+    assert_eq!(
+        fs::read_to_string(restored_workspace.join("data/documents/rebuild-proof.txt"))
+            .expect("restored proof"),
+        "offline reconstruction proof"
+    );
+    assert!(!restored_workspace.join("state/session.v1").exists());
+    assert_eq!(
+        fs::read_dir(restored_workspace.join("backups"))
+            .expect("restored backups")
+            .count(),
+        0
+    );
+
     fs::remove_dir_all(parent).expect("cleanup");
 }
