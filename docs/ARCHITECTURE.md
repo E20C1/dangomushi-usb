@@ -592,6 +592,30 @@ Snapshot hashes remain integrity identification rather than publisher authentici
 
 The next M5 boundary is Portable release bundles per operating system.
 
+## Portable release bundles
+
+M5 portable release packaging is build infrastructure implemented by `scripts/build-release-bundle.py`, `scripts/verify-release-bundle.py`, the portable Workspace resolver, and CI.
+
+A bundle contains already-built application binaries only. Windows packages `app/Dangomushi.exe` plus `app/dangomushi-cli.exe` in ZIP. Linux packages `app/Dangomushi` plus `app/dangomushi-cli` in tar.gz. macOS packages an unsigned `app/Dangomushi.app` with its executable under `Contents/MacOS`, plus the CLI, in tar.gz. Unix tar archives preserve executable mode bits.
+
+Every archive has exactly one root named `dangomushi-<version>-<os>-<arch>`. Beside the runtime payload it contains only `START_HERE.txt` and canonical `RELEASE-MANIFEST.json`. The manifest binds kind/format, application version, OS, architecture, bundle identity, portable Workspace layout and sorted per-file byte-length/SHA-256/executable records.
+
+The archive verifier reads members directly without extracting them. It rejects unsafe or duplicate paths, non-regular entries, over-limit payloads, noncanonical manifests, missing/unexpected files, digest/size mismatches and missing executable permission metadata. Workspace, vendor, recovery, source-control, target and build paths are explicitly forbidden payload prefixes.
+
+A `.sha256` sidecar covers the complete archive and is checked before the internal manifest. These hashes are integrity identifiers, not publisher authentication.
+
+The release layout preserves the existing separation between replaceable `app/` and durable `workspace/`. Windows/Linux binaries already resolve a sibling Workspace when launched below `app/`. The resolver additionally recognizes the reviewed `app/Dangomushi.app/Contents/MacOS/Dangomushi` path and maps it to that same bundle-root `workspace/`. The archive does not pre-create or populate user data.
+
+Normal three-platform CI builds and verifies one native portable archive after core/desktop release builds. Pull-request and feature-branch runs verify packaging but do not publish it. A main-branch push uploads the verified archive plus checksum sidecar as direct workflow artifacts.
+
+Release packaging never copies live Workspace data, Generic/Secret Backup artifacts, Recovery Snapshots, vendor/, source trees, Cargo caches or identity state. It does not create GitHub Releases, publish tags, restore snapshots or add update/network authority.
+
+Packaging metadata is normalized to avoid current wall-clock timestamps, improving archive repeatability for identical binary inputs. This is separate from compiled-binary reproducibility: M5 still does not claim deterministic or bit-for-bit identical binaries across rebuilds.
+
+Current Windows binaries are not Authenticode-signed. The macOS .app is not code-signed or notarized and may trigger Gatekeeper. Linux remains subject to the native runtime/system-library expectations of its build target. A checksum-valid artifact therefore must not be represented as signed publisher provenance or a universally self-contained OS image.
+
+M5 Offline continuity is complete. No new implementation milestone is inferred automatically from completion; future work requires an explicit roadmap boundary.
+
 
 ## Dependency policy
 
