@@ -10,8 +10,9 @@ const RECOVERY: &str = include_str!("../src/recovery_snapshot.rs");
 fn m6_is_explicitly_authorized_after_m5_completion() {
     assert!(ROADMAP.contains("M5 Offline continuity is complete"));
     assert!(ROADMAP.contains("## M6 — Offline reconstruction"));
+    assert!(ROADMAP.contains("- [x] **Verified snapshot staging materialization**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Verified snapshot staging materialization** — Exactly One Next Task"
+        "- [ ] **Frozen rebuild from staged source/vendor** — Exactly One Next Task"
     ));
     assert!(README.contains("## Current milestone: M6 offline reconstruction"));
 }
@@ -41,25 +42,34 @@ fn first_m6_task_is_staging_only_and_does_not_pull_later_authority_forward() {
         assert!(ROADMAP.contains(later), "missing later M6 task: {later}");
     }
 
-    assert!(!ROADMAP.contains(
+    assert!(ROADMAP.contains(
         "- [ ] **Frozen rebuild from staged source/vendor** — Exactly One Next Task"
+    ));
+    assert!(!ROADMAP.contains(
+        "- [ ] **Recovered application smoke verification** — Exactly One Next Task"
     ));
 }
 
 #[test]
-fn boundary_task_adds_no_reconstruction_runtime_authority() {
-    for forbidden in [
-        r#""stage" =>"#,
-        r#""materialize" =>"#,
-        "recovery snapshot stage",
-        "recovery snapshot materialize",
-    ] {
-        assert!(!MAIN.contains(forbidden), "unexpected CLI authority: {forbidden}");
-    }
+fn staging_runtime_authority_is_present_but_later_reconstruction_authority_is_not() {
+    assert!(MAIN.contains(r#""stage" =>"#));
+    assert!(MAIN.contains("recovery snapshot stage --snapshot <PATH> --destination <PATH>"));
+    assert!(RECOVERY.contains("pub fn stage_verified_snapshot"));
+    assert!(RECOVERY.contains("verify_snapshot(snapshot_root)?"));
+    assert!(RECOVERY.contains("verify_snapshot(&destination_path)?"));
 
     assert!(!LIB.contains("pub mod offline_reconstruction"));
-    assert!(!RECOVERY.contains("materialize_verified_snapshot"));
-    assert!(!RECOVERY.contains("stage_verified_snapshot"));
+    for forbidden in [
+        r#""rebuild" =>"#,
+        "Command::new",
+        "workspace_backup::restore_backup",
+        "secret_backup::restore",
+    ] {
+        assert!(
+            !MAIN.contains(forbidden) && !RECOVERY.contains(forbidden),
+            "later reconstruction authority appeared early: {forbidden}"
+        );
+    }
 }
 
 #[test]
