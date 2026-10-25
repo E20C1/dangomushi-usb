@@ -276,7 +276,7 @@ fn cli_docs_and_roadmap_advance_exactly_to_frozen_rebuild() {
 
     for required in [
         "existing read-only verify_snapshot",
-        "before creating the destination",
+        "Before any destination mutation",
         "copied last",
         "verified again",
         "does not restore",
