@@ -56,7 +56,7 @@ The staging destination:
 - must remain outside any supplied active source tree,
 - is resolved through its canonical parent before containment checks.
 
-`--source` and `--workspace` are optional because a clean reconstruction machine may have neither live root. When such roots do exist, callers should supply them so staging cannot be placed inside them.
+`--source` and `--workspace` are optional because a clean reconstruction machine may have neither live root. When such roots do exist, callers should supply them so staging cannot be placed inside them. In this boundary, the destination must remain outside any configured live Workspace, where a configured Workspace means the live root supplied through `--workspace` (or the equivalent library argument).
 
 After initial verification, the authenticated snapshot marker is read again and staging remains bound to the initially verified file count, total bytes and aggregate SHA-256. Only marker records already accepted by the Recovery Snapshot allowlist are materialized.
 
