@@ -38,6 +38,7 @@ const DOCUMENTS: &[OfflineDocument] = &[
     OfflineDocument { path: "docs/OFFLINE_DOCUMENTATION_PACKS.md", content: include_str!("../docs/OFFLINE_DOCUMENTATION_PACKS.md") },
     OfflineDocument { path: "docs/PASSWORD_GENERATOR_CORE.md", content: include_str!("../docs/PASSWORD_GENERATOR_CORE.md") },
     OfflineDocument { path: "docs/PERMISSION_SCOPES.md", content: include_str!("../docs/PERMISSION_SCOPES.md") },
+    OfflineDocument { path: "docs/PORTABLE_RELEASE_BUNDLES.md", content: include_str!("../docs/PORTABLE_RELEASE_BUNDLES.md") },
     OfflineDocument { path: "docs/PUBLIC_NETWORK_SAFE_DEFAULT.md", content: include_str!("../docs/PUBLIC_NETWORK_SAFE_DEFAULT.md") },
     OfflineDocument { path: "docs/RECEIVED_FILE_INTEGRITY.md", content: include_str!("../docs/RECEIVED_FILE_INTEGRITY.md") },
     OfflineDocument { path: "docs/REPRODUCIBLE_DEPENDENCY_CACHE.md", content: include_str!("../docs/REPRODUCIBLE_DEPENDENCY_CACHE.md") },
