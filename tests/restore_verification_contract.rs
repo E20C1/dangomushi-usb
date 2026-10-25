@@ -359,9 +359,7 @@ fn cli_docs_and_roadmap_expose_verify_only_and_advance_once() {
 
     assert!(README.contains("read-only Restore Verification gate"));
     assert!(ROADMAP.contains("- [x] **Restore verification**"));
-    assert!(ROADMAP.contains(
-        "- [ ] **Portable release bundles per operating system** — Exactly One Next Task"
-    ));
+    assert!(ROADMAP.contains("- [x] **Portable release bundles per operating system**"));
 }
 
 fn collect_file_contents(root: &Path) -> Vec<(String, Vec<u8>)> {
