@@ -125,7 +125,7 @@ fn documentation_states_process_execution_and_sandbox_limitations() {
             "missing rebuild limitation documentation: {required}"
         );
     }
-    assert!(README.contains("frozen rebuild from verified staging"));
+    assert!(README.contains("frozen rebuild from staged source/vendor"));
 }
 
 #[test]
