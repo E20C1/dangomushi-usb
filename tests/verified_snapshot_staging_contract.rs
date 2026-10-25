@@ -226,7 +226,7 @@ fn staging_runtime_reuses_verifier_and_adds_no_rebuild_restore_network_or_secret
         .find("pub fn stage_verified_snapshot")
         .expect("stage entry point");
     let end = CORE[start..]
-        .find("\nfn populate_snapshot")
+        .find("\nfn checked_source_root")
         .map(|offset| start + offset)
         .expect("stage entry end");
     let stage = &CORE[start..end];
