@@ -4,7 +4,7 @@ DANGOMUSHI is a portable, local-first workspace intended to keep essential tools
 
 Repository: dangomushi-usb
 
-## Current milestone: M5 offline continuity
+## Current milestone: M6 offline reconstruction
 
 The current implementation includes:
 
@@ -51,11 +51,12 @@ The current implementation includes:
 - An M5 recovery snapshot creator that packages reviewed source/build inputs, vendor/ and one verified Generic Workspace Backup into a create-new integrity-manifested offline directory without copying live Workspace/secret state.
 - An M5 read-only Restore Verification gate that strictly parses recovery manifests, rejects unreviewed layout entries, re-hashes every payload, recomputes the aggregate snapshot digest, and independently validates the embedded Generic Workspace Backup before recovery input is trusted.
 - M5 portable per-OS release bundles: Windows ZIP, Linux tar.gz and macOS tar.gz/.app packages with exact manifest verification, archive SHA-256 sidecars and no bundled Workspace/secret/recovery state.
+- An M6 offline-reconstruction roadmap boundary whose first task will materialize an already-verified Recovery Snapshot into a fresh staging root before any rebuild or Workspace restore authority is introduced.
 - No public/global peer address support, peer discovery, firewall mutation, UPnP, NAT-PMP, reverse tunnel, relay, CDN or external web request.
 - Windows double-click build/update entry point.
 - CI builds for Windows, macOS and Linux.
 
-M3's transport-independent mobile security and handoff foundation is complete. M4 is complete with trusted-peer identity, encrypted transfer, received-file verification and fail-closed Direct LAN. M5 Offline continuity is complete through embedded documentation, reproducible Cargo dependencies, recovery snapshots, read-only Restore Verification and portable per-OS release bundles. No post-M5 implementation task is currently authorized by the roadmap.
+M3's transport-independent mobile security and handoff foundation is complete. M4 is complete with trusted-peer identity, encrypted transfer, received-file verification and fail-closed Direct LAN. M5 Offline continuity is complete through embedded documentation, reproducible Cargo dependencies, recovery snapshots, read-only Restore Verification and portable per-OS release bundles. M6 is now explicitly scoped to offline reconstruction from a verified Recovery Snapshot; the next task is verified snapshot staging materialization, with no restore, Cargo execution, Secret recovery or network authority yet.
 
 ## Editor safety model
 

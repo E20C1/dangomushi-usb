@@ -500,7 +500,7 @@ dependencies = [
 
 [[package]]
 name = "dangomushi"
-version = "0.5.30"
+version = "0.5.31"
 dependencies = [
  "arboard",
  "argon2",

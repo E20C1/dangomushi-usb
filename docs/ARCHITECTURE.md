@@ -614,7 +614,23 @@ Packaging metadata is normalized to avoid current wall-clock timestamps, improvi
 
 Current Windows binaries are not Authenticode-signed. The macOS .app is not code-signed or notarized and may trigger Gatekeeper. Linux remains subject to the native runtime/system-library expectations of its build target. A checksum-valid artifact therefore must not be represented as signed publisher provenance or a universally self-contained OS image.
 
-M5 Offline continuity is complete. No new implementation milestone is inferred automatically from completion; future work requires an explicit roadmap boundary.
+M5 Offline continuity is complete.
+
+## M6 offline reconstruction boundary
+
+M6 is explicitly scoped to reconstruction from an already-verified Recovery Snapshot.
+
+The first authorized implementation task is **Verified snapshot staging materialization**. It must invoke the existing read-only Recovery Snapshot verifier before creating a destination and may only materialize payload paths already authorized by the snapshot format.
+
+The staging destination must be explicit and create-new, have a real non-symlink parent, and remain outside the source Recovery Snapshot, any configured live Workspace, and the active source tree when that root is separately supplied. Path aliasing or containment ambiguity must fail closed.
+
+This first task may materialize reviewed first-party source/build inputs, the matching vendor/ cache, and the verified recovery/workspace.dgmwbk as an inert file. It does not restore that backup, run Cargo or other child processes, restore Secret Backup ciphertext, mutate identities, open network sockets, or alter a live Workspace.
+
+Later M6 tasks are ordered separately: frozen rebuild from staged source/vendor, recovered application smoke verification, Workspace restore into a fresh destination, then reconstruction verification. Later authority must not be pulled into the staging task.
+
+Secret Backup / Restore remains an independent authenticated flow and is not auto-discovered by reconstruction. Release signing/provenance, automatic updates, mobile editor/session LAN transport, and Internet P2P remain separate future milestones. The M4 Internet P2P disable/defer decision remains unchanged.
+
+The detailed boundary is documented in docs/OFFLINE_RECONSTRUCTION.md.
 
 
 ## Dependency policy
