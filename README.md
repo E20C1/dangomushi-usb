@@ -50,11 +50,12 @@ The current implementation includes:
 - An M5 reproducible Cargo dependency-cache strategy with committed Cargo.lock, Rust 1.99.1 pinning, locked normal builds, generated versioned vendor snapshots, explicit offline source replacement, and frozen vendor CI verification.
 - An M5 recovery snapshot creator that packages reviewed source/build inputs, vendor/ and one verified Generic Workspace Backup into a create-new integrity-manifested offline directory without copying live Workspace/secret state.
 - An M5 read-only Restore Verification gate that strictly parses recovery manifests, rejects unreviewed layout entries, re-hashes every payload, recomputes the aggregate snapshot digest, and independently validates the embedded Generic Workspace Backup before recovery input is trusted.
+- M5 portable per-OS release bundles: Windows ZIP, Linux tar.gz and macOS tar.gz/.app packages with exact manifest verification, archive SHA-256 sidecars and no bundled Workspace/secret/recovery state.
 - No public/global peer address support, peer discovery, firewall mutation, UPnP, NAT-PMP, reverse tunnel, relay, CDN or external web request.
 - Windows double-click build/update entry point.
 - CI builds for Windows, macOS and Linux.
 
-M3's transport-independent mobile security and handoff foundation is complete. M4 is complete with trusted-peer identity, encrypted transfer, received-file verification and fail-closed Direct LAN. M5 Offline continuity now includes embedded documentation, reproducible Cargo dependencies, recovery snapshots and read-only Restore Verification; portable per-OS release bundles are the next task.
+M3's transport-independent mobile security and handoff foundation is complete. M4 is complete with trusted-peer identity, encrypted transfer, received-file verification and fail-closed Direct LAN. M5 Offline continuity is complete through embedded documentation, reproducible Cargo dependencies, recovery snapshots, read-only Restore Verification and portable per-OS release bundles. No post-M5 implementation task is currently authorized by the roadmap.
 
 ## Editor safety model
 
@@ -191,6 +192,19 @@ cargo run -- recovery snapshot verify --snapshot <PATH>
 ~~~
 
 Verification is read-only: it validates the strict marker and reviewed layout, re-hashes every payload and the aggregate digest, and independently verifies the embedded Generic Workspace Backup. It does not restore or extract the snapshot.
+
+## Portable release bundles
+
+After the release binaries exist, create and verify the current operating-system bundle with:
+
+~~~text
+python scripts/build-release-bundle.py
+python scripts/verify-release-bundle.py --directory dist
+~~~
+
+The resulting archive contains only the portable `app/` runtime, `START_HERE.txt` and `RELEASE-MANIFEST.json`, plus an external `.sha256` sidecar. Workspace data, backups, recovery snapshots, vendor/source trees and secret/identity state are excluded.
+
+Windows uses ZIP. Linux and macOS use tar.gz to preserve executable modes; macOS wraps the desktop binary in `Dangomushi.app`. Current binaries are not Authenticode-signed, code-signed or notarized, so operating-system trust prompts may appear. SHA-256 verifies file equality rather than publisher identity.
 
 ## Repository layout
 
