@@ -1,4 +1,5 @@
 use crate::recovery_snapshot::{self, RecoverySnapshotSummary};
+use crate::workspace_backup::{self, WorkspaceBackupSummary};
 use sha2::{Digest, Sha256};
 use std::error::Error;
 use std::ffi::OsStr;
@@ -704,6 +705,197 @@ pub fn smoke_verify_rebuild(
         cli: marker.cli,
         desktop: marker.desktop,
     })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FreshWorkspaceRestoreSummary {
+    pub source_snapshot: RecoverySnapshotSummary,
+    pub app_version: String,
+    pub workspace_backup: WorkspaceBackupSummary,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FreshWorkspaceRestoreError {
+    StagingUnavailable,
+    RebuildUnavailable,
+    SmokeVerificationFailed,
+    WorkspaceBackupUnavailable,
+    WorkspaceBackupMismatch,
+    DestinationExists,
+    DestinationInsideProtectedRoot,
+    UnsafeDestinationParent,
+    RestoreFailed,
+    StagingChanged,
+    Io,
+}
+
+impl fmt::Display for FreshWorkspaceRestoreError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let message = match self {
+            Self::StagingUnavailable => "verified reconstruction staging root is unavailable",
+            Self::RebuildUnavailable => "verified reconstruction rebuild root is unavailable",
+            Self::SmokeVerificationFailed => {
+                "recovered application smoke verification failed before Workspace restore"
+            }
+            Self::WorkspaceBackupUnavailable => {
+                "staged Generic Workspace Backup is unavailable or invalid"
+            }
+            Self::WorkspaceBackupMismatch => {
+                "staged Generic Workspace Backup does not match the verified Recovery Snapshot"
+            }
+            Self::DestinationExists => "fresh Workspace restore destination already exists",
+            Self::DestinationInsideProtectedRoot => {
+                "fresh Workspace restore destination overlaps a protected reconstruction/live root"
+            }
+            Self::UnsafeDestinationParent => "fresh Workspace restore destination parent is unsafe",
+            Self::RestoreFailed => "fresh Workspace restore failed",
+            Self::StagingChanged => "verified reconstruction staging changed during Workspace restore",
+            Self::Io => "fresh Workspace restore I/O failed",
+        };
+        formatter.write_str(message)
+    }
+}
+
+impl Error for FreshWorkspaceRestoreError {}
+
+pub fn restore_workspace_into_fresh_destination(
+    staged_root: &Path,
+    rebuild_root: &Path,
+    destination: &Path,
+    protected_source_root: Option<&Path>,
+    protected_workspace_root: Option<&Path>,
+) -> Result<FreshWorkspaceRestoreSummary, FreshWorkspaceRestoreError> {
+    let canonical_staging =
+        checked_restore_root(staged_root, FreshWorkspaceRestoreError::StagingUnavailable)?;
+    let canonical_rebuild =
+        checked_restore_root(rebuild_root, FreshWorkspaceRestoreError::RebuildUnavailable)?;
+    if canonical_rebuild.starts_with(&canonical_staging)
+        || canonical_staging.starts_with(&canonical_rebuild)
+    {
+        return Err(FreshWorkspaceRestoreError::DestinationInsideProtectedRoot);
+    }
+
+    let protected_source = checked_optional_restore_root(protected_source_root)?;
+    let protected_workspace = checked_optional_restore_root(protected_workspace_root)?;
+    let mut protected = vec![canonical_staging.as_path(), canonical_rebuild.as_path()];
+    if let Some(path) = protected_source.as_deref() {
+        protected.push(path);
+    }
+    if let Some(path) = protected_workspace.as_deref() {
+        protected.push(path);
+    }
+
+    // Destination safety is checked before smoke execution, but no destination
+    // path is created or mutated until the complete smoke gate has succeeded.
+    let destination_path = checked_fresh_restore_destination(destination, &protected)?;
+
+    let smoke = smoke_verify_rebuild(&canonical_staging, &canonical_rebuild)
+        .map_err(|_| FreshWorkspaceRestoreError::SmokeVerificationFailed)?;
+
+    let backup_path = canonical_staging.join("recovery").join("workspace.dgmwbk");
+    let backup_before = workspace_backup::verify_backup_file(&backup_path)
+        .map_err(|_| FreshWorkspaceRestoreError::WorkspaceBackupUnavailable)?;
+    if backup_before != smoke.source_snapshot.workspace_backup {
+        return Err(FreshWorkspaceRestoreError::WorkspaceBackupMismatch);
+    }
+
+    let restored = workspace_backup::restore_backup_file_into_fresh_workspace(
+        &backup_path,
+        &destination_path,
+    )
+    .map_err(|_| FreshWorkspaceRestoreError::RestoreFailed)?;
+
+    if restored != backup_before {
+        let _ = fs::remove_dir_all(&destination_path);
+        return Err(FreshWorkspaceRestoreError::WorkspaceBackupMismatch);
+    }
+
+    let after_staging = recovery_snapshot::verify_snapshot(&canonical_staging)
+        .map_err(|_| FreshWorkspaceRestoreError::StagingChanged)?;
+    let backup_after = workspace_backup::verify_backup_file(&backup_path)
+        .map_err(|_| FreshWorkspaceRestoreError::StagingChanged)?;
+    if after_staging != smoke.source_snapshot || backup_after != backup_before {
+        let _ = fs::remove_dir_all(&destination_path);
+        return Err(FreshWorkspaceRestoreError::StagingChanged);
+    }
+
+    Ok(FreshWorkspaceRestoreSummary {
+        source_snapshot: smoke.source_snapshot,
+        app_version: smoke.app_version,
+        workspace_backup: restored,
+    })
+}
+
+fn checked_restore_root(
+    path: &Path,
+    error: FreshWorkspaceRestoreError,
+) -> Result<PathBuf, FreshWorkspaceRestoreError> {
+    let metadata = fs::symlink_metadata(path).map_err(|_| error)?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(error);
+    }
+    fs::canonicalize(path).map_err(|_| error)
+}
+
+fn checked_optional_restore_root(
+    path: Option<&Path>,
+) -> Result<Option<PathBuf>, FreshWorkspaceRestoreError> {
+    let Some(path) = path else {
+        return Ok(None);
+    };
+    let metadata =
+        fs::symlink_metadata(path).map_err(|_| FreshWorkspaceRestoreError::UnsafeDestinationParent)?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(FreshWorkspaceRestoreError::UnsafeDestinationParent);
+    }
+    fs::canonicalize(path)
+        .map(Some)
+        .map_err(|_| FreshWorkspaceRestoreError::UnsafeDestinationParent)
+}
+
+fn checked_fresh_restore_destination(
+    destination: &Path,
+    protected_roots: &[&Path],
+) -> Result<PathBuf, FreshWorkspaceRestoreError> {
+    if destination.as_os_str().is_empty() {
+        return Err(FreshWorkspaceRestoreError::UnsafeDestinationParent);
+    }
+
+    match fs::symlink_metadata(destination) {
+        Ok(_) => return Err(FreshWorkspaceRestoreError::DestinationExists),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(_) => return Err(FreshWorkspaceRestoreError::Io),
+    }
+
+    let name = destination
+        .file_name()
+        .ok_or(FreshWorkspaceRestoreError::UnsafeDestinationParent)?;
+    if name == OsStr::new(".") || name == OsStr::new("..") {
+        return Err(FreshWorkspaceRestoreError::UnsafeDestinationParent);
+    }
+
+    let parent = match destination.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent,
+        _ => Path::new("."),
+    };
+    let metadata = fs::symlink_metadata(parent)
+        .map_err(|_| FreshWorkspaceRestoreError::UnsafeDestinationParent)?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(FreshWorkspaceRestoreError::UnsafeDestinationParent);
+    }
+
+    let canonical_parent = fs::canonicalize(parent)
+        .map_err(|_| FreshWorkspaceRestoreError::UnsafeDestinationParent)?;
+    let final_path = canonical_parent.join(name);
+
+    if protected_roots
+        .iter()
+        .any(|root| final_path.starts_with(root) || root.starts_with(&final_path))
+    {
+        return Err(FreshWorkspaceRestoreError::DestinationInsideProtectedRoot);
+    }
+
+    Ok(final_path)
 }
 
 fn parse_rebuild_marker(bytes: &[u8]) -> Result<ParsedRebuildMarker, RecoveredSmokeError> {
