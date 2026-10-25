@@ -36,6 +36,7 @@ const DOCUMENTS: &[OfflineDocument] = &[
     OfflineDocument { path: "docs/LAN_ENABLE_CONTROL.md", content: include_str!("../docs/LAN_ENABLE_CONTROL.md") },
     OfflineDocument { path: "docs/MOBILE_EDITOR_SESSION_HANDOFF.md", content: include_str!("../docs/MOBILE_EDITOR_SESSION_HANDOFF.md") },
     OfflineDocument { path: "docs/OFFLINE_DOCUMENTATION_PACKS.md", content: include_str!("../docs/OFFLINE_DOCUMENTATION_PACKS.md") },
+    OfflineDocument { path: "docs/OFFLINE_RECONSTRUCTION.md", content: include_str!("../docs/OFFLINE_RECONSTRUCTION.md") },
     OfflineDocument { path: "docs/PASSWORD_GENERATOR_CORE.md", content: include_str!("../docs/PASSWORD_GENERATOR_CORE.md") },
     OfflineDocument { path: "docs/PERMISSION_SCOPES.md", content: include_str!("../docs/PERMISSION_SCOPES.md") },
     OfflineDocument { path: "docs/PORTABLE_RELEASE_BUNDLES.md", content: include_str!("../docs/PORTABLE_RELEASE_BUNDLES.md") },
