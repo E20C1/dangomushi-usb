@@ -114,7 +114,7 @@ fn cli_exposes_only_fixed_rebuild_operation_and_roadmap_advances_once() {
 fn documentation_states_process_execution_and_sandbox_limitations() {
     for required in [
         "Cargo/build.rs execution",
-        "does not execute the rebuilt application",
+        "does not execute either rebuilt application",
         "outside the verified staging tree",
         "re-verifies the staged Recovery Snapshot after Cargo",
         "does not provide an OS-level network sandbox",
