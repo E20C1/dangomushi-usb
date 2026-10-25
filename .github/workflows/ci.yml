@@ -136,5 +136,5 @@ jobs:
       - name: Generate locked vendor snapshot
         run: sh scripts/vendor-dependencies.sh
 
-      - name: Exercise verified staging, frozen rebuild, and recovered smoke verification
+      - name: Exercise verified staging, frozen rebuild, smoke, and fresh Workspace restore
         run: cargo --config .cargo/vendor-config.toml test --frozen --test frozen_staged_rebuild_contract real_frozen_rebuild_from_verified_staging -- --ignored --exact --nocapture
