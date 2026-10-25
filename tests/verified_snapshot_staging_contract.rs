@@ -272,7 +272,7 @@ fn cli_docs_and_roadmap_advance_exactly_to_frozen_rebuild() {
         "recovery snapshot stage --snapshot <PATH> --destination <PATH>"
     ));
     assert!(MAIN.contains("DANGOMUSHI RECOVERY SNAPSHOT STAGED"));
-    assert!(!MAIN.contains(r#""rebuild" =>"#));
+    assert!(MAIN.contains(r#""rebuild" =>"#));
 
     for required in [
         "existing read-only verify_snapshot",
@@ -290,10 +290,8 @@ fn cli_docs_and_roadmap_advance_exactly_to_frozen_rebuild() {
 
     assert!(README.contains("verified snapshot staging materialization"));
     assert!(ROADMAP.contains("- [x] **Verified snapshot staging materialization**"));
+    assert!(ROADMAP.contains("- [x] **Frozen rebuild from staged source/vendor**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Frozen rebuild from staged source/vendor** — Exactly One Next Task"
-    ));
-    assert!(!ROADMAP.contains(
         "- [ ] **Recovered application smoke verification** — Exactly One Next Task"
     ));
 }
