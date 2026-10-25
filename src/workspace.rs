@@ -97,23 +97,52 @@ pub fn default_workspace_root() -> PathBuf {
     }
 
     if let Ok(executable) = std::env::current_exe() {
-        if let Some(parent) = executable.parent() {
-            let is_app_dir = parent
-                .file_name()
-                .map(|name| name.to_string_lossy().eq_ignore_ascii_case("app"))
-                .unwrap_or(false);
-
-            if is_app_dir {
-                if let Some(portable_root) = parent.parent() {
-                    return portable_root.join("workspace");
-                }
-            }
+        if let Some(workspace) = portable_workspace_root_from_executable(&executable) {
+            return workspace;
         }
     }
 
     std::env::current_dir()
         .unwrap_or_else(|_| PathBuf::from("."))
         .join("workspace")
+}
+
+fn portable_workspace_root_from_executable(executable: &Path) -> Option<PathBuf> {
+    let parent = executable.parent()?;
+
+    if path_name_eq(parent, "app") {
+        return parent.parent().map(|portable_root| portable_root.join("workspace"));
+    }
+
+    if !path_name_eq(parent, "MacOS") {
+        return None;
+    }
+
+    let contents = parent.parent()?;
+    if !path_name_eq(contents, "Contents") {
+        return None;
+    }
+
+    let app_bundle = contents.parent()?;
+    let bundle_name = app_bundle.file_name()?.to_string_lossy();
+    if !bundle_name.to_ascii_lowercase().ends_with(".app") {
+        return None;
+    }
+
+    let app_dir = app_bundle.parent()?;
+    if !path_name_eq(app_dir, "app") {
+        return None;
+    }
+
+    app_dir
+        .parent()
+        .map(|portable_root| portable_root.join("workspace"))
+}
+
+fn path_name_eq(path: &Path, expected: &str) -> bool {
+    path.file_name()
+        .map(|name| name.to_string_lossy().eq_ignore_ascii_case(expected))
+        .unwrap_or(false)
 }
 
 pub fn canonical_or_original(root: &Path) -> PathBuf {
@@ -149,5 +178,41 @@ mod tests {
         let root = temporary_workspace();
         let report = doctor(&root);
         assert!(!report.ok());
+    }
+
+    #[test]
+    fn portable_app_directory_maps_to_sibling_workspace() {
+        let executable = PathBuf::from("portable")
+            .join("app")
+            .join(if cfg!(windows) { "Dangomushi.exe" } else { "Dangomushi" });
+        assert_eq!(
+            portable_workspace_root_from_executable(&executable),
+            Some(PathBuf::from("portable").join("workspace"))
+        );
+    }
+
+    #[test]
+    fn macos_app_bundle_maps_to_same_portable_workspace() {
+        let executable = PathBuf::from("portable")
+            .join("app")
+            .join("Dangomushi.app")
+            .join("Contents")
+            .join("MacOS")
+            .join("Dangomushi");
+        assert_eq!(
+            portable_workspace_root_from_executable(&executable),
+            Some(PathBuf::from("portable").join("workspace"))
+        );
+    }
+
+    #[test]
+    fn unrelated_nested_executable_does_not_claim_portable_workspace() {
+        let executable = PathBuf::from("portable")
+            .join("other")
+            .join("Dangomushi.app")
+            .join("Contents")
+            .join("MacOS")
+            .join("Dangomushi");
+        assert_eq!(portable_workspace_root_from_executable(&executable), None);
     }
 }

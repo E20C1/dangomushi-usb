@@ -293,7 +293,5 @@ fn docs_and_roadmap_advance_once_to_restore_verification() {
     assert!(!ROADMAP.contains(
         "public snapshot verification are intentionally deferred"
     ));
-    assert!(ROADMAP.contains(
-        "- [ ] **Portable release bundles per operating system** — Exactly One Next Task"
-    ));
+    assert!(ROADMAP.contains("- [x] **Portable release bundles per operating system**"));
 }

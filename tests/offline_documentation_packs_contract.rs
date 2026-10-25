@@ -195,7 +195,5 @@ fn docs_and_roadmap_define_narrow_m5_boundary_and_advance_once() {
     assert!(ROADMAP.contains("- [x] **Reproducible dependency cache/vendor strategy**"));
     assert!(ROADMAP.contains("- [x] **Recovery snapshots**"));
     assert!(ROADMAP.contains("- [x] **Restore verification**"));
-    assert!(ROADMAP.contains(
-        "- [ ] **Portable release bundles per operating system** — Exactly One Next Task"
-    ));
+    assert!(ROADMAP.contains("- [x] **Portable release bundles per operating system**"));
 }

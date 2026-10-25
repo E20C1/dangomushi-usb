@@ -48,6 +48,33 @@ jobs:
       - name: Native desktop release build
         run: cargo build --locked --release --features desktop --bin dangomushi-desktop
 
+      - name: Build portable release bundle
+        run: python scripts/build-release-bundle.py
+
+      - name: Verify portable release bundle
+        run: python scripts/verify-release-bundle.py --directory dist
+
+      - name: Upload Windows portable bundle
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && runner.os == 'Windows'
+        uses: actions/upload-artifact@v7
+        with:
+          path: dist/*.zip
+          archive: false
+
+      - name: Upload Unix portable bundle
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && runner.os != 'Windows'
+        uses: actions/upload-artifact@v7
+        with:
+          path: dist/*.tar.gz
+          archive: false
+
+      - name: Upload portable bundle checksum
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v7
+        with:
+          path: dist/*.sha256
+          archive: false
+
   offline-vendor:
     runs-on: ubuntu-latest
 
