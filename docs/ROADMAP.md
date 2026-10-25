@@ -325,14 +325,16 @@ M5 Offline continuity is complete.
 
 ## M6 — Offline reconstruction
 
-- [ ] **Verified snapshot staging materialization** — Exactly One Next Task
+- [x] **Verified snapshot staging materialization**
   - source Recovery Snapshot must pass the existing read-only verifier before destination mutation
-  - destination is explicit, create-new, non-symlink-parented and outside the source snapshot, live Workspace and active source tree
-  - only the already-reviewed Recovery Snapshot payload allowlist may be materialized
+  - destination is explicit, create-new, non-symlink-parented and outside the source snapshot plus any supplied live Workspace / active source roots
+  - only marker-authenticated paths already accepted by the Recovery Snapshot allowlist are copied
+  - each copied payload file is streamed, source-change checked and compared against the initially verified marker record
+  - the original completion marker is copied last, after all payload files, so an interrupted staging directory is not presented as complete
+  - the completed staging root is independently passed through the full Recovery Snapshot verifier again; summary digest/count/bytes must equal the initial verified source
   - staged source/vendor and the embedded Generic Workspace Backup remain inert files; no Workspace restore occurs in this task
-  - destination bytes must be independently rechecked before staging is accepted
   - no Cargo/process execution, Secret Backup handling, network access, identity mutation or release-signing authority is added
-- [ ] Frozen rebuild from staged source/vendor
+- [ ] **Frozen rebuild from staged source/vendor** — Exactly One Next Task
 - [ ] Recovered application smoke verification
 - [ ] Workspace restore into a fresh destination
 - [ ] Reconstruction verification
