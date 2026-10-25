@@ -1,4 +1,4 @@
-use dangomushi::{offline_docs, recovery_snapshot, server, workspace};
+use dangomushi::{offline_docs, offline_reconstruction, recovery_snapshot, server, workspace};
 use std::env;
 use std::path::PathBuf;
 use std::process;
