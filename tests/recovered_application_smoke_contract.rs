@@ -33,8 +33,8 @@ fn smoke_requires_verified_staging_and_integrity_recorded_rebuild_artifacts() {
 #[test]
 fn smoke_executes_only_fixed_cli_and_non_gui_desktop_entrypoints() {
     for required in [
-        "&["version"]",
-        "&["--recovery-smoke-check"]",
+        r#"&["version"]"#,
+        r#"&["--recovery-smoke-check"]"#,
         "dangomushi {app_version}",
         "dangomushi-desktop {app_version} recovery-smoke-ok",
     ] {
