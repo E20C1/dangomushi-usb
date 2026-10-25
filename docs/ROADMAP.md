@@ -321,4 +321,20 @@ M3's transport-independent security and handoff boundaries are now complete. Any
   - packaging normalizes archive metadata but does not claim bit-for-bit reproducible compiled binaries
   - current bundles are not Authenticode-signed, macOS code-signed or notarized; SHA-256 verifies equality, not publisher identity
 
-M5 Offline continuity is complete. No post-M5 implementation task is authorized by this roadmap yet.
+M5 Offline continuity is complete.
+
+## M6 — Offline reconstruction
+
+- [ ] **Verified snapshot staging materialization** — Exactly One Next Task
+  - source Recovery Snapshot must pass the existing read-only verifier before destination mutation
+  - destination is explicit, create-new, non-symlink-parented and outside the source snapshot, live Workspace and active source tree
+  - only the already-reviewed Recovery Snapshot payload allowlist may be materialized
+  - staged source/vendor and the embedded Generic Workspace Backup remain inert files; no Workspace restore occurs in this task
+  - destination bytes must be independently rechecked before staging is accepted
+  - no Cargo/process execution, Secret Backup handling, network access, identity mutation or release-signing authority is added
+- [ ] Frozen rebuild from staged source/vendor
+- [ ] Recovered application smoke verification
+- [ ] Workspace restore into a fresh destination
+- [ ] Reconstruction verification
+
+M6 is intentionally limited to offline reconstruction from already-verified Recovery Snapshots. Release signing/provenance, automatic updates, mobile LAN transport and Internet P2P remain separate future security/network milestones.
