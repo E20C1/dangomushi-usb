@@ -34,7 +34,7 @@ fn first_m6_task_is_staging_only_and_does_not_pull_later_authority_forward() {
     }
 
     for later in [
-        "- [ ] Frozen rebuild from staged source/vendor",
+        "- [ ] **Frozen rebuild from staged source/vendor** — Exactly One Next Task",
         "- [ ] Recovered application smoke verification",
         "- [ ] Workspace restore into a fresh destination",
         "- [ ] Reconstruction verification",
