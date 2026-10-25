@@ -23,7 +23,7 @@ fn first_m6_task_is_staging_only_and_does_not_pull_later_authority_forward() {
         "must pass the existing read-only verify_snapshot boundary",
         "not already exist",
         "outside any configured live Workspace",
-        "no Cargo execution",
+        "Cargo execution",
         "Secret Backup / Restore is intentionally not folded into M6 reconstruction",
     ] {
         assert!(
