@@ -104,3 +104,34 @@ jobs:
 
       - name: Frozen offline build/test verification
         run: sh scripts/verify-vendored-dependencies.sh
+
+
+  frozen-reconstruction:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@1.99.1
+
+      - name: Install Linux desktop build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libegl1-mesa-dev \
+            libgl1-mesa-dev \
+            libwayland-dev \
+            libx11-dev \
+            libx11-xcb-dev \
+            libxcb1-dev \
+            libxcb-render0-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libxkbcommon-dev \
+            pkg-config
+
+      - name: Generate locked vendor snapshot
+        run: sh scripts/vendor-dependencies.sh
+
+      - name: Exercise verified staging and nested frozen rebuild
+        run: cargo --config .cargo/vendor-config.toml test --frozen --test frozen_staged_rebuild_contract real_frozen_rebuild_from_verified_staging -- --ignored --exact --nocapture
