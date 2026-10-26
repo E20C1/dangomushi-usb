@@ -1817,6 +1817,7 @@ mod tests {
     fn verified_backup_matches_workspace_read_only_and_rejects_managed_drift() {
         let root = temporary_workspace("exact-match");
         workspace::initialize(&root).expect("workspace marker");
+        fs::create_dir_all(root.join("state/autosave")).expect("autosave root");
         fs::write(root.join("data/documents/note.txt"), "verified\n").expect("document");
         fs::write(root.join("config/settings.toml"), "mode = \"offline\"\n").expect("config");
 
