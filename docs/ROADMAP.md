@@ -365,6 +365,16 @@ M5 Offline continuity is complete.
   - restore preserves Generic Backup scope: data/repositories/identity/config/autosave return, while session state, permission policy, peer private identity and other excluded state do not appear
   - the embedded recovery backup is not silently copied into the new Workspace backups directory
   - Secret Backup remains separate; no Vault/Credential/Recovery Code restoration, existing-Workspace merge/overwrite, network access or release-signing authority is added
-- [ ] **Reconstruction verification** — Exactly One Next Task
+- [x] **Reconstruction verification**
+  - final verification accepts only three existing evidence roots: verified staging, the matching frozen rebuild, and the already-created fresh Workspace
+  - staging/rebuild/Workspace roots must be real non-symlink directories and remain pairwise separate
+  - the existing recovered-application smoke gate is rerun, preserving its snapshot/rebuild marker, artifact SHA-256, platform and fixed-entrypoint checks
+  - the staged Generic Workspace Backup must still verify and match the Recovery Snapshot-authenticated backup summary
+  - restored managed roots are compared read-only against the archive entry-by-entry; directory/file shape, file length/content and the absence of extra managed entries must match exactly
+  - fresh-only non-managed layout is enforced: the reconstruction Workspace has only the initialized top-level layout, backups/ is empty, and state/ contains only the restored autosave root
+  - staging is verified again after the complete check; verification creates no new Workspace, backup, identity, Secret state or network authority
+  - the final check still does not provide publisher authenticity or an OS sandbox; Secret recovery, signing/provenance, automatic updates, mobile transport and Internet P2P remain separate
 
-M6 is intentionally limited to offline reconstruction from already-verified Recovery Snapshots. Release signing/provenance, automatic updates, mobile LAN transport and Internet P2P remain separate future security/network milestones.
+M6 Offline reconstruction is complete.
+
+No post-M6 implementation task is authorized by this roadmap yet. Release signing/provenance, automatic updates, mobile LAN transport and Internet P2P remain separate future security/network milestones.
