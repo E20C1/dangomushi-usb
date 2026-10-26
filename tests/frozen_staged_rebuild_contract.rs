@@ -113,7 +113,7 @@ fn cli_exposes_only_fixed_rebuild_operation_and_roadmap_advances_once() {
     assert!(ROADMAP.contains("- [x] **Recovered application smoke verification**"));
     assert!(ROADMAP.contains("- [x] **Workspace restore into a fresh destination**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Reconstruction verification** — Exactly One Next Task"
+        "- [x] **Reconstruction verification**"
     ));
 }
 
