@@ -1814,6 +1814,44 @@ mod tests {
     }
 
     #[test]
+    fn verified_backup_matches_workspace_read_only_and_rejects_managed_drift() {
+        let root = temporary_workspace("exact-match");
+        workspace::initialize(&root).expect("workspace marker");
+        fs::write(root.join("data/documents/note.txt"), "verified\n").expect("document");
+        fs::write(root.join("config/settings.toml"), "mode = \"offline\"\n").expect("config");
+
+        let created = create_backup(&root).expect("create");
+        let backup_path = root.join(&created.relative_path);
+        let expected = verify_backup_file(&backup_path).expect("verify backup");
+
+        assert_eq!(
+            verify_backup_file_matches_workspace(&backup_path, &root).expect("exact match"),
+            expected
+        );
+
+        fs::write(root.join("data/documents/note.txt"), "changed\n").expect("change");
+        assert_eq!(
+            verify_backup_file_matches_workspace(&backup_path, &root).unwrap_err(),
+            WorkspaceBackupError::WorkspaceContentsMismatch
+        );
+
+        restore_backup(&root, &created.relative_path).expect("restore exact contents");
+        fs::write(root.join("config/unexpected.txt"), "extra").expect("extra");
+        assert_eq!(
+            verify_backup_file_matches_workspace(&backup_path, &root).unwrap_err(),
+            WorkspaceBackupError::WorkspaceContentsMismatch
+        );
+
+        fs::remove_file(root.join("config/unexpected.txt")).expect("remove extra");
+        assert_eq!(
+            verify_backup_file_matches_workspace(&backup_path, &root).expect("matches again"),
+            expected
+        );
+
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
     fn fresh_restore_refuses_existing_destination_without_mutation() {
         let source = temporary_workspace("fresh-existing-source");
         fs::write(source.join("data/documents/note.txt"), "backup").expect("document");
