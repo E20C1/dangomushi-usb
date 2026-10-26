@@ -1,4 +1,5 @@
 use crate::recovery_snapshot::{self, RecoverySnapshotSummary};
+use crate::workspace;
 use crate::workspace_backup::{self, WorkspaceBackupSummary};
 use sha2::{Digest, Sha256};
 use std::error::Error;
@@ -834,6 +835,228 @@ pub fn restore_workspace_into_fresh_destination(
         app_version: smoke.app_version,
         workspace_backup: restored,
     })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReconstructionVerificationSummary {
+    pub source_snapshot: RecoverySnapshotSummary,
+    pub rebuild_runner_version: String,
+    pub app_version: String,
+    pub os: String,
+    pub arch: String,
+    pub cli: RebuiltArtifact,
+    pub desktop: RebuiltArtifact,
+    pub workspace_backup: WorkspaceBackupSummary,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReconstructionVerificationError {
+    StagingUnavailable,
+    RebuildUnavailable,
+    WorkspaceUnavailable,
+    EvidenceRootsOverlap,
+    SmokeVerificationFailed,
+    WorkspaceBackupUnavailable,
+    WorkspaceBackupMismatch,
+    WorkspaceContentsMismatch,
+    WorkspaceLayoutMismatch,
+    StagingChanged,
+}
+
+impl fmt::Display for ReconstructionVerificationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let message = match self {
+            Self::StagingUnavailable => "verified reconstruction staging root is unavailable",
+            Self::RebuildUnavailable => "verified reconstruction rebuild root is unavailable",
+            Self::WorkspaceUnavailable => "restored reconstruction Workspace is unavailable",
+            Self::EvidenceRootsOverlap => {
+                "staging, rebuild and restored Workspace evidence roots must remain separate"
+            }
+            Self::SmokeVerificationFailed => {
+                "recovered application smoke evidence failed reconstruction verification"
+            }
+            Self::WorkspaceBackupUnavailable => {
+                "staged Generic Workspace Backup is unavailable or invalid"
+            }
+            Self::WorkspaceBackupMismatch => {
+                "staged Generic Workspace Backup does not match the verified Recovery Snapshot"
+            }
+            Self::WorkspaceContentsMismatch => {
+                "restored Workspace managed contents do not match the authenticated Generic Backup"
+            }
+            Self::WorkspaceLayoutMismatch => {
+                "restored Workspace is not the expected fresh reconstruction layout"
+            }
+            Self::StagingChanged => {
+                "verified reconstruction staging changed during final verification"
+            }
+        };
+        formatter.write_str(message)
+    }
+}
+
+impl Error for ReconstructionVerificationError {}
+
+pub fn verify_reconstruction(
+    staged_root: &Path,
+    rebuild_root: &Path,
+    workspace_root: &Path,
+) -> Result<ReconstructionVerificationSummary, ReconstructionVerificationError> {
+    let canonical_staging = checked_verification_root(
+        staged_root,
+        ReconstructionVerificationError::StagingUnavailable,
+    )?;
+    let canonical_rebuild = checked_verification_root(
+        rebuild_root,
+        ReconstructionVerificationError::RebuildUnavailable,
+    )?;
+    let canonical_workspace = checked_verification_root(
+        workspace_root,
+        ReconstructionVerificationError::WorkspaceUnavailable,
+    )?;
+
+    if roots_overlap(&canonical_staging, &canonical_rebuild)
+        || roots_overlap(&canonical_staging, &canonical_workspace)
+        || roots_overlap(&canonical_rebuild, &canonical_workspace)
+    {
+        return Err(ReconstructionVerificationError::EvidenceRootsOverlap);
+    }
+
+    verify_fresh_reconstruction_layout(&canonical_workspace)?;
+
+    // Reuse the existing bounded execution gate rather than defining a second
+    // executable-verification path. This re-verifies staging, rebuild metadata,
+    // artifact hashes and the two fixed smoke entrypoints.
+    let smoke = smoke_verify_rebuild(&canonical_staging, &canonical_rebuild)
+        .map_err(|_| ReconstructionVerificationError::SmokeVerificationFailed)?;
+
+    let backup_path = canonical_staging.join("recovery").join("workspace.dgmwbk");
+    let backup = workspace_backup::verify_backup_file(&backup_path)
+        .map_err(|_| ReconstructionVerificationError::WorkspaceBackupUnavailable)?;
+    if backup != smoke.source_snapshot.workspace_backup {
+        return Err(ReconstructionVerificationError::WorkspaceBackupMismatch);
+    }
+
+    let matched = workspace_backup::verify_backup_file_matches_workspace(
+        &backup_path,
+        &canonical_workspace,
+    )
+    .map_err(|_| ReconstructionVerificationError::WorkspaceContentsMismatch)?;
+    if matched != backup {
+        return Err(ReconstructionVerificationError::WorkspaceBackupMismatch);
+    }
+
+    // Smoke execution is not an OS sandbox. Verify the fresh Workspace layout
+    // and exact managed contents after that executable-code authority has run.
+    verify_fresh_reconstruction_layout(&canonical_workspace)?;
+    let matched_after = workspace_backup::verify_backup_file_matches_workspace(
+        &backup_path,
+        &canonical_workspace,
+    )
+    .map_err(|_| ReconstructionVerificationError::WorkspaceContentsMismatch)?;
+    if matched_after != backup {
+        return Err(ReconstructionVerificationError::WorkspaceBackupMismatch);
+    }
+
+    let after_staging = recovery_snapshot::verify_snapshot(&canonical_staging)
+        .map_err(|_| ReconstructionVerificationError::StagingChanged)?;
+    if after_staging != smoke.source_snapshot {
+        return Err(ReconstructionVerificationError::StagingChanged);
+    }
+
+    Ok(ReconstructionVerificationSummary {
+        source_snapshot: smoke.source_snapshot,
+        rebuild_runner_version: smoke.rebuild_runner_version,
+        app_version: smoke.app_version,
+        os: smoke.os,
+        arch: smoke.arch,
+        cli: smoke.cli,
+        desktop: smoke.desktop,
+        workspace_backup: matched_after,
+    })
+}
+
+fn checked_verification_root(
+    path: &Path,
+    error: ReconstructionVerificationError,
+) -> Result<PathBuf, ReconstructionVerificationError> {
+    let metadata = fs::symlink_metadata(path).map_err(|_| error)?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(error);
+    }
+    fs::canonicalize(path).map_err(|_| error)
+}
+
+fn roots_overlap(left: &Path, right: &Path) -> bool {
+    left.starts_with(right) || right.starts_with(left)
+}
+
+fn verify_fresh_reconstruction_layout(
+    workspace_root: &Path,
+) -> Result<(), ReconstructionVerificationError> {
+    if !workspace::doctor(workspace_root).ok() {
+        return Err(ReconstructionVerificationError::WorkspaceLayoutMismatch);
+    }
+
+    let expected_top = vec![
+        (".dangomushi-workspace".to_string(), false),
+        ("backups".to_string(), true),
+        ("config".to_string(), true),
+        ("data".to_string(), true),
+        ("identity".to_string(), true),
+        ("repositories".to_string(), true),
+        ("state".to_string(), true),
+    ];
+    let mut observed_top = Vec::<(String, bool)>::new();
+    for entry in fs::read_dir(workspace_root)
+        .map_err(|_| ReconstructionVerificationError::WorkspaceLayoutMismatch)?
+    {
+        let entry = entry.map_err(|_| ReconstructionVerificationError::WorkspaceLayoutMismatch)?;
+        let name = entry
+            .file_name()
+            .to_str()
+            .ok_or(ReconstructionVerificationError::WorkspaceLayoutMismatch)?
+            .to_string();
+        let metadata = fs::symlink_metadata(entry.path())
+            .map_err(|_| ReconstructionVerificationError::WorkspaceLayoutMismatch)?;
+        if metadata.file_type().is_symlink() {
+            return Err(ReconstructionVerificationError::WorkspaceLayoutMismatch);
+        }
+        observed_top.push((name, metadata.is_dir()));
+    }
+    observed_top.sort_by(|left, right| left.0.cmp(&right.0));
+    if observed_top != expected_top {
+        return Err(ReconstructionVerificationError::WorkspaceLayoutMismatch);
+    }
+
+    let backups = workspace_root.join("backups");
+    if fs::read_dir(&backups)
+        .map_err(|_| ReconstructionVerificationError::WorkspaceLayoutMismatch)?
+        .next()
+        .is_some()
+    {
+        return Err(ReconstructionVerificationError::WorkspaceLayoutMismatch);
+    }
+
+    let state = workspace_root.join("state");
+    let mut state_entries = fs::read_dir(&state)
+        .map_err(|_| ReconstructionVerificationError::WorkspaceLayoutMismatch)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| ReconstructionVerificationError::WorkspaceLayoutMismatch)?;
+    if state_entries.len() != 1 {
+        return Err(ReconstructionVerificationError::WorkspaceLayoutMismatch);
+    }
+    let autosave = state_entries.pop().expect("one state entry");
+    if autosave.file_name().as_os_str() != OsStr::new("autosave") {
+        return Err(ReconstructionVerificationError::WorkspaceLayoutMismatch);
+    }
+    let autosave_metadata = fs::symlink_metadata(autosave.path())
+        .map_err(|_| ReconstructionVerificationError::WorkspaceLayoutMismatch)?;
+    if autosave_metadata.file_type().is_symlink() || !autosave_metadata.is_dir() {
+        return Err(ReconstructionVerificationError::WorkspaceLayoutMismatch);
+    }
+
+    Ok(())
 }
 
 fn checked_restore_root(

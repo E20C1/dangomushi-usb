@@ -211,6 +211,6 @@ fn docs_and_roadmap_advance_exactly_to_reconstruction_verification() {
 
     assert!(ROADMAP.contains("- [x] **Workspace restore into a fresh destination**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Reconstruction verification** — Exactly One Next Task"
+        "- [x] **Reconstruction verification**"
     ));
 }

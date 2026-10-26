@@ -113,7 +113,7 @@ fn cli_exposes_only_fixed_rebuild_operation_and_roadmap_advances_once() {
     assert!(ROADMAP.contains("- [x] **Recovered application smoke verification**"));
     assert!(ROADMAP.contains("- [x] **Workspace restore into a fresh destination**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Reconstruction verification** — Exactly One Next Task"
+        "- [x] **Reconstruction verification**"
     ));
 }
 
@@ -229,6 +229,19 @@ fn real_frozen_rebuild_from_verified_staging() {
             .count(),
         0
     );
+
+    let verified = offline_reconstruction::verify_reconstruction(
+        &staging,
+        &rebuild,
+        &restored_workspace,
+    )
+    .expect("final reconstruction verification");
+    assert_eq!(verified.source_snapshot, staged);
+    assert_eq!(verified.workspace_backup, staged.workspace_backup);
+    assert_eq!(verified.app_version, env!("CARGO_PKG_VERSION"));
+    assert_eq!(verified.cli, summary.cli);
+    assert_eq!(verified.desktop, summary.desktop);
+    assert!(!rebuild.join(".dangomushi-recovery-smoke").exists());
 
     fs::remove_dir_all(parent).expect("cleanup");
 }

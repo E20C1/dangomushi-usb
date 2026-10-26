@@ -129,7 +129,7 @@ fn cli_and_ci_expose_only_the_bounded_smoke_flow() {
     assert!(CI.contains("Verify recovered smoke entrypoints"));
     assert!(CI.contains("python scripts/verify-smoke-entrypoints.py"));
     assert!(CI.contains(
-        "Exercise verified staging, frozen rebuild, smoke, and fresh Workspace restore"
+        "Exercise complete verified offline reconstruction"
     ));
 
     for required in [
@@ -162,6 +162,6 @@ fn documentation_states_execution_limitations_and_advances_once() {
     assert!(ROADMAP.contains("- [x] **Recovered application smoke verification**"));
     assert!(ROADMAP.contains("- [x] **Workspace restore into a fresh destination**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Reconstruction verification** — Exactly One Next Task"
+        "- [x] **Reconstruction verification**"
     ));
 }

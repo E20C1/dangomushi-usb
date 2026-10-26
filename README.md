@@ -4,7 +4,7 @@ DANGOMUSHI is a portable, local-first workspace intended to keep essential tools
 
 Repository: dangomushi-usb
 
-## Current milestone: M6 offline reconstruction
+## Current milestone: M6 offline reconstruction (complete)
 
 The current implementation includes:
 
@@ -55,11 +55,12 @@ The current implementation includes:
 - An M6 frozen rebuild from staged source/vendor path that re-verifies staging, builds CLI/desktop only from the pinned Rust 1.99.1 + staged vendor cache with Cargo --frozen into a separate create-new target root, re-verifies staging afterward, and records rebuilt binary SHA-256 without executing them.
 - An M6 recovered-application smoke gate that re-verifies staging and rebuild SHA-256 records, executes only CLI `version` plus a non-GUI desktop recovery-smoke entrypoint in a rebuild-local temporary sandbox, then re-verifies staged source and rebuilt artifacts.
 - An M6 fresh Workspace reconstruction restore gate that reruns smoke verification, accepts only the staged verified Generic Workspace Backup, creates a new Workspace only, reuses Generic Backup rollback/revocation semantics, and re-verifies staging afterward.
+- An M6 final reconstruction verifier that reruns the fixed smoke gate, re-validates staging/rebuild evidence, byte-compares the restored Generic Backup managed roots against the authenticated archive, rejects extra managed entries and requires the fresh-only non-managed Workspace layout.
 - No public/global peer address support, peer discovery, firewall mutation, UPnP, NAT-PMP, reverse tunnel, relay, CDN or external web request.
 - Windows double-click build/update entry point.
 - CI builds for Windows, macOS and Linux.
 
-M3's transport-independent mobile security and handoff foundation is complete. M4 is complete with trusted-peer identity, encrypted transfer, received-file verification and fail-closed Direct LAN. M5 Offline continuity is complete through embedded documentation, reproducible Cargo dependencies, recovery snapshots, read-only Restore Verification and portable per-OS release bundles. M6 now has verified snapshot staging, frozen rebuild, recovered-application smoke verification and fresh Workspace restoration; Reconstruction verification is next, while Secret recovery and network authority remain out of scope.
+M3's transport-independent mobile security and handoff foundation is complete. M4 is complete with trusted-peer identity, encrypted transfer, received-file verification and fail-closed Direct LAN. M5 Offline continuity is complete through embedded documentation, reproducible Cargo dependencies, recovery snapshots, read-only Restore Verification and portable per-OS release bundles. M6 Offline reconstruction is complete through verified staging, frozen rebuild, recovered-application smoke verification, fresh Workspace restoration and final reconstruction verification. No post-M6 implementation task is authorized by the current roadmap; Secret recovery and additional network authority remain separate.
 
 ## Editor safety model
 
@@ -243,6 +244,17 @@ cargo run -- recovery snapshot restore-workspace \
 ~~~
 
 The command reruns the recovered-app smoke gate before creating the destination, uses only `recovery/workspace.dgmwbk`, and never overwrites or merges an existing Workspace. Generic Backup exclusions remain excluded, and Secret Backup recovery stays a separate explicit flow.
+
+Verify the completed reconstruction without creating another Workspace or backup:
+
+~~~text
+cargo run -- recovery snapshot verify-reconstruction \
+  --staging <STAGING-PATH> \
+  --rebuild <REBUILD-PATH> \
+  --restored-workspace <FRESH-WORKSPACE>
+~~~
+
+Final verification reruns the fixed recovered-app smoke gate, validates the staged Generic Backup against the Recovery Snapshot, compares every Generic Backup managed directory/file against the restored Workspace without rewriting it, rejects extra managed entries, requires an empty `backups/` directory and allows only `autosave/` under fresh `state/`. The smoke step still executes recovered native code and is not an OS sandbox or publisher-authenticity guarantee.
 
 ## Portable release bundles
 
