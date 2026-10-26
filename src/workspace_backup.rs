@@ -1081,7 +1081,7 @@ fn verify_comparison_tree_exact(
         collect_comparison_entries(root, &components, &mut observed)?;
     }
 
-    if observed != *expected {
+    if &observed != expected {
         return Err(WorkspaceBackupError::WorkspaceContentsMismatch);
     }
     Ok(())
