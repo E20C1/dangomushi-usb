@@ -37,7 +37,7 @@ fn first_m6_task_is_staging_only_and_does_not_pull_later_authority_forward() {
         "- [x] **Frozen rebuild from staged source/vendor**",
         "- [x] **Recovered application smoke verification**",
         "- [x] **Workspace restore into a fresh destination**",
-        "- [ ] **Reconstruction verification** — Exactly One Next Task",
+        "- [x] **Reconstruction verification**",
     ] {
         assert!(ROADMAP.contains(later), "missing later M6 task: {later}");
     }
@@ -46,7 +46,7 @@ fn first_m6_task_is_staging_only_and_does_not_pull_later_authority_forward() {
     assert!(ROADMAP.contains("- [x] **Recovered application smoke verification**"));
     assert!(ROADMAP.contains("- [x] **Workspace restore into a fresh destination**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Reconstruction verification** — Exactly One Next Task"
+        "- [x] **Reconstruction verification**"
     ));
 }
 
