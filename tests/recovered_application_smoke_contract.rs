@@ -129,7 +129,7 @@ fn cli_and_ci_expose_only_the_bounded_smoke_flow() {
     assert!(CI.contains("Verify recovered smoke entrypoints"));
     assert!(CI.contains("python scripts/verify-smoke-entrypoints.py"));
     assert!(CI.contains(
-        "Exercise verified staging, frozen rebuild, smoke, and fresh Workspace restore"
+        "Exercise complete verified offline reconstruction"
     ));
 
     for required in [
