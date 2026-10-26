@@ -230,5 +230,18 @@ fn real_frozen_rebuild_from_verified_staging() {
         0
     );
 
+    let verified = offline_reconstruction::verify_reconstruction(
+        &staging,
+        &rebuild,
+        &restored_workspace,
+    )
+    .expect("final reconstruction verification");
+    assert_eq!(verified.source_snapshot, staged);
+    assert_eq!(verified.workspace_backup, staged.workspace_backup);
+    assert_eq!(verified.app_version, env!("CARGO_PKG_VERSION"));
+    assert_eq!(verified.cli, summary.cli);
+    assert_eq!(verified.desktop, summary.desktop);
+    assert!(!rebuild.join(".dangomushi-recovery-smoke").exists());
+
     fs::remove_dir_all(parent).expect("cleanup");
 }
