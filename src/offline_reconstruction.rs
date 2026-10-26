@@ -1047,7 +1047,7 @@ fn verify_fresh_reconstruction_layout(
         return Err(ReconstructionVerificationError::WorkspaceLayoutMismatch);
     }
     let autosave = state_entries.pop().expect("one state entry");
-    if autosave.file_name() != OsStr::new("autosave") {
+    if autosave.file_name().as_os_str() != OsStr::new("autosave") {
         return Err(ReconstructionVerificationError::WorkspaceLayoutMismatch);
     }
     let autosave_metadata = fs::symlink_metadata(autosave.path())
