@@ -6,7 +6,7 @@ M5 established that DANGOMUSHI can preserve its documentation, Rust dependency s
 
 M6 addresses the remaining recovery gap: turning an already-verified Recovery Snapshot into a fresh reconstructed environment without mutating the currently running source tree or Workspace.
 
-M6 now includes verified snapshot staging materialization, a frozen rebuild boundary, and recovered application smoke verification. Cargo execution is authorized only through the fixed staged-source rebuild path, and rebuilt application execution is authorized only through the fixed smoke-verification entrypoints. Workspace restore, Secret Backup restore, and network transport remain out of scope.
+M6 now completes the full bounded offline reconstruction chain: verified snapshot staging, frozen rebuild, recovered-application smoke verification, fresh Workspace restore, and final reconstruction verification. Cargo execution remains authorized only through the fixed staged-source rebuild path, and rebuilt application execution remains authorized only through the fixed smoke-verification entrypoints. Secret Backup restore, release signing/provenance, automatic updates, and additional network authority remain out of scope.
 
 ## Why this milestone comes next
 
@@ -72,7 +72,7 @@ Staging does not restore `workspace.dgmwbk`, read or restore Secret Backup ciphe
 
 The source snapshot remains read-only.
 
-## Later M6 boundaries
+## Completed M6 boundaries
 
 ### Frozen rebuild from staged source/vendor
 
@@ -111,7 +111,7 @@ After both Cargo invocations complete, the entire staged Recovery Snapshot is ve
 
 The expected CLI and desktop release artifacts must be real non-symlink regular files and are bounded to 2 GiB each. Their exact byte length and SHA-256 are recorded in a final `.dangomushi-frozen-rebuild` marker written only after both builds and post-build staging verification succeed. The temporary isolated Cargo home is removed before completion.
 
-The rebuild output remains outside the verified staging tree, and the implementation re-verifies the staged Recovery Snapshot after Cargo/build.rs execution. The rebuild does not execute either rebuilt application. **Recovered application smoke verification** remains the next separate task. It also does not restore `recovery/workspace.dgmwbk`, inspect Secret Backup data, mutate an existing Workspace, alter identity/trust state, or enable LAN/Internet transport.
+The rebuild output remains outside the verified staging tree, and the implementation re-verifies the staged Recovery Snapshot after Cargo/build.rs execution. The rebuild itself does not execute either rebuilt application. Recovered application smoke verification is a separate later boundary in the M6 sequence. The rebuild also does not restore `recovery/workspace.dgmwbk`, inspect Secret Backup data, mutate an existing Workspace, alter identity/trust state, or enable LAN/Internet transport.
 
 This boundary does not provide an OS-level network sandbox. Cargo/build.rs execution is executable-code authority; `--frozen`, the staged vendor config and `CARGO_NET_OFFLINE=true` constrain Cargo dependency fetching, but arbitrary build scripts or proc-macros could still attempt direct network access through the operating system.
 
@@ -198,7 +198,36 @@ Secret Backup remains separate and is not auto-discovered or restored. This task
 
 ### Reconstruction verification
 
-The final M6 task will define what evidence is required to declare a reconstruction complete: staged source integrity, frozen dependency resolution, rebuilt application evidence, and restored Workspace verification.
+Final reconstruction verification is implemented by:
+
+~~~text
+offline_reconstruction::verify_reconstruction(...)
+~~~
+
+and the CLI:
+
+~~~text
+dangomushi recovery snapshot verify-reconstruction \
+  --staging <STAGING-PATH> \
+  --rebuild <REBUILD-PATH> \
+  --restored-workspace <FRESH-WORKSPACE>
+~~~
+
+The command accepts only evidence that already exists. It does not stage a snapshot, rebuild binaries, or create/restore a Workspace. The staging, rebuild, and restored Workspace roots must each be real non-symlink directories and must remain pairwise separate.
+
+Verification reuses `smoke_verify_rebuild` rather than adding another executable-validation path. The existing gate therefore re-verifies the Recovery Snapshot, frozen-rebuild marker, source-snapshot binding, host OS/architecture, fixed CLI/desktop artifact paths and SHA-256 values, and then executes only the already-authorized `version` and `--recovery-smoke-check` entrypoints.
+
+After that bounded executable check, the final verifier independently validates the fixed staged `recovery/workspace.dgmwbk` and requires its Generic Workspace Backup summary to equal the backup summary authenticated by the Recovery Snapshot.
+
+The restored Workspace is then compared read-only against that archive. The existing Generic Backup parser remains authoritative: every managed directory and file must exist with the expected type, every file must have the exact recorded length and byte content, and a recursive bounded enumeration rejects any extra managed entry. The verifier does not create a temporary replacement backup and does not rewrite the Workspace.
+
+The non-managed fresh-reconstruction boundary is checked separately. The Workspace must have only the initialized top-level layout, `backups/` must remain empty, and `state/` may contain only the restored `autosave/` root. This prevents excluded local state such as session data, device permission policy, or peer-private identity from being mistaken for reconstructed Generic Backup state.
+
+Because the smoke gate executes recovered native code and is not an OS sandbox, the restored Workspace and its exact managed contents are checked after smoke execution as well. Finally the complete staged Recovery Snapshot is re-verified once more and must equal the summary bound by the smoke gate.
+
+A successful final result therefore binds four claims: the staged source/vendor snapshot still verifies, the rebuild artifacts still match their frozen marker and pass fixed smoke entrypoints, the embedded Generic Backup still matches the authenticated snapshot metadata, and the fresh Workspace managed contents exactly match that backup.
+
+This remains integrity/reconstruction evidence, not publisher authenticity. Secret Backup recovery, release signing/provenance, automatic updates, mobile transport, and Internet P2P remain separate authorities.
 
 ## Secrets remain separate
 
@@ -228,8 +257,8 @@ Internet P2P remains disabled under the M4 threat-review decision.
 
 ## Exactly One Next Task
 
-Verified snapshot staging materialization, frozen staged rebuild, recovered application smoke verification, and fresh Workspace restoration are complete.
+Verified snapshot staging materialization, frozen staged rebuild, recovered application smoke verification, fresh Workspace restoration, and final reconstruction verification are complete.
 
-The next authorized implementation task is **Reconstruction verification**.
+**M6 Offline reconstruction is complete.**
 
-That final M6 task may verify the already-produced staging, rebuild and fresh Workspace evidence. Secret restore, release signing, mobile transport, and Internet P2P remain separate later authorities.
+No post-M6 implementation task is authorized by the current roadmap. Selecting a later milestone must remain a separate decision; Secret restore, release signing/provenance, automatic updates, mobile transport, and Internet P2P are not implicitly authorized by completing M6.
