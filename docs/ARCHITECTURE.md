@@ -672,7 +672,15 @@ Before creating a Workspace destination, reconstruction validates destination no
 
 After restore, M6 re-verifies both the embedded Generic Backup and the complete staged Recovery Snapshot. Generic Backup exclusions remain exclusions: session state, permission policy, peer-private state and Secret Backup data are not synthesized. Existing Workspace merge/overwrite is not authorized.
 
-Reconstruction verification remains the final separate M6 authority.
+The fifth and final M6 task, **Reconstruction verification**, is implemented by `offline_reconstruction::verify_reconstruction`.
+
+The final verifier accepts only the already-produced staging root, frozen rebuild root and fresh restored Workspace. All three must be real non-symlink directories and pairwise non-overlapping. It reuses `smoke_verify_rebuild`, so staged snapshot integrity, frozen marker/source binding, current platform binding, rebuilt artifact SHA-256 and the two fixed smoke entrypoints are checked through the existing authority rather than duplicated.
+
+The fixed staged `recovery/workspace.dgmwbk` is independently verified and must still equal the Generic Backup summary authenticated by the Recovery Snapshot. `workspace_backup::verify_backup_file_matches_workspace` extends the existing archive parser with a read-only comparison mode: recorded directories/files must exist with the correct type, every recorded file is byte-compared with the restored Workspace, and a bounded recursive enumeration rejects extra entries inside Generic Backup managed roots.
+
+Final verification also requires the fresh-only non-managed layout produced by M6 restoration: only the initialized top-level Workspace entries are present, `backups/` is empty, and `state/` contains only `autosave/`. Because the reused smoke gate executes recovered native code without an OS sandbox, the Workspace content/layout checks occur after smoke execution, followed by another complete Recovery Snapshot verification.
+
+M6 Offline reconstruction is complete after this verifier. The current roadmap does not implicitly authorize a post-M6 implementation task.
 
 Secret Backup / Restore remains an independent authenticated flow and is not auto-discovered by reconstruction. Release signing/provenance, automatic updates, mobile editor/session LAN transport, and Internet P2P remain separate future milestones. The M4 Internet P2P disable/defer decision remains unchanged.
 
