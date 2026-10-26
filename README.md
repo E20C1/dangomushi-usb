@@ -54,11 +54,12 @@ The current implementation includes:
 - An M6 verified snapshot staging materialization path that requires the existing Recovery Snapshot verifier before destination creation, copies only authenticated payload records into a create-new staging root, copies the completion marker last, and re-verifies the staged root before acceptance.
 - An M6 frozen rebuild from staged source/vendor path that re-verifies staging, builds CLI/desktop only from the pinned Rust 1.99.1 + staged vendor cache with Cargo --frozen into a separate create-new target root, re-verifies staging afterward, and records rebuilt binary SHA-256 without executing them.
 - An M6 recovered-application smoke gate that re-verifies staging and rebuild SHA-256 records, executes only CLI `version` plus a non-GUI desktop recovery-smoke entrypoint in a rebuild-local temporary sandbox, then re-verifies staged source and rebuilt artifacts.
+- An M6 fresh Workspace reconstruction restore gate that reruns smoke verification, accepts only the staged verified Generic Workspace Backup, creates a new Workspace only, reuses Generic Backup rollback/revocation semantics, and re-verifies staging afterward.
 - No public/global peer address support, peer discovery, firewall mutation, UPnP, NAT-PMP, reverse tunnel, relay, CDN or external web request.
 - Windows double-click build/update entry point.
 - CI builds for Windows, macOS and Linux.
 
-M3's transport-independent mobile security and handoff foundation is complete. M4 is complete with trusted-peer identity, encrypted transfer, received-file verification and fail-closed Direct LAN. M5 Offline continuity is complete through embedded documentation, reproducible Cargo dependencies, recovery snapshots, read-only Restore Verification and portable per-OS release bundles. M6 now has verified snapshot staging, frozen rebuild and recovered-application smoke verification; Workspace restore into a fresh destination is next, while Secret recovery and network authority remain out of scope.
+M3's transport-independent mobile security and handoff foundation is complete. M4 is complete with trusted-peer identity, encrypted transfer, received-file verification and fail-closed Direct LAN. M5 Offline continuity is complete through embedded documentation, reproducible Cargo dependencies, recovery snapshots, read-only Restore Verification and portable per-OS release bundles. M6 now has verified snapshot staging, frozen rebuild, recovered-application smoke verification and fresh Workspace restoration; Reconstruction verification is next, while Secret recovery and network authority remain out of scope.
 
 ## Editor safety model
 
@@ -229,6 +230,19 @@ cargo run -- recovery snapshot smoke \\
 ~~~
 
 Smoke verification rechecks the staged Recovery Snapshot and rebuild marker/artifact hashes, then runs only CLI `version` and the desktop binary's non-GUI `--recovery-smoke-check` entrypoint. Process state is redirected into a temporary rebuild-local sandbox and removed afterward. This executes recovered code, so it is not an OS sandbox or publisher-authenticity guarantee.
+
+Restore the embedded Generic Workspace Backup only into a new destination:
+
+~~~text
+cargo run -- recovery snapshot restore-workspace \
+  --staging <STAGING-PATH> \
+  --rebuild <REBUILD-PATH> \
+  --destination <FRESH-WORKSPACE> \
+  [--source <ACTIVE-SOURCE-ROOT>] \
+  [--workspace <LIVE-WORKSPACE-ROOT>]
+~~~
+
+The command reruns the recovered-app smoke gate before creating the destination, uses only `recovery/workspace.dgmwbk`, and never overwrites or merges an existing Workspace. Generic Backup exclusions remain excluded, and Secret Backup recovery stays a separate explicit flow.
 
 ## Portable release bundles
 

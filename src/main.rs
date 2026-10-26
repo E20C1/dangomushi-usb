@@ -48,6 +48,15 @@ struct RecoverySnapshotSmokeOptions {
     rebuild: PathBuf,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct RecoverySnapshotRestoreWorkspaceOptions {
+    staging: PathBuf,
+    rebuild: PathBuf,
+    destination: PathBuf,
+    source: Option<PathBuf>,
+    workspace: Option<PathBuf>,
+}
+
 fn main() {
     if let Err(message) = run() {
         eprintln!("dangomushi: {message}");
@@ -229,6 +238,30 @@ fn run_recovery(args: Vec<String>) -> Result<(), String> {
                 summary.desktop.relative_path,
                 summary.desktop.bytes,
                 summary.desktop.sha256_hex()
+            );
+            Ok(())
+        }
+        "restore-workspace" => {
+            let options = parse_recovery_snapshot_restore_workspace_options(&args[2..])?;
+            let summary = offline_reconstruction::restore_workspace_into_fresh_destination(
+                &options.staging,
+                &options.rebuild,
+                &options.destination,
+                options.source.as_deref(),
+                options.workspace.as_deref(),
+            )
+            .map_err(|error| format!("fresh Workspace reconstruction restore failed: {error}"))?;
+
+            println!("DANGOMUSHI FRESH WORKSPACE RESTORED");
+            println!("staging: {}", options.staging.display());
+            println!("rebuild: {}", options.rebuild.display());
+            println!("destination: {}", options.destination.display());
+            println!("source_snapshot_sha256: {}", summary.source_snapshot.sha256_hex());
+            println!("app_version: {}", summary.app_version);
+            println!("workspace_backup_files: {}", summary.workspace_backup.files);
+            println!(
+                "workspace_backup_bytes: {}",
+                summary.workspace_backup.total_file_bytes
             );
             Ok(())
         }
@@ -493,8 +526,75 @@ fn parse_recovery_snapshot_smoke_options(
     Ok(RecoverySnapshotSmokeOptions { staging, rebuild })
 }
 
+
+fn parse_recovery_snapshot_restore_workspace_options(
+    args: &[String],
+) -> Result<RecoverySnapshotRestoreWorkspaceOptions, String> {
+    let mut staging = None;
+    let mut rebuild = None;
+    let mut destination = None;
+    let mut source = None;
+    let mut workspace = None;
+    let mut index = 0;
+
+    while index < args.len() {
+        let flag = args[index].as_str();
+        if matches!(flag, "--help" | "-h") {
+            return Err(recovery_help_text());
+        }
+
+        index += 1;
+        let value = args
+            .get(index)
+            .ok_or_else(|| format!("{flag} requires a value\n\n{}", recovery_help_text()))?;
+
+        match flag {
+            "--staging" => staging = Some(PathBuf::from(value)),
+            "--rebuild" => rebuild = Some(PathBuf::from(value)),
+            "--destination" => destination = Some(PathBuf::from(value)),
+            "--source" => source = Some(PathBuf::from(value)),
+            "--workspace" => workspace = Some(PathBuf::from(value)),
+            _ => {
+                return Err(format!(
+                    "unknown recovery snapshot restore-workspace option: {flag}\n\n{}",
+                    recovery_help_text()
+                ))
+            }
+        }
+
+        index += 1;
+    }
+
+    let staging = staging.ok_or_else(|| {
+        format!(
+            "--staging is required for fresh Workspace reconstruction restore\n\n{}",
+            recovery_help_text()
+        )
+    })?;
+    let rebuild = rebuild.ok_or_else(|| {
+        format!(
+            "--rebuild is required for fresh Workspace reconstruction restore\n\n{}",
+            recovery_help_text()
+        )
+    })?;
+    let destination = destination.ok_or_else(|| {
+        format!(
+            "--destination is required for fresh Workspace reconstruction restore\n\n{}",
+            recovery_help_text()
+        )
+    })?;
+
+    Ok(RecoverySnapshotRestoreWorkspaceOptions {
+        staging,
+        rebuild,
+        destination,
+        source,
+        workspace,
+    })
+}
+
 fn recovery_help_text() -> String {
-    "Usage:\n  dangomushi recovery snapshot create --backup backups/<NAME>.dgmwbk --destination <PATH> [--source <SOURCE-ROOT>] [--workspace <WORKSPACE-ROOT>]\n  dangomushi recovery snapshot verify --snapshot <PATH>\n  dangomushi recovery snapshot stage --snapshot <PATH> --destination <PATH> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n  dangomushi recovery snapshot rebuild --staging <PATH> --destination <PATH> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n  dangomushi recovery snapshot smoke --staging <PATH> --rebuild <PATH>\n\nDefaults for create:\n  source: .\n  workspace: ./workspace\n\nCreate requires a generated vendor/ directory and a verified Generic Workspace Backup. Verify is read-only. Stage verifies before materializing authenticated payload. Rebuild verifies the staged snapshot before creating a separate target directory, uses only the pinned Cargo toolchain plus staged vendor config with --frozen, and does not execute rebuilt binaries or restore Workspace data. Smoke re-verifies staging and rebuild integrity, then executes only the fixed CLI version and non-GUI desktop recovery-smoke entrypoints inside a temporary rebuild-local sandbox. Supply --source and/or --workspace when live roots exist so staging/rebuild outputs are rejected inside them.".to_string()
+    "Usage:\n  dangomushi recovery snapshot create --backup backups/<NAME>.dgmwbk --destination <PATH> [--source <SOURCE-ROOT>] [--workspace <WORKSPACE-ROOT>]\n  dangomushi recovery snapshot verify --snapshot <PATH>\n  dangomushi recovery snapshot stage --snapshot <PATH> --destination <PATH> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n  dangomushi recovery snapshot rebuild --staging <PATH> --destination <PATH> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n  dangomushi recovery snapshot smoke --staging <PATH> --rebuild <PATH>\n  dangomushi recovery snapshot restore-workspace --staging <PATH> --rebuild <PATH> --destination <FRESH-WORKSPACE> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n\nDefaults for create:\n  source: .\n  workspace: ./workspace\n\nCreate requires a generated vendor/ directory and a verified Generic Workspace Backup. Verify is read-only. Stage verifies before materializing authenticated payload. Rebuild verifies the staged snapshot before creating a separate target directory, uses only the pinned Cargo toolchain plus staged vendor config with --frozen, and does not execute rebuilt binaries or restore Workspace data. Smoke re-verifies staging and rebuild integrity, then executes only the fixed CLI version and non-GUI desktop recovery-smoke entrypoints inside a temporary rebuild-local sandbox. Restore-workspace reruns the smoke gate, accepts only the embedded Generic Workspace Backup, and creates a new Workspace destination; it never overwrites or merges an existing Workspace. Supply --source and/or --workspace when live roots exist so reconstruction outputs are rejected inside them.".to_string()
 }
 
 fn run_docs(args: Vec<String>) -> Result<(), String> {

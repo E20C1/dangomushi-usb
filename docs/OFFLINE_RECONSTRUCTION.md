@@ -165,11 +165,36 @@ Smoke verification intentionally executes recovered native code and therefore is
 
 ### Workspace restore into a fresh destination
 
-A later task may use the embedded Generic Workspace Backup to create a new Workspace destination.
+Fresh Workspace reconstruction restore is implemented by:
 
-The first restore target must be create-new. Overwriting or merging an existing live Workspace is not authorized by this milestone definition.
+~~~text
+offline_reconstruction::restore_workspace_into_fresh_destination(...)
+~~~
 
-The Generic Workspace Backup verifier/restore boundary remains authoritative.
+and the CLI:
+
+~~~text
+dangomushi recovery snapshot restore-workspace \
+  --staging <STAGING-PATH> \
+  --rebuild <REBUILD-PATH> \
+  --destination <FRESH-WORKSPACE> \
+  [--source <ACTIVE-SOURCE-ROOT>] \
+  [--workspace <LIVE-WORKSPACE-ROOT>]
+~~~
+
+The destination must not exist, must have a real non-symlink parent, and must remain outside the verified staging tree, rebuild tree, and any supplied active source or live Workspace roots. Existing Workspace overwrite or merge is rejected.
+
+Before destination mutation, the implementation reruns the complete recovered-application smoke gate. This re-verifies the staged Recovery Snapshot, rebuild marker, artifact hashes and fixed CLI/desktop smoke entrypoints.
+
+Only the fixed staged `recovery/workspace.dgmwbk` is accepted. It is independently checked through the Generic Workspace Backup verifier and its summary must equal the Workspace Backup summary authenticated by the verified Recovery Snapshot.
+
+The fresh destination is then initialized only after backup verification. Restoration reuses the existing Generic Workspace Backup extraction, restore staging/rollback, managed-root replacement and device-revocation merge path rather than defining another archive or restore format.
+
+The external backup bytes are streamed and hashed before and after restore and the backup is re-verified afterward. The entire staged Recovery Snapshot is also re-verified after restoration. Observable mismatch removes the newly created destination and fails closed.
+
+The restored scope is exactly Generic Workspace Backup scope: data, repositories, identity, config and autosave return. State excluded by Generic Backup does not become reconstructed implicitly; session state, local permission policy and peer-private state remain absent/default. The embedded recovery archive is not silently copied into the new Workspace backups directory.
+
+Secret Backup remains separate and is not auto-discovered or restored. This task does not authorize restore into an existing Workspace, Vault/Credential/Recovery Code recovery, LAN/Internet transport or release signing.
 
 ### Reconstruction verification
 
@@ -203,8 +228,8 @@ Internet P2P remains disabled under the M4 threat-review decision.
 
 ## Exactly One Next Task
 
-Verified snapshot staging materialization, frozen staged rebuild, and recovered application smoke verification are complete.
+Verified snapshot staging materialization, frozen staged rebuild, recovered application smoke verification, and fresh Workspace restoration are complete.
 
-The next authorized implementation task is **Workspace restore into a fresh destination**.
+The next authorized implementation task is **Reconstruction verification**.
 
-That task may use only the embedded, already-verified Generic Workspace Backup and must preserve its existing restore boundary. Secret restore, release signing, mobile transport, and Internet P2P remain separate later authorities.
+That final M6 task may verify the already-produced staging, rebuild and fresh Workspace evidence. Secret restore, release signing, mobile transport, and Internet P2P remain separate later authorities.

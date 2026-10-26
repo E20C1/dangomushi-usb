@@ -13,6 +13,7 @@ fn m6_is_explicitly_authorized_after_m5_completion() {
     assert!(ROADMAP.contains("- [x] **Verified snapshot staging materialization**"));
     assert!(ROADMAP.contains("- [x] **Frozen rebuild from staged source/vendor**"));
     assert!(ROADMAP.contains("- [x] **Recovered application smoke verification**"));
+    assert!(ROADMAP.contains("- [x] **Workspace restore into a fresh destination**"));
     assert!(README.contains("## Current milestone: M6 offline reconstruction"));
 }
 
@@ -35,21 +36,22 @@ fn first_m6_task_is_staging_only_and_does_not_pull_later_authority_forward() {
     for later in [
         "- [x] **Frozen rebuild from staged source/vendor**",
         "- [x] **Recovered application smoke verification**",
-        "- [ ] **Workspace restore into a fresh destination** — Exactly One Next Task",
-        "- [ ] Reconstruction verification",
+        "- [x] **Workspace restore into a fresh destination**",
+        "- [ ] **Reconstruction verification** — Exactly One Next Task",
     ] {
         assert!(ROADMAP.contains(later), "missing later M6 task: {later}");
     }
 
     assert!(ROADMAP.contains("- [x] **Frozen rebuild from staged source/vendor**"));
     assert!(ROADMAP.contains("- [x] **Recovered application smoke verification**"));
+    assert!(ROADMAP.contains("- [x] **Workspace restore into a fresh destination**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Workspace restore into a fresh destination** — Exactly One Next Task"
+        "- [ ] **Reconstruction verification** — Exactly One Next Task"
     ));
 }
 
 #[test]
-fn staging_runtime_authority_is_present_but_later_reconstruction_authority_is_not() {
+fn staged_reconstruction_authorities_advance_without_secret_restore() {
     assert!(MAIN.contains(r#""stage" =>"#));
     assert!(MAIN.contains("recovery snapshot stage --snapshot <PATH> --destination <PATH>"));
     assert!(RECOVERY.contains("pub fn stage_verified_snapshot"));
@@ -58,15 +60,10 @@ fn staging_runtime_authority_is_present_but_later_reconstruction_authority_is_no
 
     assert!(LIB.contains("pub mod offline_reconstruction"));
     assert!(MAIN.contains(r#""rebuild" =>"#));
-    for forbidden in [
-        "workspace_backup::restore_backup",
-        "secret_backup::restore",
-    ] {
-        assert!(
-            !MAIN.contains(forbidden) && !RECOVERY.contains(forbidden),
-            "later reconstruction authority appeared early: {forbidden}"
-        );
-    }
+    assert!(MAIN.contains(r#""restore-workspace" =>"#));
+    assert!(MAIN.contains("restore_workspace_into_fresh_destination"));
+    assert!(!MAIN.contains("secret_backup::restore"));
+    assert!(!RECOVERY.contains("secret_backup::restore"));
 }
 
 #[test]

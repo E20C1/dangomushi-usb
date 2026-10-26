@@ -78,12 +78,19 @@ fn restore_verifies_before_replace_and_keeps_rollback_path() {
         .expect("production source");
 
     let restore = production
-        .split("pub fn restore_backup")
+        .split("fn restore_archive_into_workspace")
         .nth(1)
-        .expect("restore function");
+        .expect("shared restore function");
+
+    assert!(production.contains(
+        "restore_archive_into_workspace(&canonical_workspace, &backups_root, &backup_path)"
+    ));
+    assert!(production.contains(
+        "restore_archive_into_workspace(&canonical_workspace, &backups_root, backup_path)"
+    ));
 
     let verify_position = restore
-        .find("verify_archive_path(&backup_path, Some(&staging_root))")
+        .find("verify_archive_path(backup_path, Some(&staging_root))")
         .expect("verified extraction");
     let replace_position = restore
         .find("replace_managed_roots")

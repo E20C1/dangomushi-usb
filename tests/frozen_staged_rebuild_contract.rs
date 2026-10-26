@@ -47,6 +47,14 @@ fn frozen_rebuild_uses_verified_staging_pinned_vendor_and_external_target() {
 
 #[test]
 fn rebuild_keeps_later_authority_out_of_scope() {
+    let rebuild = CORE
+        .split("pub fn frozen_rebuild")
+        .nth(1)
+        .expect("frozen rebuild")
+        .split("fn rebuild_into_new_directory")
+        .next()
+        .expect("frozen rebuild end");
+
     for forbidden in [
         "workspace_backup::restore_backup",
         "secret_backup",
@@ -59,13 +67,13 @@ fn rebuild_keeps_later_authority_out_of_scope() {
         "server::",
     ] {
         assert!(
-            !CORE.contains(forbidden),
+            !rebuild.contains(forbidden),
             "frozen rebuild gained forbidden later authority: {forbidden}"
         );
     }
 
-    assert!(!CORE.contains("Command::new(summary.cli"));
-    assert!(!CORE.contains("Command::new(&summary.cli"));
+    assert!(!rebuild.contains("Command::new(summary.cli"));
+    assert!(!rebuild.contains("Command::new(&summary.cli"));
     assert!(!SESSION.contains("frozen_rebuild_path="));
     assert!(!SESSION.contains("frozen_rebuild_sha256="));
 }
@@ -103,8 +111,9 @@ fn cli_exposes_only_fixed_rebuild_operation_and_roadmap_advances_once() {
 
     assert!(ROADMAP.contains("- [x] **Frozen rebuild from staged source/vendor**"));
     assert!(ROADMAP.contains("- [x] **Recovered application smoke verification**"));
+    assert!(ROADMAP.contains("- [x] **Workspace restore into a fresh destination**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Workspace restore into a fresh destination** — Exactly One Next Task"
+        "- [ ] **Reconstruction verification** — Exactly One Next Task"
     ));
 }
 
@@ -195,6 +204,31 @@ fn real_frozen_rebuild_from_verified_staging() {
     assert_eq!(smoke.cli, summary.cli);
     assert_eq!(smoke.desktop, summary.desktop);
     assert!(!rebuild.join(".dangomushi-recovery-smoke").exists());
+
+    let restored_workspace = parent.join("restored-workspace");
+    let restored = offline_reconstruction::restore_workspace_into_fresh_destination(
+        &staging,
+        &rebuild,
+        &restored_workspace,
+        Some(&source),
+        Some(&workspace_root),
+    )
+    .expect("fresh Workspace reconstruction restore");
+    assert_eq!(restored.source_snapshot, staged);
+    assert_eq!(restored.workspace_backup, staged.workspace_backup);
+    assert!(workspace::doctor(&restored_workspace).ok());
+    assert_eq!(
+        fs::read_to_string(restored_workspace.join("data/documents/rebuild-proof.txt"))
+            .expect("restored proof"),
+        "offline reconstruction proof"
+    );
+    assert!(!restored_workspace.join("state/session.v1").exists());
+    assert_eq!(
+        fs::read_dir(restored_workspace.join("backups"))
+            .expect("restored backups")
+            .count(),
+        0
+    );
 
     fs::remove_dir_all(parent).expect("cleanup");
 }

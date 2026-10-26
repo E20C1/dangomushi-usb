@@ -1,4 +1,4 @@
-use crate::device_revocation;
+use crate::{device_revocation, workspace};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::error::Error;
@@ -64,6 +64,8 @@ pub enum WorkspaceBackupError {
     BackupIntegrityFailed,
     SourceChanged,
     RestoreTargetUnsafe,
+    FreshRestoreDestinationExists,
+    FreshRestoreDestinationUnsafe,
     RestoreFailed,
     RevocationStateUnavailable,
     Io,
@@ -86,6 +88,8 @@ impl fmt::Display for WorkspaceBackupError {
             Self::BackupIntegrityFailed => "workspace backup integrity verification failed",
             Self::SourceChanged => "workspace changed while backup was being created",
             Self::RestoreTargetUnsafe => "workspace restore target is not in a safe state",
+            Self::FreshRestoreDestinationExists => "fresh Workspace restore destination already exists",
+            Self::FreshRestoreDestinationUnsafe => "fresh Workspace restore destination parent is unsafe",
             Self::RestoreFailed => "workspace restore failed and rollback was attempted",
             Self::RevocationStateUnavailable => "workspace restore could not verify device revocation state",
             Self::Io => "workspace backup I/O failed",
@@ -211,10 +215,83 @@ pub fn restore_backup(
     relative_backup: &Path,
 ) -> Result<WorkspaceBackupSummary, WorkspaceBackupError> {
     let (canonical_workspace, backups_root) = checked_workspace_and_backups(workspace_root)?;
-    ensure_no_restore_artifacts(&backups_root)?;
     let backup_path = resolve_backup_file(&backups_root, relative_backup)?;
+    restore_archive_into_workspace(&canonical_workspace, &backups_root, &backup_path)
+}
 
-    let (staging_root, rollback_root) = allocate_restore_dirs(&backups_root)?;
+pub fn restore_backup_file_into_fresh_workspace(
+    backup_path: &Path,
+    destination: &Path,
+) -> Result<WorkspaceBackupSummary, WorkspaceBackupError> {
+    // The external archive must remain byte-identical across the complete
+    // preflight verifier before the fresh destination is created.
+    let source_before = hash_backup_source(backup_path)?;
+    let expected = verify_archive_path(backup_path, None)?;
+    let source_verified = hash_backup_source(backup_path)?;
+    if source_verified != source_before {
+        return Err(WorkspaceBackupError::SourceChanged);
+    }
+    let (destination_parent, destination_path) = checked_fresh_workspace_destination(destination)?;
+
+    fs::create_dir(&destination_path).map_err(|error| {
+        if error.kind() == io::ErrorKind::AlreadyExists {
+            WorkspaceBackupError::FreshRestoreDestinationExists
+        } else {
+            WorkspaceBackupError::Io
+        }
+    })?;
+
+    let result = (|| {
+        workspace::initialize(&destination_path).map_err(|_| WorkspaceBackupError::Io)?;
+        if !workspace::doctor(&destination_path).ok() {
+            return Err(WorkspaceBackupError::RestoreTargetUnsafe);
+        }
+
+        let (canonical_workspace, backups_root) =
+            checked_workspace_and_backups(&destination_path)?;
+        let restored =
+            restore_archive_into_workspace(&canonical_workspace, &backups_root, backup_path)?;
+        if restored != expected {
+            return Err(WorkspaceBackupError::SourceChanged);
+        }
+
+        let source_after = hash_backup_source(backup_path)?;
+        if source_after != source_before {
+            return Err(WorkspaceBackupError::SourceChanged);
+        }
+        let verified_after = verify_archive_path(backup_path, None)?;
+        if verified_after != expected {
+            return Err(WorkspaceBackupError::SourceChanged);
+        }
+        if !workspace::doctor(&canonical_workspace).ok() {
+            return Err(WorkspaceBackupError::RestoreFailed);
+        }
+
+        Ok(restored)
+    })();
+
+    match result {
+        Ok(summary) => {
+            let _ = sync_directory(&destination_path);
+            let _ = sync_directory(&destination_parent);
+            Ok(summary)
+        }
+        Err(error) => {
+            let _ = fs::remove_dir_all(&destination_path);
+            let _ = sync_directory(&destination_parent);
+            Err(error)
+        }
+    }
+}
+
+fn restore_archive_into_workspace(
+    canonical_workspace: &Path,
+    backups_root: &Path,
+    backup_path: &Path,
+) -> Result<WorkspaceBackupSummary, WorkspaceBackupError> {
+    ensure_no_restore_artifacts(backups_root)?;
+
+    let (staging_root, rollback_root) = allocate_restore_dirs(backups_root)?;
     if let Err(error) = fs::create_dir(&staging_root) {
         return Err(map_io(error));
     }
@@ -223,7 +300,7 @@ pub fn restore_backup(
         return Err(map_io(error));
     }
 
-    let summary = match verify_archive_path(&backup_path, Some(&staging_root)) {
+    let summary = match verify_archive_path(backup_path, Some(&staging_root)) {
         Ok(summary) => summary,
         Err(error) => {
             let _ = fs::remove_dir_all(&staging_root);
@@ -232,23 +309,23 @@ pub fn restore_backup(
         }
     };
 
-    if let Err(error) = validate_restore_targets(&canonical_workspace, &staging_root) {
+    if let Err(error) = validate_restore_targets(canonical_workspace, &staging_root) {
         let _ = fs::remove_dir_all(&staging_root);
         let _ = fs::remove_dir_all(&rollback_root);
         return Err(error);
     }
 
-    if device_revocation::merge_for_workspace_restore(&canonical_workspace, &staging_root).is_err() {
+    if device_revocation::merge_for_workspace_restore(canonical_workspace, &staging_root).is_err() {
         let _ = fs::remove_dir_all(&staging_root);
         let _ = fs::remove_dir_all(&rollback_root);
         return Err(WorkspaceBackupError::RevocationStateUnavailable);
     }
 
     if let Err(error) = replace_managed_roots(
-        &canonical_workspace,
+        canonical_workspace,
         &staging_root,
         &rollback_root,
-        &backups_root,
+        backups_root,
     ) {
         let _ = fs::remove_dir_all(&staging_root);
         let _ = fs::remove_dir_all(&rollback_root);
@@ -257,10 +334,75 @@ pub fn restore_backup(
 
     let _ = fs::remove_dir_all(&staging_root);
     let _ = fs::remove_dir_all(&rollback_root);
-    let _ = sync_directory(&backups_root);
-    let _ = sync_directory(&canonical_workspace);
+    let _ = sync_directory(backups_root);
+    let _ = sync_directory(canonical_workspace);
 
     Ok(summary)
+}
+
+fn checked_fresh_workspace_destination(
+    destination: &Path,
+) -> Result<(PathBuf, PathBuf), WorkspaceBackupError> {
+    if destination.as_os_str().is_empty() {
+        return Err(WorkspaceBackupError::FreshRestoreDestinationUnsafe);
+    }
+
+    match fs::symlink_metadata(destination) {
+        Ok(_) => return Err(WorkspaceBackupError::FreshRestoreDestinationExists),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(_) => return Err(WorkspaceBackupError::Io),
+    }
+
+    let name = destination
+        .file_name()
+        .ok_or(WorkspaceBackupError::FreshRestoreDestinationUnsafe)?;
+    if name == OsStr::new(".") || name == OsStr::new("..") {
+        return Err(WorkspaceBackupError::FreshRestoreDestinationUnsafe);
+    }
+
+    let parent = match destination.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent,
+        _ => Path::new("."),
+    };
+    let metadata =
+        fs::symlink_metadata(parent).map_err(|_| WorkspaceBackupError::FreshRestoreDestinationUnsafe)?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(WorkspaceBackupError::FreshRestoreDestinationUnsafe);
+    }
+
+    let canonical_parent =
+        fs::canonicalize(parent).map_err(|_| WorkspaceBackupError::FreshRestoreDestinationUnsafe)?;
+    Ok((canonical_parent.clone(), canonical_parent.join(name)))
+}
+
+fn hash_backup_source(
+    backup_path: &Path,
+) -> Result<(u64, [u8; 32]), WorkspaceBackupError> {
+    let metadata = fs::symlink_metadata(backup_path).map_err(|_| WorkspaceBackupError::Io)?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err(WorkspaceBackupError::InvalidBackupPath);
+    }
+
+    let mut file = File::open(backup_path).map_err(|_| WorkspaceBackupError::Io)?;
+    let mut hasher = Sha256::new();
+    let mut total = 0u64;
+    let mut buffer = [0u8; IO_BUFFER_BYTES];
+
+    loop {
+        let count = file.read(&mut buffer).map_err(|_| WorkspaceBackupError::Io)?;
+        if count == 0 {
+            break;
+        }
+        total = total
+            .checked_add(count as u64)
+            .ok_or(WorkspaceBackupError::InvalidBackupFormat)?;
+        hasher.update(&buffer[..count]);
+    }
+
+    let digest = hasher.finalize();
+    let mut sha256 = [0u8; 32];
+    sha256.copy_from_slice(digest.as_slice());
+    Ok((total, sha256))
 }
 
 fn checked_workspace_and_backups(
@@ -1463,4 +1605,95 @@ mod tests {
         fs::remove_dir_all(root).expect("cleanup root");
         fs::remove_dir_all(outside).expect("cleanup outside");
     }
+
+    #[test]
+    fn external_backup_restores_only_into_a_fresh_workspace() {
+        let source = temporary_workspace("fresh-source");
+        fs::create_dir_all(source.join("state/autosave")).expect("autosave");
+        fs::write(source.join("data/documents/note.txt"), "recovered\n").expect("document");
+        fs::write(source.join("identity/device.txt"), "trusted-public-state").expect("identity");
+        fs::write(source.join("config/settings.toml"), "mode = \"recovered\"\n").expect("config");
+        fs::write(source.join("state/autosave/draft.txt"), "draft").expect("draft");
+        fs::write(source.join("state/session.v1"), "must-not-be-backed-up").expect("session");
+
+        let created = create_backup(&source).expect("create");
+        let backup_path = source.join(&created.relative_path);
+        let expected = verify_backup_file(&backup_path).expect("verify");
+
+        let destination = source.with_extension("fresh-restored");
+        let restored =
+            restore_backup_file_into_fresh_workspace(&backup_path, &destination).expect("restore");
+        assert_eq!(restored, expected);
+        assert!(workspace::doctor(&destination).ok());
+        assert_eq!(
+            fs::read_to_string(destination.join("data/documents/note.txt")).expect("document"),
+            "recovered\n"
+        );
+        assert_eq!(
+            fs::read_to_string(destination.join("identity/device.txt")).expect("identity"),
+            "trusted-public-state"
+        );
+        assert_eq!(
+            fs::read_to_string(destination.join("config/settings.toml")).expect("config"),
+            "mode = \"recovered\"\n"
+        );
+        assert_eq!(
+            fs::read_to_string(destination.join("state/autosave/draft.txt")).expect("draft"),
+            "draft"
+        );
+        assert!(!destination.join("state/session.v1").exists());
+        assert_eq!(
+            fs::read_dir(destination.join("backups"))
+                .expect("backups")
+                .count(),
+            0,
+            "external recovery archive must not be silently copied into the restored Workspace"
+        );
+
+        fs::remove_dir_all(source).expect("cleanup source");
+        fs::remove_dir_all(destination).expect("cleanup destination");
+    }
+
+    #[test]
+    fn fresh_restore_refuses_existing_destination_without_mutation() {
+        let source = temporary_workspace("fresh-existing-source");
+        fs::write(source.join("data/documents/note.txt"), "backup").expect("document");
+        let created = create_backup(&source).expect("create");
+        let backup_path = source.join(&created.relative_path);
+
+        let destination = source.with_extension("fresh-existing-destination");
+        fs::create_dir_all(&destination).expect("destination");
+        fs::write(destination.join("sentinel.txt"), "keep").expect("sentinel");
+
+        assert_eq!(
+            restore_backup_file_into_fresh_workspace(&backup_path, &destination).unwrap_err(),
+            WorkspaceBackupError::FreshRestoreDestinationExists
+        );
+        assert_eq!(
+            fs::read_to_string(destination.join("sentinel.txt")).expect("sentinel"),
+            "keep"
+        );
+
+        fs::remove_dir_all(source).expect("cleanup source");
+        fs::remove_dir_all(destination).expect("cleanup destination");
+    }
+
+    #[test]
+    fn invalid_external_backup_fails_before_fresh_destination_creation() {
+        let source = temporary_workspace("fresh-invalid-source");
+        fs::write(source.join("data/documents/note.txt"), "backup").expect("document");
+        let created = create_backup(&source).expect("create");
+        let backup_path = source.join(&created.relative_path);
+        let mut bytes = fs::read(&backup_path).expect("read");
+        let index = bytes.len() / 2;
+        bytes[index] ^= 0x55;
+        fs::write(&backup_path, bytes).expect("tamper");
+
+        let destination = source.with_extension("fresh-invalid-destination");
+        assert!(restore_backup_file_into_fresh_workspace(&backup_path, &destination).is_err());
+        assert!(!destination.exists());
+
+        fs::remove_dir_all(source).expect("cleanup source");
+    }
+
 }

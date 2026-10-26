@@ -664,7 +664,15 @@ After the smoke processes exit, the temporary directory is removed, the rebuild 
 
 This is intentionally a bounded execution gate, not an OS sandbox. Hash-consistent malicious recovered code could still attempt direct operating-system actions. No Workspace restore, Secret restore, arbitrary command execution, normal desktop GUI startup, LAN listener or Internet P2P path is authorized here.
 
-The next M6 task is Workspace restore into a fresh destination. Reconstruction verification remains the final separate M6 authority.
+The fourth M6 task, **Workspace restore into a fresh destination**, is implemented by `offline_reconstruction::restore_workspace_into_fresh_destination` plus the existing Generic Workspace Backup restore core.
+
+Before creating a Workspace destination, reconstruction validates destination nonexistence/protected-root separation and reruns `smoke_verify_rebuild`. Only the staged `recovery/workspace.dgmwbk` is accepted, and its independently verified Generic Backup summary must equal the Workspace Backup summary already authenticated by the Recovery Snapshot.
+
+`workspace_backup::restore_backup_file_into_fresh_workspace` verifies the external archive before creating the destination, initializes a fresh Workspace, and reuses the same Generic Backup extraction, restore staging/rollback, managed-root replacement and revocation-merge path used by ordinary restore. The source archive is hashed before/after use and re-verified. Failure removes the fresh destination.
+
+After restore, M6 re-verifies both the embedded Generic Backup and the complete staged Recovery Snapshot. Generic Backup exclusions remain exclusions: session state, permission policy, peer-private state and Secret Backup data are not synthesized. Existing Workspace merge/overwrite is not authorized.
+
+Reconstruction verification remains the final separate M6 authority.
 
 Secret Backup / Restore remains an independent authenticated flow and is not auto-discovered by reconstruction. Release signing/provenance, automatic updates, mobile editor/session LAN transport, and Internet P2P remain separate future milestones. The M4 Internet P2P disable/defer decision remains unchanged.
 

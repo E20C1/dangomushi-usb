@@ -125,7 +125,8 @@ fn m5_closes_and_m6_starts_only_after_an_explicit_boundary() {
     assert!(ROADMAP.contains("- [x] **Verified snapshot staging materialization**"));
     assert!(ROADMAP.contains("- [x] **Frozen rebuild from staged source/vendor**"));
     assert!(ROADMAP.contains("- [x] **Recovered application smoke verification**"));
+    assert!(ROADMAP.contains("- [x] **Workspace restore into a fresh destination**"));
     assert!(ROADMAP.contains(
-        "- [ ] **Workspace restore into a fresh destination** — Exactly One Next Task"
+        "- [ ] **Reconstruction verification** — Exactly One Next Task"
     ));
 }
