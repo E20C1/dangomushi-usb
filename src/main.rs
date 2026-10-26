@@ -57,6 +57,13 @@ struct RecoverySnapshotRestoreWorkspaceOptions {
     workspace: Option<PathBuf>,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct ReconstructionVerifyOptions {
+    staging: PathBuf,
+    rebuild: PathBuf,
+    restored_workspace: PathBuf,
+}
+
 fn main() {
     if let Err(message) = run() {
         eprintln!("dangomushi: {message}");
@@ -258,6 +265,43 @@ fn run_recovery(args: Vec<String>) -> Result<(), String> {
             println!("destination: {}", options.destination.display());
             println!("source_snapshot_sha256: {}", summary.source_snapshot.sha256_hex());
             println!("app_version: {}", summary.app_version);
+            println!("workspace_backup_files: {}", summary.workspace_backup.files);
+            println!(
+                "workspace_backup_bytes: {}",
+                summary.workspace_backup.total_file_bytes
+            );
+            Ok(())
+        }
+        "verify-reconstruction" => {
+            let options = parse_reconstruction_verify_options(&args[2..])?;
+            let summary = offline_reconstruction::verify_reconstruction(
+                &options.staging,
+                &options.rebuild,
+                &options.restored_workspace,
+            )
+            .map_err(|error| format!("reconstruction verification failed: {error}"))?;
+
+            println!("DANGOMUSHI RECONSTRUCTION VERIFIED");
+            println!("staging: {}", options.staging.display());
+            println!("rebuild: {}", options.rebuild.display());
+            println!("restored_workspace: {}", options.restored_workspace.display());
+            println!("source_snapshot_sha256: {}", summary.source_snapshot.sha256_hex());
+            println!("rebuild_runner_version: {}", summary.rebuild_runner_version);
+            println!("app_version: {}", summary.app_version);
+            println!("os: {}", summary.os);
+            println!("arch: {}", summary.arch);
+            println!(
+                "cli: {} | {} bytes | {}",
+                summary.cli.relative_path,
+                summary.cli.bytes,
+                summary.cli.sha256_hex()
+            );
+            println!(
+                "desktop: {} | {} bytes | {}",
+                summary.desktop.relative_path,
+                summary.desktop.bytes,
+                summary.desktop.sha256_hex()
+            );
             println!("workspace_backup_files: {}", summary.workspace_backup.files);
             println!(
                 "workspace_backup_bytes: {}",
@@ -593,8 +637,68 @@ fn parse_recovery_snapshot_restore_workspace_options(
     })
 }
 
+fn parse_reconstruction_verify_options(
+    args: &[String],
+) -> Result<ReconstructionVerifyOptions, String> {
+    let mut staging = None;
+    let mut rebuild = None;
+    let mut restored_workspace = None;
+    let mut index = 0;
+
+    while index < args.len() {
+        let flag = args[index].as_str();
+        if matches!(flag, "--help" | "-h") {
+            return Err(recovery_help_text());
+        }
+
+        index += 1;
+        let value = args
+            .get(index)
+            .ok_or_else(|| format!("{flag} requires a value\n\n{}", recovery_help_text()))?;
+
+        match flag {
+            "--staging" => staging = Some(PathBuf::from(value)),
+            "--rebuild" => rebuild = Some(PathBuf::from(value)),
+            "--restored-workspace" => restored_workspace = Some(PathBuf::from(value)),
+            _ => {
+                return Err(format!(
+                    "unknown reconstruction verification option: {flag}\n\n{}",
+                    recovery_help_text()
+                ))
+            }
+        }
+
+        index += 1;
+    }
+
+    let staging = staging.ok_or_else(|| {
+        format!(
+            "--staging is required for reconstruction verification\n\n{}",
+            recovery_help_text()
+        )
+    })?;
+    let rebuild = rebuild.ok_or_else(|| {
+        format!(
+            "--rebuild is required for reconstruction verification\n\n{}",
+            recovery_help_text()
+        )
+    })?;
+    let restored_workspace = restored_workspace.ok_or_else(|| {
+        format!(
+            "--restored-workspace is required for reconstruction verification\n\n{}",
+            recovery_help_text()
+        )
+    })?;
+
+    Ok(ReconstructionVerifyOptions {
+        staging,
+        rebuild,
+        restored_workspace,
+    })
+}
+
 fn recovery_help_text() -> String {
-    "Usage:\n  dangomushi recovery snapshot create --backup backups/<NAME>.dgmwbk --destination <PATH> [--source <SOURCE-ROOT>] [--workspace <WORKSPACE-ROOT>]\n  dangomushi recovery snapshot verify --snapshot <PATH>\n  dangomushi recovery snapshot stage --snapshot <PATH> --destination <PATH> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n  dangomushi recovery snapshot rebuild --staging <PATH> --destination <PATH> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n  dangomushi recovery snapshot smoke --staging <PATH> --rebuild <PATH>\n  dangomushi recovery snapshot restore-workspace --staging <PATH> --rebuild <PATH> --destination <FRESH-WORKSPACE> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n\nDefaults for create:\n  source: .\n  workspace: ./workspace\n\nCreate requires a generated vendor/ directory and a verified Generic Workspace Backup. Verify is read-only. Stage verifies before materializing authenticated payload. Rebuild verifies the staged snapshot before creating a separate target directory, uses only the pinned Cargo toolchain plus staged vendor config with --frozen, and does not execute rebuilt binaries or restore Workspace data. Smoke re-verifies staging and rebuild integrity, then executes only the fixed CLI version and non-GUI desktop recovery-smoke entrypoints inside a temporary rebuild-local sandbox. Restore-workspace reruns the smoke gate, accepts only the embedded Generic Workspace Backup, and creates a new Workspace destination; it never overwrites or merges an existing Workspace. Supply --source and/or --workspace when live roots exist so reconstruction outputs are rejected inside them.".to_string()
+    "Usage:\n  dangomushi recovery snapshot create --backup backups/<NAME>.dgmwbk --destination <PATH> [--source <SOURCE-ROOT>] [--workspace <WORKSPACE-ROOT>]\n  dangomushi recovery snapshot verify --snapshot <PATH>\n  dangomushi recovery snapshot stage --snapshot <PATH> --destination <PATH> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n  dangomushi recovery snapshot rebuild --staging <PATH> --destination <PATH> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n  dangomushi recovery snapshot smoke --staging <PATH> --rebuild <PATH>\n  dangomushi recovery snapshot restore-workspace --staging <PATH> --rebuild <PATH> --destination <FRESH-WORKSPACE> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n  dangomushi recovery snapshot verify-reconstruction --staging <PATH> --rebuild <PATH> --restored-workspace <FRESH-WORKSPACE>\n\nDefaults for create:\n  source: .\n  workspace: ./workspace\n\nCreate requires a generated vendor/ directory and a verified Generic Workspace Backup. Verify is read-only. Stage verifies before materializing authenticated payload. Rebuild verifies the staged snapshot before creating a separate target directory, uses only the pinned Cargo toolchain plus staged vendor config with --frozen, and does not execute rebuilt binaries or restore Workspace data. Smoke re-verifies staging and rebuild integrity, then executes only the fixed CLI version and non-GUI desktop recovery-smoke entrypoints inside a temporary rebuild-local sandbox. Restore-workspace reruns the smoke gate, accepts only the embedded Generic Workspace Backup, and creates a new Workspace destination; it never overwrites or merges an existing Workspace. Verify-reconstruction reuses the smoke gate, re-verifies staged/rebuild evidence, compares every managed Workspace entry byte-for-byte with the authenticated Generic Backup, and requires the fresh-only non-managed layout. Supply --source and/or --workspace when live roots exist so reconstruction outputs are rejected inside them.".to_string()
 }
 
 fn run_docs(args: Vec<String>) -> Result<(), String> {
@@ -887,6 +991,37 @@ mod tests {
         assert!(parse_recovery_snapshot_smoke_options(&[
             "--staging".into(),
             "../staged-reconstruction".into(),
+        ])
+        .is_err());
+    }
+
+    #[test]
+    fn reconstruction_verify_requires_all_three_evidence_roots() {
+        let options = parse_reconstruction_verify_options(&[
+            "--staging".into(),
+            "../staged-reconstruction".into(),
+            "--rebuild".into(),
+            "../rebuild-output".into(),
+            "--restored-workspace".into(),
+            "../restored-workspace".into(),
+        ])
+        .expect("parse reconstruction verification options");
+
+        assert_eq!(
+            options,
+            ReconstructionVerifyOptions {
+                staging: PathBuf::from("../staged-reconstruction"),
+                rebuild: PathBuf::from("../rebuild-output"),
+                restored_workspace: PathBuf::from("../restored-workspace"),
+            }
+        );
+
+        assert!(parse_reconstruction_verify_options(&[]).is_err());
+        assert!(parse_reconstruction_verify_options(&[
+            "--staging".into(),
+            "../staged-reconstruction".into(),
+            "--rebuild".into(),
+            "../rebuild-output".into(),
         ])
         .is_err());
     }
