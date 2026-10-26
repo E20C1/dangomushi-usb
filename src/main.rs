@@ -837,6 +837,8 @@ dangomushi recovery snapshot verify --snapshot <PATH>\n  \
 dangomushi recovery snapshot stage --snapshot <PATH> --destination <PATH> [--source PATH] [--workspace PATH]\n  \
 dangomushi recovery snapshot rebuild --staging <PATH> --destination <PATH> [--source PATH] [--workspace PATH]\n  \
 dangomushi recovery snapshot smoke --staging <PATH> --rebuild <PATH>\n  \
+dangomushi recovery snapshot restore-workspace --staging <PATH> --rebuild <PATH> --destination <FRESH-WORKSPACE> [--source PATH] [--workspace PATH]\n  \
+dangomushi recovery snapshot verify-reconstruction --staging <PATH> --rebuild <PATH> --restored-workspace <FRESH-WORKSPACE>\n  \
 dangomushi version\n\n\
 Desktop:\n  run the dangomushi-desktop binary built with --features desktop\n\n\
 Defaults:\n  port: {DEFAULT_PORT}\n  workspace: ./{DEFAULT_WORKSPACE}\n\n\
