@@ -64,6 +64,7 @@ pub enum WorkspaceBackupError {
     BackupIntegrityFailed,
     SourceChanged,
     RestoreTargetUnsafe,
+    WorkspaceContentsMismatch,
     FreshRestoreDestinationExists,
     FreshRestoreDestinationUnsafe,
     RestoreFailed,
@@ -88,6 +89,7 @@ impl fmt::Display for WorkspaceBackupError {
             Self::BackupIntegrityFailed => "workspace backup integrity verification failed",
             Self::SourceChanged => "workspace changed while backup was being created",
             Self::RestoreTargetUnsafe => "workspace restore target is not in a safe state",
+            Self::WorkspaceContentsMismatch => "workspace managed contents do not match the verified backup",
             Self::FreshRestoreDestinationExists => "fresh Workspace restore destination already exists",
             Self::FreshRestoreDestinationUnsafe => "fresh Workspace restore destination parent is unsafe",
             Self::RestoreFailed => "workspace restore failed and rollback was attempted",
@@ -208,6 +210,17 @@ pub(crate) fn verify_backup_file(
     backup_path: &Path,
 ) -> Result<WorkspaceBackupSummary, WorkspaceBackupError> {
     verify_archive_path(backup_path, None)
+}
+
+pub(crate) fn verify_backup_file_matches_workspace(
+    backup_path: &Path,
+    workspace_root: &Path,
+) -> Result<WorkspaceBackupSummary, WorkspaceBackupError> {
+    let (canonical_workspace, _) = checked_workspace_and_backups(workspace_root)?;
+    if !workspace::doctor(&canonical_workspace).ok() {
+        return Err(WorkspaceBackupError::RestoreTargetUnsafe);
+    }
+    verify_archive_path_against_workspace(backup_path, &canonical_workspace)
 }
 
 pub fn restore_backup(
@@ -809,6 +822,25 @@ fn verify_archive_path(
     backup_path: &Path,
     extraction_root: Option<&Path>,
 ) -> Result<WorkspaceBackupSummary, WorkspaceBackupError> {
+    verify_archive_path_internal(backup_path, extraction_root, None)
+}
+
+fn verify_archive_path_against_workspace(
+    backup_path: &Path,
+    workspace_root: &Path,
+) -> Result<WorkspaceBackupSummary, WorkspaceBackupError> {
+    verify_archive_path_internal(backup_path, None, Some(workspace_root))
+}
+
+fn verify_archive_path_internal(
+    backup_path: &Path,
+    extraction_root: Option<&Path>,
+    comparison_root: Option<&Path>,
+) -> Result<WorkspaceBackupSummary, WorkspaceBackupError> {
+    if extraction_root.is_some() && comparison_root.is_some() {
+        return Err(WorkspaceBackupError::InvalidBackupFormat);
+    }
+
     let metadata = fs::symlink_metadata(backup_path).map_err(|error| {
         if error.kind() == io::ErrorKind::NotFound {
             WorkspaceBackupError::BackupNotFound
@@ -884,6 +916,9 @@ fn verify_archive_path(
                 }
                 fs::create_dir(&target).map_err(|_| WorkspaceBackupError::Io)?;
             }
+            if let Some(root) = comparison_root {
+                verify_comparison_directory(root, &components)?;
+            }
             directories.insert(components);
             summary.directories = summary.directories.saturating_add(1);
             continue;
@@ -913,9 +948,31 @@ fn verify_archive_path(
             None => None,
         };
 
+        let comparison_target = comparison_root
+            .map(|root| join_components(root, &components))
+            .transpose()?;
+        let mut comparison_file = match comparison_target {
+            Some(path) => {
+                let metadata = fs::symlink_metadata(&path)
+                    .map_err(|_| WorkspaceBackupError::WorkspaceContentsMismatch)?;
+                if metadata.file_type().is_symlink()
+                    || !metadata.is_file()
+                    || metadata.len() != length
+                {
+                    return Err(WorkspaceBackupError::WorkspaceContentsMismatch);
+                }
+                Some(
+                    File::open(path)
+                        .map_err(|_| WorkspaceBackupError::WorkspaceContentsMismatch)?,
+                )
+            }
+            None => None,
+        };
+
         let mut file_hasher = Sha256::new();
         let mut remaining = length;
         let mut buffer = [0u8; IO_BUFFER_BYTES];
+        let mut comparison_buffer = [0u8; IO_BUFFER_BYTES];
 
         while remaining > 0 {
             let count = usize::try_from(remaining.min(buffer.len() as u64))
@@ -925,6 +982,13 @@ fn verify_archive_path(
             if let Some(file) = output.as_mut() {
                 file.write_all(&buffer[..count])
                     .map_err(|_| WorkspaceBackupError::Io)?;
+            }
+            if let Some(file) = comparison_file.as_mut() {
+                file.read_exact(&mut comparison_buffer[..count])
+                    .map_err(|_| WorkspaceBackupError::WorkspaceContentsMismatch)?;
+                if comparison_buffer[..count] != buffer[..count] {
+                    return Err(WorkspaceBackupError::WorkspaceContentsMismatch);
+                }
             }
             remaining -= count as u64;
         }
@@ -939,6 +1003,16 @@ fn verify_archive_path(
         if let Some(file) = output {
             file.sync_all().map_err(|_| WorkspaceBackupError::Io)?;
         }
+        if let Some(mut file) = comparison_file {
+            let mut trailing = [0u8; 1];
+            if file
+                .read(&mut trailing)
+                .map_err(|_| WorkspaceBackupError::WorkspaceContentsMismatch)?
+                != 0
+            {
+                return Err(WorkspaceBackupError::WorkspaceContentsMismatch);
+            }
+        }
 
         summary.files = summary.files.saturating_add(1);
     }
@@ -948,6 +1022,10 @@ fn verify_archive_path(
         if !roots_seen.contains(&expected) {
             return Err(WorkspaceBackupError::InvalidBackupFormat);
         }
+    }
+
+    if let Some(root) = comparison_root {
+        verify_comparison_tree_exact(root, &seen)?;
     }
 
     let computed = reader.finish_hash();
@@ -975,6 +1053,87 @@ fn verify_archive_path(
     }
 
     Ok(summary)
+}
+
+fn verify_comparison_directory(
+    root: &Path,
+    components: &[String],
+) -> Result<(), WorkspaceBackupError> {
+    let target = join_components(root, components)?;
+    let metadata = fs::symlink_metadata(target)
+        .map_err(|_| WorkspaceBackupError::WorkspaceContentsMismatch)?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(WorkspaceBackupError::WorkspaceContentsMismatch);
+    }
+    Ok(())
+}
+
+fn verify_comparison_tree_exact(
+    root: &Path,
+    expected: &BTreeSet<Vec<String>>,
+) -> Result<(), WorkspaceBackupError> {
+    let mut observed = BTreeSet::<Vec<String>>::new();
+    for managed_root in MANAGED_ROOTS {
+        let components = managed_root
+            .iter()
+            .map(|part| (*part).to_string())
+            .collect::<Vec<_>>();
+        collect_comparison_entries(root, &components, &mut observed)?;
+    }
+
+    if observed != *expected {
+        return Err(WorkspaceBackupError::WorkspaceContentsMismatch);
+    }
+    Ok(())
+}
+
+fn collect_comparison_entries(
+    root: &Path,
+    components: &[String],
+    observed: &mut BTreeSet<Vec<String>>,
+) -> Result<(), WorkspaceBackupError> {
+    if observed.len() >= MAX_BACKUP_ENTRIES {
+        return Err(WorkspaceBackupError::EntryLimitExceeded);
+    }
+
+    let target = join_components(root, components)?;
+    let metadata = fs::symlink_metadata(&target)
+        .map_err(|_| WorkspaceBackupError::WorkspaceContentsMismatch)?;
+    if metadata.file_type().is_symlink() {
+        return Err(WorkspaceBackupError::WorkspaceContentsMismatch);
+    }
+    if !metadata.is_dir() && !metadata.is_file() {
+        return Err(WorkspaceBackupError::WorkspaceContentsMismatch);
+    }
+
+    if !observed.insert(components.to_vec()) {
+        return Err(WorkspaceBackupError::WorkspaceContentsMismatch);
+    }
+
+    if !metadata.is_dir() {
+        return Ok(());
+    }
+
+    let mut entries = fs::read_dir(&target)
+        .map_err(|_| WorkspaceBackupError::WorkspaceContentsMismatch)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| WorkspaceBackupError::WorkspaceContentsMismatch)?;
+    entries.sort_by(|left, right| left.file_name().cmp(&right.file_name()));
+
+    for entry in entries {
+        let name = entry
+            .file_name()
+            .to_str()
+            .ok_or(WorkspaceBackupError::WorkspaceContentsMismatch)?
+            .to_string();
+        validate_component_text(&name)
+            .map_err(|_| WorkspaceBackupError::WorkspaceContentsMismatch)?;
+        let mut child = components.to_vec();
+        child.push(name);
+        collect_comparison_entries(root, &child, observed)?;
+    }
+
+    Ok(())
 }
 
 fn read_components(reader: &mut HashingReader) -> Result<Vec<String>, WorkspaceBackupError> {
