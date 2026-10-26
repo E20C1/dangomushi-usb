@@ -998,14 +998,14 @@ fn verify_fresh_reconstruction_layout(
         return Err(ReconstructionVerificationError::WorkspaceLayoutMismatch);
     }
 
-    let expected_top = [
-        (".dangomushi-workspace", false),
-        ("backups", true),
-        ("config", true),
-        ("data", true),
-        ("identity", true),
-        ("repositories", true),
-        ("state", true),
+    let expected_top = vec![
+        (".dangomushi-workspace".to_string(), false),
+        ("backups".to_string(), true),
+        ("config".to_string(), true),
+        ("data".to_string(), true),
+        ("identity".to_string(), true),
+        ("repositories".to_string(), true),
+        ("state".to_string(), true),
     ];
     let mut observed_top = Vec::<(String, bool)>::new();
     for entry in fs::read_dir(workspace_root)
