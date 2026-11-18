@@ -1,3 +1,6 @@
+use crate::clipboard_hygiene::{
+    ClipboardPolicy, ClipboardPoll, ClipboardSecret, SecretClipboard, SystemClipboard,
+};
 use crate::device_pairing::{DevicePairing, PairedDeviceCandidate, PairingInvitation, PairingStatus};
 use crate::device_permissions::{self, DevicePermissionStore, PermissionScope};
 use crate::device_revocation;
@@ -10,6 +13,9 @@ use crate::lan_access_control::LanEnableControl;
 use crate::network_safety::{self, NetworkEnvironment, NetworkSafetyAssessment};
 use crate::offline_docs;
 use crate::peer_identity;
+use crate::password_generator::{
+    self, GeneratedPassword, GeneratorConfig, MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH,
+};
 use crate::native_ui_theme::{self as theme, PixelIcon, BAD, BG, LINE, MUTED, OK, PANEL, TEXT, WARN};
 use crate::repository_git;
 use crate::session_state::{self, SessionState, SessionView};
@@ -47,6 +53,7 @@ pub fn run() -> eframe::Result {
 enum View {
     Home,
     Tools,
+    PasswordGenerator,
     Files,
     Editor,
     HashVerify,
@@ -65,6 +72,7 @@ impl View {
         match self {
             Self::Home => SessionView::Home,
             Self::Tools => SessionView::Tools,
+            Self::PasswordGenerator => SessionView::Tools,
             Self::Files => SessionView::Files,
             Self::Editor => SessionView::Editor,
             Self::HashVerify => SessionView::HashVerify,
@@ -826,12 +834,52 @@ impl BackupUiState {
     }
 }
 
+
+struct PasswordGeneratorUiState {
+    config: GeneratorConfig,
+    generated: Option<GeneratedPassword>,
+    error: Option<String>,
+}
+
+impl PasswordGeneratorUiState {
+    fn new() -> Self {
+        Self {
+            config: GeneratorConfig::default(),
+            generated: None,
+            error: None,
+        }
+    }
+
+    fn generate(&mut self) -> Result<(), password_generator::GeneratorError> {
+        self.generated = None;
+
+        match password_generator::generate(&self.config) {
+            Ok(generated) => {
+                self.generated = Some(generated);
+                self.error = None;
+                Ok(())
+            }
+            Err(error) => {
+                self.error = Some(error.to_string());
+                Err(error)
+            }
+        }
+    }
+
+    fn clear_output(&mut self) {
+        self.generated = None;
+        self.error = None;
+    }
+}
+
 struct NativeApp {
     view: View,
     workspace_root: PathBuf,
     browser: FileBrowserState,
     editor: EditorState,
     hash_verify: HashVerifyState,
+    password_generator: PasswordGeneratorUiState,
+    secret_clipboard: Option<SecretClipboard<SystemClipboard>>,
     lan_access: LanEnableControl,
     network_safety: NetworkSafetyAssessment,
     device_pairing: DevicePairing,
@@ -875,6 +923,8 @@ impl NativeApp {
             browser,
             editor: EditorState::new(),
             hash_verify: HashVerifyState::new(),
+            password_generator: PasswordGeneratorUiState::new(),
+            secret_clipboard: SystemClipboard::new().ok().map(SecretClipboard::new),
             lan_access: LanEnableControl::default(),
             network_safety: network_safety::assess_current_network(),
             device_pairing: DevicePairing::default(),
@@ -1306,6 +1356,10 @@ impl NativeApp {
                 self.view = View::TextJson;
                 self.notice = "TEXT / JSON READY".to_string();
             }
+            ToolId::PasswordGenerator => {
+                self.view = View::PasswordGenerator;
+                self.notice = "PASSWORD GENERATOR READY".to_string();
+            }
             ToolId::Compare => {
                 self.view = View::Compare;
                 self.notice = "COMPARE READY".to_string();
@@ -1335,6 +1389,205 @@ impl NativeApp {
                     }
                 }
                 self.view = View::Backup;
+            }
+        }
+    }
+
+
+    fn password_generator_view(&mut self, ui: &mut egui::Ui) {
+        theme::section_title(ui, PixelIcon::Key, "PASSWORD GENERATOR");
+        ui.label(
+            egui::RichText::new(
+                "Generate passwords locally from the operating-system CSPRNG. Generated values remain process-local and are not written to Workspace files, autosave, or session state.",
+            )
+            .color(MUTED),
+        );
+        ui.add_space(10.0);
+
+        let mut generate_requested = false;
+
+        theme::panel(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("LENGTH").monospace().color(MUTED));
+                ui.add(
+                    egui::DragValue::new(&mut self.password_generator.config.length)
+                        .range(MIN_PASSWORD_LENGTH..=MAX_PASSWORD_LENGTH)
+                        .speed(1.0),
+                );
+            });
+
+            ui.add_space(6.0);
+            ui.horizontal_wrapped(|ui| {
+                ui.checkbox(
+                    &mut self.password_generator.config.uppercase,
+                    "UPPERCASE A-Z",
+                );
+                ui.checkbox(
+                    &mut self.password_generator.config.lowercase,
+                    "LOWERCASE a-z",
+                );
+                ui.checkbox(&mut self.password_generator.config.digits, "DIGITS 0-9");
+                ui.checkbox(&mut self.password_generator.config.symbols, "SYMBOLS");
+            });
+
+            ui.add_space(4.0);
+            ui.horizontal_wrapped(|ui| {
+                ui.checkbox(
+                    &mut self.password_generator.config.require_each_selected_group,
+                    "REQUIRE EACH SELECTED GROUP",
+                );
+                ui.checkbox(
+                    &mut self.password_generator.config.exclude_ambiguous,
+                    "EXCLUDE AMBIGUOUS 0 O 1 I l |",
+                );
+            });
+
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("SYMBOL SET").monospace().color(MUTED));
+                ui.add_enabled(
+                    self.password_generator.config.symbols,
+                    egui::TextEdit::singleline(
+                        &mut self.password_generator.config.symbol_set,
+                    )
+                    .desired_width(420.0),
+                );
+            });
+
+            ui.add_space(10.0);
+            if ui.button("[GENERATE]").clicked() {
+                generate_requested = true;
+            }
+        });
+
+        if generate_requested {
+            match self.password_generator.generate() {
+                Ok(()) => {
+                    let length = self
+                        .password_generator
+                        .generated
+                        .as_ref()
+                        .map(GeneratedPassword::len)
+                        .unwrap_or_default();
+                    self.notice = format!("PASSWORD GENERATED / {length} CHARS");
+                }
+                Err(error) => {
+                    self.notice = format!("PASSWORD GENERATION FAILED: {error}");
+                }
+            }
+        }
+
+        if let Some(error) = self.password_generator.error.as_ref() {
+            ui.add_space(8.0);
+            ui.label(
+                egui::RichText::new(error)
+                    .color(BAD)
+                    .monospace(),
+            );
+        }
+
+        ui.add_space(8.0);
+
+        let clipboard_available = self.secret_clipboard.is_some();
+        let mut copy_requested = false;
+        let mut clear_requested = false;
+
+        if let Some(generated) = self.password_generator.generated.as_ref() {
+            theme::panel(ui, |ui| {
+                theme::small_label(ui, "GENERATED PASSWORD");
+                ui.add_space(6.0);
+                egui::ScrollArea::both()
+                    .max_height(120.0)
+                    .show(ui, |ui| {
+                        ui.label(
+                            egui::RichText::new(generated.expose_secret())
+                                .monospace()
+                                .size(16.0)
+                                .color(TEXT),
+                        );
+                    });
+
+                ui.add_space(8.0);
+                ui.horizontal_wrapped(|ui| {
+                    if ui
+                        .add_enabled(
+                            clipboard_available,
+                            egui::Button::new("[COPY / AUTO-CLEAR 30s]"),
+                        )
+                        .clicked()
+                    {
+                        copy_requested = true;
+                    }
+
+                    if ui.button("[CLEAR OUTPUT]").clicked() {
+                        clear_requested = true;
+                    }
+                });
+
+                if !clipboard_available {
+                    ui.label(
+                        egui::RichText::new(
+                            "OS clipboard is unavailable. The generated value has not been copied.",
+                        )
+                        .color(WARN),
+                    );
+                }
+            });
+        } else {
+            theme::panel(ui, |ui| {
+                theme::status_badge(ui, "NO PASSWORD GENERATED", MUTED);
+            });
+        }
+
+        if copy_requested {
+            if let (Some(generated), Some(clipboard)) = (
+                self.password_generator.generated.as_ref(),
+                self.secret_clipboard.as_mut(),
+            ) {
+                match clipboard.copy(
+                    ClipboardSecret::from_generated_password(generated),
+                    ClipboardPolicy::default(),
+                ) {
+                    Ok(()) => {
+                        self.notice =
+                            "PASSWORD COPIED / CLIPBOARD CLEAR IN 30s".to_string();
+                    }
+                    Err(error) => {
+                        self.notice = format!("CLIPBOARD FAILED: {error}");
+                    }
+                }
+            }
+        }
+
+        if clear_requested {
+            self.password_generator.clear_output();
+            self.notice = "PASSWORD OUTPUT CLEARED".to_string();
+        }
+    }
+
+    fn poll_secret_clipboard(&mut self, context: &egui::Context) {
+        let Some(clipboard) = self.secret_clipboard.as_mut() else {
+            return;
+        };
+
+        if !clipboard.has_pending_clear() {
+            return;
+        }
+
+        match clipboard.poll() {
+            Ok(ClipboardPoll::Idle) => {}
+            Ok(ClipboardPoll::Pending) => {
+                context.request_repaint_after(Duration::from_millis(250));
+            }
+            Ok(ClipboardPoll::Cleared) => {
+                self.notice = "CLIPBOARD CLEARED".to_string();
+            }
+            Ok(ClipboardPoll::PreservedExternalContent) => {
+                self.notice = "CLIPBOARD CHANGED / EXTERNAL CONTENT PRESERVED".to_string();
+            }
+            Err(error) => {
+                self.notice = format!("CLIPBOARD FAILED: {error}");
+                context.request_repaint_after(Duration::from_secs(1));
             }
         }
     }
@@ -3738,6 +3991,7 @@ impl eframe::App for NativeApp {
                 match self.view {
                     View::Home => self.home(ui),
                     View::Tools => self.tools(ui),
+                    View::PasswordGenerator => self.password_generator_view(ui),
                     View::Files => self.files(ui),
                     View::Editor => self.editor(ui),
                     View::HashVerify => self.hash_verify_view(ui),
@@ -3752,6 +4006,10 @@ impl eframe::App for NativeApp {
                 }
             });
 
+        if self.view != View::PasswordGenerator {
+            self.password_generator.clear_output();
+        }
+        self.poll_secret_clipboard(ui.ctx());
         self.persist_session_if_changed();
     }
 }
@@ -3771,6 +4029,7 @@ fn tool_icon(tool: ToolId) -> PixelIcon {
         ToolId::Editor => PixelIcon::Editor,
         ToolId::HashVerify => PixelIcon::Hash,
         ToolId::TextJson => PixelIcon::Editor,
+        ToolId::PasswordGenerator => PixelIcon::Key,
         ToolId::Compare => PixelIcon::Compare,
         ToolId::Search => PixelIcon::Files,
         ToolId::Repositories => PixelIcon::Repository,
@@ -3983,6 +4242,14 @@ mod tests {
     fn text_json_view_maps_to_navigation_only_session_state() {
         assert_eq!(View::TextJson.session_view(), SessionView::TextJson);
         assert_eq!(View::from_session(SessionView::TextJson), View::TextJson);
+    }
+
+    #[test]
+    fn password_generator_does_not_persist_secret_view_state() {
+        assert_eq!(
+            View::PasswordGenerator.session_view(),
+            SessionView::Tools
+        );
     }
 
     #[test]

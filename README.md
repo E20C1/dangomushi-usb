@@ -22,7 +22,8 @@ The current implementation includes:
 - A READY native BACKUP / RESTORE tool for verified generic Workspace snapshots under `workspace/backups`, with per-file/archive SHA-256, hidden staging, in-process rollback, explicit RESTORE confirmation, and no Vault-secret export path.
 - Restores the previous native view, FILES location/selection and open editor file from workspace-local session state.
 - A reusable square-edged pixel UI system with original 5x5 vector-drawn icons and no external icon/font assets.
-- An M2-S Password Generator Core with OS CSPRNG input, configurable character groups, rejection-sampled selection, deterministic injected-source tests, and no UI/Vault persistence.
+- An M2-S Password Generator Core with OS CSPRNG input, configurable character groups, rejection-sampled selection, deterministic injected-source tests, and no Vault persistence.
+- A dedicated native PASSWORD GENERATOR view that keeps generated values process-local, excludes them from generic session/autosave/Workspace persistence, and uses the existing compare-before-clear Clipboard hygiene boundary for explicit copies.
 - An M2-S in-memory Credential model with redacted secret-aware ownership and no persistence/UI integration.
 - An M2-S existing-Credential input boundary that consumes owned input into the same Credential model without persistence or UI integration.
 - An M2-S encrypted Vault storage core using XChaCha20Poly1305 AEAD, authenticated metadata, verified durable replacement, and interrupted-write recovery.
@@ -90,7 +91,7 @@ All restored paths are relative and are validated again before use. Missing or i
 
 The secret-management roadmap is intentionally separate from ordinary M2 Local Tools. Its core sequence is now complete through Secret Backup / Restore: Password Generator, source-agnostic Credential inputs, encrypted Vault storage/unlock, Recovery Codes, Clipboard hygiene, and encrypted backup/restore.
 
-Secret values are not routed through the Text Editor, generic autosave or session restoration, and are not exposed through the native UI yet. Vault ciphertext uses a dedicated storage API and is not a normal Workspace file. See docs/SECRET_DATA_BOUNDARY.md, docs/PASSWORD_GENERATOR_CORE.md, and docs/VAULT_STORAGE.md.
+Secret values are not routed through the Text Editor, generic autosave or session restoration. Generated passwords are exposed only through the dedicated native PASSWORD GENERATOR view; Credential, Recovery Code and decrypted Vault UI integration remains unavailable. Vault ciphertext uses a dedicated storage API and is not a normal Workspace file. See docs/SECRET_DATA_BOUNDARY.md, docs/PASSWORD_GENERATOR_CORE.md, and docs/VAULT_STORAGE.md.
 
 ## Windows quick start
 
