@@ -4,6 +4,7 @@ pub enum ToolId {
     Editor,
     HashVerify,
     TextJson,
+    PasswordGenerator,
     Compare,
     Search,
     Repositories,
@@ -92,6 +93,14 @@ const TOOLS: &[ToolDefinition] = &[
         status: ToolStatus::Ready,
     },
     ToolDefinition {
+        id: ToolId::PasswordGenerator,
+        key: "password-generator",
+        label: "PASSWORD GENERATOR",
+        category: ToolCategory::Utility,
+        description: "Generate passwords locally with OS randomness and explicit clipboard hygiene.",
+        status: ToolStatus::Ready,
+    },
+    ToolDefinition {
         id: ToolId::Compare,
         key: "compare",
         label: "COMPARE",
@@ -171,6 +180,10 @@ mod tests {
             Some(ToolStatus::Ready)
         );
         assert_eq!(
+            by_key("password-generator").map(|tool| tool.status),
+            Some(ToolStatus::Ready)
+        );
+        assert_eq!(
             by_key("compare").map(|tool| tool.status),
             Some(ToolStatus::Ready)
         );
@@ -197,6 +210,10 @@ mod tests {
         assert_eq!(
             by_key("text-json").map(|tool| tool.id),
             Some(ToolId::TextJson)
+        );
+        assert_eq!(
+            by_key("password-generator").map(|tool| tool.id),
+            Some(ToolId::PasswordGenerator)
         );
         assert_eq!(
             by_key("compare").map(|tool| tool.id),

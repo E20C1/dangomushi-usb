@@ -24,6 +24,7 @@ pub const ICON_SIZE: f32 = 13.0;
 pub enum PixelIcon {
     Home,
     Tools,
+    Key,
     Files,
     Editor,
     Workspace,
@@ -44,6 +45,7 @@ impl PixelIcon {
         match self {
             Self::Home => [0b00100, 0b01110, 0b11111, 0b10101, 0b11111],
             Self::Tools => [0b10101, 0b01110, 0b11111, 0b01110, 0b10101],
+            Self::Key => [0b01100, 0b10010, 0b01100, 0b00111, 0b00010],
             Self::Files => [0b11000, 0b11111, 0b10001, 0b10001, 0b11111],
             Self::Editor => [0b11110, 0b10010, 0b10110, 0b11000, 0b11111],
             Self::Workspace => [0b10001, 0b11111, 0b10101, 0b11111, 0b10001],
