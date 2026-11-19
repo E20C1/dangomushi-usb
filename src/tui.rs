@@ -43,8 +43,10 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph, Wrap};
 use ratatui::{Frame, Terminal};
+use std::fs;
 use std::io::{self, stdout, Stdout};
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::{Duration, Instant};
 
 const AUTOSAVE_DELAY: Duration = Duration::from_secs(2);
@@ -224,6 +226,8 @@ enum ControlId {
     ImageEffortNext,
     ImagePreview,
     ImageSave,
+    ImageBefore,
+    ImageAfter,
     ImageClear,
     EditorEdit,
     EditorSave,
@@ -383,7 +387,7 @@ impl FileBrowserState {
             }
             Err(error) => {
                 self.entries.clear();
-                self.error = Some(error.to_string());
+                self.error = Some(file_browser_error(root, &error));
             }
         }
     }
@@ -396,7 +400,7 @@ impl FileBrowserState {
                 self.selected = None;
                 self.error = None;
             }
-            Err(error) => self.error = Some(error.to_string()),
+            Err(error) => self.error = Some(file_browser_error(root, &error)),
         }
     }
 
@@ -590,6 +594,14 @@ impl EditorState {
         self.confirm_discard = false;
         self.recovery_status = "RELOADED FROM DISK".to_string();
         Ok(())
+    }
+}
+
+fn file_browser_error(root: &Path, error: &io::Error) -> String {
+    if !workspace::summary(root).initialized {
+        "WORKSPACE NOT INITIALIZED / Open WORKSPACE and choose INITIALIZE WORKSPACE.".to_string()
+    } else {
+        error.to_string()
     }
 }
 
@@ -1166,7 +1178,7 @@ impl App {
                     );
                 }
                 let selected = self.browser.selected_entry();
-                push(ControlId::FileOpen, "OPEN".to_string(), selected.is_some());
+                push(ControlId::FileOpen, "OPEN SELECTED".to_string(), selected.is_some());
                 let is_file = selected.is_some_and(|entry| entry.kind == EntryKind::File);
                 push(ControlId::FileHash, "HASH / VERIFY".to_string(), is_file);
                 push(ControlId::FileTextJson, "TEXT / JSON".to_string(), is_file);
@@ -1229,6 +1241,17 @@ impl App {
                     "SAVE TO DATA/EXPORTS".to_string(),
                     self.image_optimizer.has_current_candidate()
                         && !self.image_optimizer.preview_pending(),
+                );
+                let preview_ready = self.image_optimizer.has_current_candidate();
+                push(
+                    ControlId::ImageBefore,
+                    "BEFORE IMAGE".to_string(),
+                    preview_ready,
+                );
+                push(
+                    ControlId::ImageAfter,
+                    "AFTER IMAGE".to_string(),
+                    preview_ready,
                 );
                 push(
                     ControlId::ImageClear,
@@ -1369,10 +1392,35 @@ impl App {
             self.should_quit = true;
             return;
         }
+        let focused_image = if self.view == View::ImageOptimizer {
+            let controls = self.controls();
+            controls
+                .get(self.focus_index.min(controls.len().saturating_sub(1)))
+                .map(|control| control.id)
+        } else {
+            None
+        };
+
         match key.code {
             KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Up => self.move_focus(-1),
             KeyCode::Down => self.move_focus(1),
+            KeyCode::Left
+                if matches!(
+                    focused_image,
+                    Some(ControlId::ImageBefore | ControlId::ImageAfter)
+                ) =>
+            {
+                self.focus_control(ControlId::ImageBefore);
+            }
+            KeyCode::Right
+                if matches!(
+                    focused_image,
+                    Some(ControlId::ImageBefore | ControlId::ImageAfter)
+                ) =>
+            {
+                self.focus_control(ControlId::ImageAfter);
+            }
             KeyCode::Left => self.jump_zone(Zone::Navigation),
             KeyCode::Right | KeyCode::Tab => self.jump_zone(Zone::Content),
             KeyCode::Enter => self.activate_focused(),
@@ -1402,7 +1450,13 @@ impl App {
                     .copied()
                 {
                     self.focus_index = hit.control_index;
-                    self.activate_focused();
+                    let id = {
+                        let controls = self.controls();
+                        controls.get(hit.control_index).map(|control| control.id)
+                    };
+                    if !matches!(id, Some(ControlId::ImageBefore | ControlId::ImageAfter)) {
+                        self.activate_focused();
+                    }
                 }
             }
             MouseEventKind::ScrollUp => self.move_focus(-1),
@@ -1425,6 +1479,17 @@ impl App {
                 self.focus_index = index as usize;
                 break;
             }
+        }
+    }
+
+    fn focus_control(&mut self, id: ControlId) {
+        let controls = self.controls();
+        if let Some((index, _)) = controls
+            .iter()
+            .enumerate()
+            .find(|(_, control)| control.id == id && control.enabled)
+        {
+            self.focus_index = index;
         }
     }
 
@@ -1472,16 +1537,19 @@ impl App {
             }
             ControlId::FileRefresh => {
                 self.browser.refresh(&self.workspace_root);
-                self.notice = "FILES REFRESHED".to_string();
+                self.notice = self
+                    .browser
+                    .error
+                    .clone()
+                    .unwrap_or_else(|| "FILES REFRESHED".to_string());
             }
             ControlId::FileEntry(index) => {
                 if let Some(entry) = self.browser.entries.get(index).cloned() {
                     self.browser.selected = Some(entry.relative_path.clone());
-                    if entry.kind == EntryKind::Directory {
-                        self.browser.navigate(&self.workspace_root, entry.relative_path);
-                    } else if entry.kind == EntryKind::File {
-                        self.open_in_editor(entry.relative_path);
-                    }
+                    self.notice = format!(
+                        "SELECTED / {}",
+                        file_browser::display_path(&entry.relative_path)
+                    );
                 }
             }
             ControlId::FileOpen => self.open_selected(),
@@ -1555,6 +1623,8 @@ impl App {
             }
             ControlId::ImagePreview => self.request_image_optimizer_preview(),
             ControlId::ImageSave => self.save_image_optimizer_candidate(),
+            ControlId::ImageBefore => self.open_optimizer_image_external(true),
+            ControlId::ImageAfter => self.open_optimizer_image_external(false),
             ControlId::ImageClear => {
                 self.image_optimizer.clear();
                 self.image_preview.clear();
@@ -2055,6 +2125,73 @@ impl App {
         self.image_optimizer.exported = None;
         self.image_preview.clear();
         self.notice = "GENERATING IMAGE PREVIEW".to_string();
+    }
+
+    fn open_optimizer_image_external(&mut self, before: bool) {
+        let path = if before {
+            let Some(source) = self.image_optimizer.source.as_ref() else {
+                self.notice = "NO BEFORE IMAGE AVAILABLE".to_string();
+                return;
+            };
+            match fs::canonicalize(self.workspace_root.join(source)) {
+                Ok(path) => path,
+                Err(error) => {
+                    self.notice = format!("OPEN BEFORE FAILED: {error}");
+                    return;
+                }
+            }
+        } else {
+            match self.materialize_after_preview() {
+                Ok(path) => path,
+                Err(error) => {
+                    self.notice = format!("OPEN AFTER FAILED: {error}");
+                    return;
+                }
+            }
+        };
+
+        match external_open_file(&path) {
+            Ok(()) => {
+                self.notice = if before {
+                    "BEFORE IMAGE OPENED EXTERNALLY"
+                } else {
+                    "AFTER IMAGE OPENED EXTERNALLY"
+                }
+                .to_string();
+            }
+            Err(error) => {
+                self.notice = format!("EXTERNAL IMAGE OPEN FAILED: {error}");
+            }
+        }
+    }
+
+    fn materialize_after_preview(&self) -> io::Result<PathBuf> {
+        if let Some(exported) = self.image_optimizer.exported.as_ref() {
+            let saved = self.workspace_root.join(&exported.relative_path);
+            if saved.is_file() {
+                return fs::canonicalize(saved);
+            }
+        }
+
+        let candidate = self
+            .image_optimizer
+            .candidate
+            .as_ref()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no current image preview"))?;
+
+        let preview_dir = self.workspace_root.join("state").join("image-preview");
+        fs::create_dir_all(&preview_dir)?;
+        let sha = candidate.output_sha256_hex();
+        let name = format!(
+            "after-{}.{}",
+            &sha[..16],
+            candidate.output_format.extension()
+        );
+        let path = preview_dir.join(name);
+        if !path.is_file() {
+            fs::write(&path, &candidate.output_bytes)?;
+        }
+        fs::canonicalize(path)
     }
 
     fn save_image_optimizer_candidate(&mut self) {
@@ -2645,7 +2782,13 @@ impl App {
         let content_controls: Vec<(usize, &Control)> = controls
             .iter()
             .enumerate()
-            .filter(|(_, control)| control.zone == Zone::Content)
+            .filter(|(_, control)| {
+                control.zone == Zone::Content
+                    && !matches!(
+                        control.id,
+                        ControlId::ImageBefore | ControlId::ImageAfter
+                    )
+            })
             .collect();
         let max_rows = sections[1].height.saturating_sub(2) as usize;
         let focus_pos = content_controls
@@ -2689,7 +2832,32 @@ impl App {
             }
         }
 
-        self.image_preview.render_pair(frame, sections[2]);
+        let before_index = controls
+            .iter()
+            .position(|control| control.id == ControlId::ImageBefore);
+        let after_index = controls
+            .iter()
+            .position(|control| control.id == ControlId::ImageAfter);
+        let panes = self.image_preview.render_pair_focused(
+            frame,
+            sections[2],
+            before_index == Some(self.focus_index),
+            after_index == Some(self.focus_index),
+        );
+        if self.image_optimizer.has_current_candidate() {
+            if let Some(index) = before_index {
+                self.hits.push(HitTarget {
+                    rect: panes[0],
+                    control_index: index,
+                });
+            }
+            if let Some(index) = after_index {
+                self.hits.push(HitTarget {
+                    rect: panes[1],
+                    control_index: index,
+                });
+            }
+        }
 
         frame.render_widget(
             Paragraph::new(self.image_optimizer_detail_text())
@@ -2702,7 +2870,11 @@ impl App {
     fn render_footer(&self, frame: &mut Frame, area: Rect) {
         let editing = self.edit.as_ref().map(|edit| format!("EDIT {:?} / Esc done", edit.target));
         let text = editing.unwrap_or_else(|| {
-            "↑↓ focus  ← nav  →/Tab content  Enter activate/click  Esc home  F1-F7 views  q quit".to_string()
+            if cfg!(windows) {
+                "↑↓ focus  ←/→ nav/content  Enter activate  Shift+drag text select  Esc home  F1-F7 views  q quit".to_string()
+            } else {
+                "↑↓ focus  ← nav  →/Tab content  Enter activate/click  Esc home  F1-F7 views  q quit".to_string()
+            }
         });
         frame.render_widget(
             Paragraph::new(text).style(Style::default().fg(Color::DarkGray)),
@@ -2715,7 +2887,7 @@ impl App {
             View::Home => {
                 let summary = workspace::summary(&self.workspace_root);
                 format!(
-                    "Runtime: TUI\nWorkspace: {} ({}/{})\nNetwork: {}\n\nAll interactive controls use one Activate path for keyboard Enter and mouse click.",
+                    "Runtime: TUI\nWorkspace: {} ({}/{})\nNetwork: {}\n\nNormal controls share one Activate path for keyboard Enter and mouse click. Preview images use click-to-focus and Enter-to-open.",
                     if summary.initialized { "READY" } else { "NOT INITIALIZED" },
                     summary.present_dirs,
                     summary.total_dirs,
@@ -2965,6 +3137,32 @@ impl App {
 
 fn mark(value: bool) -> char {
     if value { 'x' } else { ' ' }
+}
+
+fn external_open_file(path: &Path) -> io::Result<()> {
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("explorer.exe").arg(path).spawn()?;
+        return Ok(());
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open").arg(path).spawn()?;
+        return Ok(());
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        Command::new("xdg-open").arg(path).spawn()?;
+        return Ok(());
+    }
+
+    #[allow(unreachable_code)]
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "external file opening is unsupported on this platform",
+    ))
 }
 
 fn contains(rect: Rect, x: u16, y: u16) -> bool {
