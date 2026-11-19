@@ -7,7 +7,7 @@ use dangomushi::network_safety::{
 const SOURCE: &str = include_str!("../src/network_safety.rs");
 const SERVER: &str = include_str!("../src/server.rs");
 const SESSION: &str = include_str!("../src/session_state.rs");
-const UI: &str = include_str!("../src/native_ui.rs");
+const UI: &str = include_str!("../src/tui.rs");
 const ROADMAP: &str = include_str!("../docs/ROADMAP.md");
 const ARCHITECTURE: &str = include_str!("../docs/ARCHITECTURE.md");
 const DOC: &str = include_str!("../docs/PUBLIC_NETWORK_SAFE_DEFAULT.md");
