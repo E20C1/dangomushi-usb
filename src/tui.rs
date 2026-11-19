@@ -2464,7 +2464,7 @@ impl App {
                 let documents = offline_docs::documents();
                 let document = documents.get(self.offline_doc_index);
                 format!(
-                    "UI: Ratatui / Crossterm\nFile browser: workspace-rooted / read-only\nEditor: UTF-8 / explicit save / recovery\nGateway: 127.0.0.1 only\n\nOFFLINE DOCUMENTATION\nEMBEDDED / VERIFIED INVENTORY\nRead-only content is compiled into this executable.\nOffline docs: {} docs / {} bytes / {}\n\n{}\n\n{}",
+                    "UI: Ratatui / Crossterm\nImage preview: {}{}\nFile browser: workspace-rooted / read-only\nEditor: UTF-8 / explicit save / recovery\nGateway: 127.0.0.1 only\n\nOFFLINE DOCUMENTATION\nEMBEDDED / VERIFIED INVENTORY\nRead-only content is compiled into this executable.\nOffline docs: {} docs / {} bytes / {}\n\n{}\n\n{}",
                     self.image_preview.protocol_label(),
                     if self.image_preview.is_pixel_protocol() { " / PIXEL" } else { " / APPROXIMATE FALLBACK" },
                     summary.document_count,
