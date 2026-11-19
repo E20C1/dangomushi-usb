@@ -996,7 +996,7 @@ impl App {
         }
     }
 
-    fn controls(&self) -> Vec<Control> {
+    fn controls(&mut self) -> Vec<Control> {
         let mut controls: Vec<Control> = View::PRIMARY.into_iter().map(Control::nav).collect();
         let mut push = |id, label: String, enabled| {
             controls.push(Control::content(id, label, enabled));
@@ -1139,10 +1139,16 @@ impl App {
                     push(ControlId::RevocationCommit, "CONFIRM REVOCATION".to_string(), self.revocation_confirmation.trim() == "REVOKE");
                     push(ControlId::RevocationCancel, "CANCEL REVOCATION".to_string(), true);
                 }
-                match self.device_pairing.status_snapshot(Instant::now()) {
-                    PairingStatusSnapshot::Idle => push(ControlId::PairingStart, "START DEVICE PAIRING".to_string(), self.lan_access.is_enabled()),
-                    PairingStatusSnapshot::Waiting => push(ControlId::PairingCancel, "CANCEL PAIRING".to_string(), true),
-                    PairingStatusSnapshot::AwaitingApproval => {
+                match self.device_pairing.status(Instant::now()) {
+                    PairingStatus::Idle => {
+                        self.pairing_invitation = None;
+                        push(ControlId::PairingStart, "START DEVICE PAIRING".to_string(), self.lan_access.is_enabled());
+                    }
+                    PairingStatus::Waiting { .. } => {
+                        push(ControlId::PairingCancel, "CANCEL PAIRING".to_string(), true);
+                    }
+                    PairingStatus::AwaitingApproval { .. } => {
+                        self.pairing_invitation = None;
                         push(ControlId::PairingApprove, "APPROVE DEVICE FOR THIS RUN".to_string(), true);
                         push(ControlId::PairingReject, "REJECT DEVICE".to_string(), true);
                     }
@@ -2368,18 +2374,14 @@ impl App {
         if let Some(error) = self.permission_store_error.as_ref() {
             text.push_str(&format!("Permissions: {error}\n"));
         }
-        let now = Instant::now();
-        match self.device_pairing.status_preview(now) {
-            PairingPreview::Idle => text.push_str("\nPairing: IDLE"),
-            PairingPreview::Waiting { attempts, seconds } => {
-                text.push_str(&format!("\nPairing: WAITING / {seconds}s / {attempts} attempts"));
-                if let Some(invitation) = self.pairing_invitation.as_ref() {
-                    text.push_str(&format!("\nCode: {}", invitation.code().expose_secret()));
-                }
+        if self.paired_device.is_some() {
+            if let Some(paired) = self.paired_device.as_ref() {
+                text.push_str(&format!("\nPairing: PAIRED FOR THIS RUN\nDevice: {}\nFingerprint: {}", paired.device_name(), paired.fingerprint_hex()));
             }
-            PairingPreview::Approval { device, fingerprint, seconds } => {
-                text.push_str(&format!("\nPairing: APPROVAL REQUIRED / {seconds}s\nDevice: {device}\nFingerprint: {fingerprint}"));
-            }
+        } else if let Some(invitation) = self.pairing_invitation.as_ref() {
+            text.push_str(&format!("\nPairing invitation active\nCode: {}", invitation.code().expose_secret()));
+        } else {
+            text.push_str("\nPairing: IDLE OR AWAITING TRANSPORT PROOF");
         }
         text
     }
@@ -2401,31 +2403,6 @@ impl App {
             Err(error) => format!("OFFLINE DOCS INVALID: {error}"),
         }
     }
-}
-
-trait PairingStatusExt {
-    fn status_snapshot(&self, now: Instant) -> PairingStatusSnapshot;
-    fn status_preview(&self, now: Instant) -> PairingPreview;
-}
-
-impl PairingStatusExt for DevicePairing {
-    fn status_snapshot(&self, _now: Instant) -> PairingStatusSnapshot {
-        // The authoritative status API requires &mut self because it expires stale sessions.
-        // controls() is read-only, so the current display state is inferred only for control layout.
-        // activate()/mobile detail use the mutable API before security-sensitive transitions.
-        PairingStatusSnapshot::Idle
-    }
-
-    fn status_preview(&self, _now: Instant) -> PairingPreview {
-        PairingPreview::Idle
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-enum PairingStatusSnapshot {
-    Idle,
-    Waiting,
-    AwaitingApproval,
 }
 
 enum PairingPreview {
