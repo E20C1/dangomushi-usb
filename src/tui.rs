@@ -2551,6 +2551,11 @@ impl App {
     }
 
     fn render_content(&mut self, frame: &mut Frame, area: Rect, controls: &[Control]) {
+        if self.view == View::ImageOptimizer {
+            self.render_image_optimizer(frame, area, controls);
+            return;
+        }
+
         let sections = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Length(2), Constraint::Percentage(55), Constraint::Percentage(45)])
@@ -2619,6 +2624,82 @@ impl App {
         );
     }
 
+    fn render_image_optimizer(&mut self, frame: &mut Frame, area: Rect, controls: &[Control]) {
+        let sections = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(2),
+                Constraint::Length(10),
+                Constraint::Min(6),
+                Constraint::Length(6),
+            ])
+            .split(area);
+
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                " IMAGE OPTIMIZER ",
+                Style::default().add_modifier(Modifier::BOLD),
+            ))),
+            sections[0],
+        );
+
+        let content_controls: Vec<(usize, &Control)> = controls
+            .iter()
+            .enumerate()
+            .filter(|(_, control)| control.zone == Zone::Content)
+            .collect();
+        let max_rows = sections[1].height.saturating_sub(2) as usize;
+        let focus_pos = content_controls
+            .iter()
+            .position(|(index, _)| *index == self.focus_index)
+            .unwrap_or(0);
+        let start = focus_pos.saturating_sub(max_rows.saturating_sub(1));
+        let visible = content_controls.iter().skip(start).take(max_rows);
+
+        let mut items = Vec::new();
+        let mut visible_indexes = Vec::new();
+        for (index, control) in visible {
+            let focused = *index == self.focus_index;
+            let prefix = if focused { "> " } else { "  " };
+            let style = if !control.enabled {
+                Style::default().fg(Color::DarkGray)
+            } else if focused {
+                Style::default().fg(Color::Black).bg(Color::White)
+            } else {
+                Style::default()
+            };
+            items.push(ListItem::new(format!("{prefix}{}", control.label)).style(style));
+            visible_indexes.push(*index);
+        }
+        frame.render_widget(
+            List::new(items).block(Block::default().title(" CONTROLS ").borders(Borders::ALL)),
+            sections[1],
+        );
+        for (row, index) in visible_indexes.into_iter().enumerate() {
+            let y = sections[1].y.saturating_add(1 + row as u16);
+            if y < sections[1].bottom().saturating_sub(1) {
+                self.hits.push(HitTarget {
+                    rect: Rect::new(
+                        sections[1].x + 1,
+                        y,
+                        sections[1].width.saturating_sub(2),
+                        1,
+                    ),
+                    control_index: index,
+                });
+            }
+        }
+
+        self.image_preview.render_pair(frame, sections[2]);
+
+        frame.render_widget(
+            Paragraph::new(self.image_optimizer_detail_text())
+                .block(Block::default().title(" RESULT ").borders(Borders::ALL))
+                .wrap(Wrap { trim: false }),
+            sections[3],
+        );
+    }
+
     fn render_footer(&self, frame: &mut Frame, area: Rect) {
         let editing = self.edit.as_ref().map(|edit| format!("EDIT {:?} / Esc done", edit.target));
         let text = editing.unwrap_or_else(|| {
@@ -2651,6 +2732,7 @@ impl App {
                     self.password.error.as_deref().unwrap_or("")
                 )
             }
+            View::ImageOptimizer => self.image_optimizer_detail_text(),
             View::Files => {
                 let selected = self.browser.selected_entry().map(|entry| {
                     format!("{} / {} / {} bytes", file_browser::display_path(&entry.relative_path), entry.kind.label(), entry.size_bytes)
@@ -2749,6 +2831,82 @@ impl App {
             View::Mobile => self.mobile_detail(),
             View::System => self.system_detail(),
         }
+    }
+
+    fn image_optimizer_detail_text(&self) -> String {
+        let Some(info) = self.image_optimizer.info.as_ref() else {
+            return format!(
+                "Select an image in FILES, then choose OPTIMIZE IMAGE.\nSupported: JPEG / PNG / still WebP\nPreview protocol: {}",
+                self.image_preview.protocol_label()
+            );
+        };
+
+        let source = self
+            .image_optimizer
+            .source
+            .as_deref()
+            .map(file_browser::display_path)
+            .unwrap_or_else(|| "(none)".to_string());
+        let resolved = self.image_optimizer.settings.format.resolve(info.format);
+        let state = if self.image_optimizer.preview_pending() {
+            "GENERATING"
+        } else if self.image_optimizer.has_current_candidate() {
+            "READY TO SAVE"
+        } else {
+            "PREVIEW REQUIRED"
+        };
+
+        let mut lines = vec![
+            format!(
+                "{} / {} / {}x{} / {:.2} MP / {}",
+                source,
+                info.format.label(),
+                info.width,
+                info.height,
+                info.megapixels(),
+                format_bytes(info.source_bytes)
+            ),
+            format!(
+                "Output: {} / Q{} / {} / metadata PRIVACY / {}",
+                resolved.label(),
+                self.image_optimizer.settings.quality,
+                self.image_optimizer.settings.effort.label(),
+                state
+            ),
+        ];
+
+        if resolved == image_optimizer::ImageFormat::Jpeg && info.has_alpha {
+            lines.push("JPEG BLOCKED: source has alpha; choose PNG or WebP.".to_string());
+        } else if resolved == image_optimizer::ImageFormat::WebP
+            && (info.width > 16_383 || info.height > 16_383)
+        {
+            lines.push("WEBP BLOCKED: dimension exceeds 16,383 pixels.".to_string());
+        } else if let Some(candidate) = self.image_optimizer.candidate.as_ref() {
+            let delta = -candidate.reduction_percent();
+            lines.push(format!(
+                "{} -> {} ({:+.1}%) / SHA-256 {}",
+                format_bytes(info.source_bytes),
+                format_bytes(candidate.output_bytes_len() as u64),
+                delta,
+                &candidate.output_sha256_hex()[..12]
+            ));
+            if !candidate.color_profile_preserved {
+                lines.push("COLOR PROFILE WILL NOT BE PRESERVED IN WEBP OUTPUT.".to_string());
+            } else if candidate.private_metadata_stripped {
+                lines.push("ICC preserved where supported; EXIF/XMP private metadata stripped.".to_string());
+            }
+        }
+
+        if let Some(exported) = self.image_optimizer.exported.as_ref() {
+            lines.push(format!(
+                "Saved: {}",
+                file_browser::display_path(&exported.relative_path)
+            ));
+        }
+        if let Some(error) = self.image_optimizer.error.as_ref() {
+            lines.push(format!("Error: {error}"));
+        }
+        lines.join("\n")
     }
 
     fn mobile_detail(&self) -> String {
