@@ -1,3 +1,6 @@
+use crate::clipboard_hygiene::{
+    ClipboardPolicy, ClipboardPoll, ClipboardSecret, SecretClipboard, SystemClipboard,
+};
 use crate::device_pairing::{DevicePairing, PairedDeviceCandidate, PairingInvitation, PairingStatus};
 use crate::device_permissions::{self, DevicePermissionStore, PermissionScope};
 use crate::device_revocation;
@@ -216,6 +219,7 @@ enum ControlId {
     PasswordAmbiguous,
     PasswordSymbolSet,
     PasswordGenerate,
+    PasswordCopy,
     PasswordClear,
     CompareLeft,
     CompareRight,
@@ -770,6 +774,7 @@ struct App {
     repositories: RepositoryUiState,
     backup: BackupUiState,
     password: PasswordState,
+    secret_clipboard: Option<SecretClipboard<SystemClipboard>>,
     lan_access: LanEnableControl,
     network_safety: NetworkSafetyAssessment,
     device_pairing: DevicePairing,
@@ -811,6 +816,7 @@ impl App {
             repositories: RepositoryUiState::new(&workspace_root),
             backup: BackupUiState::new(&workspace_root),
             password: PasswordState::new(),
+            secret_clipboard: SystemClipboard::new().ok().map(SecretClipboard::new),
             lan_access: LanEnableControl::default(),
             network_safety: network_safety::assess_current_network(),
             device_pairing: DevicePairing::default(),
@@ -852,6 +858,7 @@ impl App {
             if self.editor.maybe_autosave(&self.workspace_root)? {
                 self.notice = "RECOVERY AUTOSAVED".to_string();
             }
+            self.poll_secret_clipboard();
             self.persist_session_if_changed();
 
             if event::poll(EVENT_POLL)? {
@@ -1023,6 +1030,11 @@ impl App {
                 push(ControlId::PasswordAmbiguous, format!("[{}] EXCLUDE AMBIGUOUS", mark(self.password.config.exclude_ambiguous)), true);
                 push(ControlId::PasswordSymbolSet, format!("SYMBOL SET: {}", self.password.config.symbol_set), self.password.config.symbols);
                 push(ControlId::PasswordGenerate, "GENERATE".to_string(), true);
+                push(
+                    ControlId::PasswordCopy,
+                    "COPY / AUTO-CLEAR 30s".to_string(),
+                    self.password.generated.is_some() && self.secret_clipboard.is_some(),
+                );
                 push(ControlId::PasswordClear, "CLEAR OUTPUT".to_string(), self.password.generated.is_some());
             }
             View::Files => {
@@ -1451,6 +1463,23 @@ impl App {
                     self.notice = format!("PASSWORD GENERATION FAILED: {error}");
                 }
             },
+            ControlId::PasswordCopy => {
+                if let (Some(generated), Some(clipboard)) = (
+                    self.password.generated.as_ref(),
+                    self.secret_clipboard.as_mut(),
+                ) {
+                    match clipboard.copy(
+                        ClipboardSecret::from_generated_password(generated),
+                        ClipboardPolicy::default(),
+                    ) {
+                        Ok(()) => {
+                            self.notice =
+                                "PASSWORD COPIED / CLIPBOARD CLEAR IN 30s".to_string();
+                        }
+                        Err(error) => self.notice = format!("CLIPBOARD FAILED: {error}"),
+                    }
+                }
+            }
             ControlId::PasswordClear => {
                 self.password.clear();
                 self.notice = "PASSWORD OUTPUT CLEARED".to_string();
@@ -1683,6 +1712,27 @@ impl App {
                 if len > 0 {
                     self.offline_doc_index = (self.offline_doc_index + 1) % len;
                 }
+            }
+        }
+    }
+
+    fn poll_secret_clipboard(&mut self) {
+        let Some(clipboard) = self.secret_clipboard.as_mut() else {
+            return;
+        };
+        if !clipboard.has_pending_clear() {
+            return;
+        }
+        match clipboard.poll() {
+            Ok(ClipboardPoll::Idle | ClipboardPoll::Pending) => {}
+            Ok(ClipboardPoll::Cleared) => {
+                self.notice = "CLIPBOARD CLEARED".to_string();
+            }
+            Ok(ClipboardPoll::PreservedExternalContent) => {
+                self.notice = "CLIPBOARD CHANGED / EXTERNAL CONTENT PRESERVED".to_string();
+            }
+            Err(error) => {
+                self.notice = format!("CLIPBOARD FAILED: {error}");
             }
         }
     }
