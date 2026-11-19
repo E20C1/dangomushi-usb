@@ -1,5 +1,6 @@
 const BUILD_SCRIPT: &str = include_str!("../scripts/build-release-bundle.py");
 const VERIFY_SCRIPT: &str = include_str!("../scripts/verify-release-bundle.py");
+const TERMINAL_FETCH: &str = include_str!("../scripts/fetch-windows-terminal-runtime.py");
 const CI: &str = include_str!("../.github/workflows/ci.yml");
 const WORKSPACE: &str = include_str!("../src/workspace.rs");
 const ROADMAP: &str = include_str!("../docs/ROADMAP.md");
@@ -12,6 +13,9 @@ fn builder_packages_only_reviewed_runtime_payloads() {
     for required in [
         "app/Dangomushi.exe",
         "app/Dangomushi",
+        "START_DANGOMUSHI.cmd",
+        "runtime/windows-terminal/",
+        "RUNTIME-MANIFEST.json",
         "START_HERE.txt",
         "RELEASE-MANIFEST.json",
         "workspace-sibling-of-app",
@@ -33,6 +37,26 @@ fn builder_packages_only_reviewed_runtime_payloads() {
             "builder must not package durable/secret state: {forbidden}"
         );
     }
+}
+
+#[test]
+fn pinned_windows_terminal_runtime_is_verified_before_packaging() {
+    for required in [
+        "1.25.3131.0",
+        "273d6f1502eca1b5bd95c43f5d4d7ec72cc503df340102f8659717e5bead3437",
+        "b7e1d2a414e6368affd098d91a4cba441dcacd3ab634a6f39c8e6f5490deef89",
+        ".portable",
+        "WindowsTerminal.exe",
+        "wt.exe",
+        "NOTICE.html",
+        "unsafe Windows Terminal archive path",
+        "Windows Terminal asset SHA-256 mismatch",
+    ] {
+        assert!(TERMINAL_FETCH.contains(required), "missing terminal runtime gate: {required}");
+    }
+    assert!(BUILD_SCRIPT.contains("validate_windows_terminal_runtime"));
+    assert!(VERIFY_SCRIPT.contains("verify_windows_terminal_runtime"));
+    assert!(CI.contains("Fetch pinned Windows Terminal portable runtime"));
 }
 
 #[test]
