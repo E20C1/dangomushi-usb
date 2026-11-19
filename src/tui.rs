@@ -1173,6 +1173,69 @@ impl App {
                 push(ControlId::FileTextJson, "TEXT / JSON".to_string(), is_file);
                 push(ControlId::FileCompareA, "COMPARE AS A".to_string(), is_file);
                 push(ControlId::FileCompareB, "COMPARE AS B".to_string(), is_file);
+                push(ControlId::FileImageOptimize, "OPTIMIZE IMAGE".to_string(), is_file);
+            }
+            View::ImageOptimizer => {
+                let has_source = self.image_optimizer.source.is_some();
+                let resolved = self.image_optimizer.resolved_format();
+                let quality_enabled = !matches!(resolved, Some(image_optimizer::ImageFormat::Png));
+                push(
+                    ControlId::ImageUseSelection,
+                    "USE FILES SELECTION".to_string(),
+                    self.selected_file_path().is_some(),
+                );
+                push(
+                    ControlId::ImageFormatPrevious,
+                    format!("< FORMAT  {}", self.image_optimizer.settings.format.label()),
+                    has_source,
+                );
+                push(
+                    ControlId::ImageFormatNext,
+                    format!("FORMAT  {} >", self.image_optimizer.settings.format.label()),
+                    has_source,
+                );
+                push(
+                    ControlId::ImageQualityDown,
+                    format!("QUALITY - ({})", self.image_optimizer.settings.quality),
+                    has_source && quality_enabled && self.image_optimizer.settings.quality > 1,
+                );
+                push(
+                    ControlId::ImageQualityUp,
+                    format!("QUALITY + ({})", self.image_optimizer.settings.quality),
+                    has_source && quality_enabled && self.image_optimizer.settings.quality < 100,
+                );
+                push(
+                    ControlId::ImageEffortPrevious,
+                    format!("< EFFORT  {}", self.image_optimizer.settings.effort.label()),
+                    has_source,
+                );
+                push(
+                    ControlId::ImageEffortNext,
+                    format!("EFFORT  {} >", self.image_optimizer.settings.effort.label()),
+                    has_source,
+                );
+                push(
+                    ControlId::ImagePreview,
+                    if self.image_optimizer.preview_pending() {
+                        "GENERATING PREVIEW...".to_string()
+                    } else {
+                        "PREVIEW".to_string()
+                    },
+                    has_source
+                        && self.image_optimizer.preview_allowed()
+                        && !self.image_optimizer.preview_pending(),
+                );
+                push(
+                    ControlId::ImageSave,
+                    "SAVE TO DATA/EXPORTS".to_string(),
+                    self.image_optimizer.has_current_candidate()
+                        && !self.image_optimizer.preview_pending(),
+                );
+                push(
+                    ControlId::ImageClear,
+                    "CLEAR".to_string(),
+                    has_source || self.image_optimizer.candidate.is_some(),
+                );
             }
             View::Editor => {
                 let open = self.editor.path.is_some();
