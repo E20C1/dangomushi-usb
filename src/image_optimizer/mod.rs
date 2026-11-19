@@ -460,7 +460,17 @@ fn probe_bytes(bytes: &[u8]) -> Result<ImageInfo, OptimizeError> {
     let mut decoder = reader
         .into_decoder()
         .map_err(|error| OptimizeError::Decode(error.to_string()))?;
-    let (width, height) = decoder.dimensions();
+    let (mut width, mut height) = decoder.dimensions();
+    let orientation = decoder.orientation().unwrap_or(Orientation::NoTransforms);
+    if matches!(
+        orientation,
+        Orientation::Rotate90
+            | Orientation::Rotate270
+            | Orientation::Rotate90FlipH
+            | Orientation::Rotate270FlipH
+    ) {
+        std::mem::swap(&mut width, &mut height);
+    }
     validate_dimensions(width, height)?;
     let has_alpha = decoder.color_type().has_alpha();
     let icc_present = decoder.icc_profile().ok().flatten().is_some();
