@@ -21,6 +21,7 @@ use crate::text_json;
 use crate::tool_registry::{self, ToolId, ToolStatus};
 use crate::trusted_devices::{self, TrustedDevice};
 use crate::trusted_peers;
+use crate::tui_image::ImagePreviewRuntime;
 use crate::workspace;
 use crate::workspace_backup;
 use crossterm::cursor::Show;
@@ -48,8 +49,8 @@ const EVENT_POLL: Duration = Duration::from_millis(100);
 type TuiTerminal = Terminal<CrosstermBackend<Stdout>>;
 
 pub fn run() -> io::Result<()> {
-    let mut terminal = TerminalGuard::enter()?;
-    let mut app = App::new();
+    let (mut terminal, image_preview) = TerminalGuard::enter()?;
+    let mut app = App::new(image_preview);
     let result = app.run(&mut terminal.terminal);
     drop(terminal);
     result
@@ -60,16 +61,27 @@ struct TerminalGuard {
 }
 
 impl TerminalGuard {
-    fn enter() -> io::Result<Self> {
+    fn enter() -> io::Result<(Self, ImagePreviewRuntime)> {
         enable_raw_mode()?;
         let mut out = stdout();
-        if let Err(error) = execute!(out, EnterAlternateScreen, EnableMouseCapture) {
+        if let Err(error) = execute!(out, EnterAlternateScreen) {
             let _ = disable_raw_mode();
             return Err(error);
         }
+
+        // ratatui-image must query terminal capabilities after entering the
+        // alternate screen and before the Crossterm event loop starts.
+        let image_preview = ImagePreviewRuntime::detect();
+
+        if let Err(error) = execute!(out, EnableMouseCapture) {
+            let _ = execute!(out, LeaveAlternateScreen, Show);
+            let _ = disable_raw_mode();
+            return Err(error);
+        }
+
         let backend = CrosstermBackend::new(out);
         let terminal = Terminal::new(backend)?;
-        Ok(Self { terminal })
+        Ok((Self { terminal }, image_preview))
     }
 }
 
@@ -419,7 +431,7 @@ struct EditorState {
 }
 
 impl EditorState {
-    fn new() -> Self {
+    fn new(image_preview: ImagePreviewRuntime) -> Self {
         Self {
             path: None,
             buffer: String::new(),
@@ -774,6 +786,7 @@ struct App {
     repositories: RepositoryUiState,
     backup: BackupUiState,
     password: PasswordState,
+    image_preview: ImagePreviewRuntime,
     secret_clipboard: Option<SecretClipboard<SystemClipboard>>,
     lan_access: LanEnableControl,
     network_safety: NetworkSafetyAssessment,
@@ -816,6 +829,7 @@ impl App {
             repositories: RepositoryUiState::new(&workspace_root),
             backup: BackupUiState::new(&workspace_root),
             password: PasswordState::new(),
+            image_preview,
             secret_clipboard: SystemClipboard::new().ok().map(SecretClipboard::new),
             lan_access: LanEnableControl::default(),
             network_safety: network_safety::assess_current_network(),
@@ -859,6 +873,7 @@ impl App {
                 self.notice = "RECOVERY AUTOSAVED".to_string();
             }
             self.poll_secret_clipboard();
+            self.image_preview.poll_workers();
             self.persist_session_if_changed();
 
             if event::poll(EVENT_POLL)? {
@@ -2443,6 +2458,8 @@ impl App {
                 let document = documents.get(self.offline_doc_index);
                 format!(
                     "UI: Ratatui / Crossterm\nFile browser: workspace-rooted / read-only\nEditor: UTF-8 / explicit save / recovery\nGateway: 127.0.0.1 only\n\nOFFLINE DOCUMENTATION\nEMBEDDED / VERIFIED INVENTORY\nRead-only content is compiled into this executable.\nOffline docs: {} docs / {} bytes / {}\n\n{}\n\n{}",
+                    self.image_preview.protocol_label(),
+                    if self.image_preview.is_pixel_protocol() { " / PIXEL" } else { " / APPROXIMATE FALLBACK" },
                     summary.document_count,
                     summary.total_bytes,
                     summary.sha256_hex(),
