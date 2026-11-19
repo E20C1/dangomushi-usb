@@ -8,6 +8,11 @@ use crate::document_search;
 use crate::file_browser::{self, EntryKind, FileEntry};
 use crate::file_compare;
 use crate::hash_verify;
+use crate::image_optimizer::{
+    self, CandidateArtifact, Effort as ImageEffort, ExportSummary as ImageExportSummary,
+    ImageInfo, OptimizeSettings, OutputFormat,
+};
+use crate::image_optimizer::worker::{OptimizeCompletion, OptimizeJob, OptimizerWorker};
 use crate::internet_p2p_policy;
 use crate::lan_access_control::LanEnableControl;
 use crate::network_safety::{self, NetworkSafetyAssessment};
@@ -110,6 +115,7 @@ enum View {
     Home,
     Tools,
     PasswordGenerator,
+    ImageOptimizer,
     Files,
     Editor,
     HashVerify,
@@ -139,6 +145,7 @@ impl View {
             Self::Home => "HOME",
             Self::Tools => "TOOLS",
             Self::PasswordGenerator => "PASSWORD",
+            Self::ImageOptimizer => "IMAGE OPTIMIZER",
             Self::Files => "FILES",
             Self::Editor => "EDITOR",
             Self::HashVerify => "HASH / VERIFY",
@@ -156,7 +163,7 @@ impl View {
     fn session_view(self) -> SessionView {
         match self {
             Self::Home => SessionView::Home,
-            Self::Tools | Self::PasswordGenerator => SessionView::Tools,
+            Self::Tools | Self::PasswordGenerator | Self::ImageOptimizer => SessionView::Tools,
             Self::Files => SessionView::Files,
             Self::Editor => SessionView::Editor,
             Self::HashVerify => SessionView::HashVerify,
@@ -208,6 +215,17 @@ enum ControlId {
     FileTextJson,
     FileCompareA,
     FileCompareB,
+    FileImageOptimize,
+    ImageUseSelection,
+    ImageFormatPrevious,
+    ImageFormatNext,
+    ImageQualityDown,
+    ImageQualityUp,
+    ImageEffortPrevious,
+    ImageEffortNext,
+    ImagePreview,
+    ImageSave,
+    ImageClear,
     EditorEdit,
     EditorSave,
     EditorDiscard,
@@ -781,6 +799,80 @@ impl PasswordState {
     }
 }
 
+struct ImageOptimizerUiState {
+    source: Option<PathBuf>,
+    info: Option<ImageInfo>,
+    settings: OptimizeSettings,
+    generation: u64,
+    active_generation: Option<u64>,
+    candidate_generation: Option<u64>,
+    candidate: Option<CandidateArtifact>,
+    error: Option<String>,
+    exported: Option<ImageExportSummary>,
+}
+
+impl ImageOptimizerUiState {
+    fn new() -> Self {
+        Self {
+            source: None,
+            info: None,
+            settings: OptimizeSettings::default(),
+            generation: 1,
+            active_generation: None,
+            candidate_generation: None,
+            candidate: None,
+            error: None,
+            exported: None,
+        }
+    }
+
+    fn reset_for_source(&mut self, source: PathBuf, info: ImageInfo) {
+        self.source = Some(source);
+        self.info = Some(info);
+        self.settings = OptimizeSettings::default();
+        self.invalidate_preview();
+    }
+
+    fn invalidate_preview(&mut self) {
+        self.generation = self.generation.wrapping_add(1).max(1);
+        self.active_generation = None;
+        self.candidate_generation = None;
+        self.candidate = None;
+        self.error = None;
+        self.exported = None;
+    }
+
+    fn has_current_candidate(&self) -> bool {
+        self.candidate.is_some() && self.candidate_generation == Some(self.generation)
+    }
+
+    fn preview_pending(&self) -> bool {
+        self.active_generation == Some(self.generation)
+    }
+
+    fn resolved_format(&self) -> Option<image_optimizer::ImageFormat> {
+        self.info
+            .as_ref()
+            .map(|info| self.settings.format.resolve(info.format))
+    }
+
+    fn preview_allowed(&self) -> bool {
+        let Some(info) = self.info.as_ref() else {
+            return false;
+        };
+        match self.settings.format.resolve(info.format) {
+            image_optimizer::ImageFormat::Jpeg if info.has_alpha => false,
+            image_optimizer::ImageFormat::Jpeg if info.width > u16::MAX as u32 || info.height > u16::MAX as u32 => false,
+            image_optimizer::ImageFormat::WebP if info.width > 16_383 || info.height > 16_383 => false,
+            _ => true,
+        }
+    }
+
+    fn clear(&mut self) {
+        *self = Self::new();
+    }
+}
+
 struct App {
     view: View,
     workspace_root: PathBuf,
@@ -793,6 +885,8 @@ struct App {
     repositories: RepositoryUiState,
     backup: BackupUiState,
     password: PasswordState,
+    image_optimizer: ImageOptimizerUiState,
+    image_optimizer_worker: OptimizerWorker,
     image_preview: ImagePreviewRuntime,
     secret_clipboard: Option<SecretClipboard<SystemClipboard>>,
     lan_access: LanEnableControl,
@@ -836,6 +930,8 @@ impl App {
             repositories: RepositoryUiState::new(&workspace_root),
             backup: BackupUiState::new(&workspace_root),
             password: PasswordState::new(),
+            image_optimizer: ImageOptimizerUiState::new(),
+            image_optimizer_worker: OptimizerWorker::new(),
             image_preview,
             secret_clipboard: SystemClipboard::new().ok().map(SecretClipboard::new),
             lan_access: LanEnableControl::default(),
@@ -880,6 +976,7 @@ impl App {
                 self.notice = "RECOVERY AUTOSAVED".to_string();
             }
             self.poll_secret_clipboard();
+            self.poll_image_optimizer_worker();
             self.image_preview.poll_workers();
             self.persist_session_if_changed();
 
