@@ -1,5 +1,5 @@
 const SOURCE: &str = include_str!("../src/workspace_backup.rs");
-const UI: &str = include_str!("../src/native_ui.rs");
+const UI: &str = include_str!("../src/tui.rs");
 const REGISTRY: &str = include_str!("../src/tool_registry.rs");
 const SESSION: &str = include_str!("../src/session_state.rs");
 const ROADMAP: &str = include_str!("../docs/ROADMAP.md");
@@ -130,14 +130,15 @@ fn native_ui_requires_explicit_restore_and_resets_filesystem_state() {
     assert!(entry.contains("status: ToolStatus::Ready"));
     assert!(UI.contains("ToolId::Backup =>"));
     assert!(UI.contains("View::Backup"));
-    assert!(UI.contains("fn backup_view"));
-    assert!(UI.contains("[CREATE BACKUP]"));
-    assert!(UI.contains("[VERIFY BACKUP]"));
-    assert!(UI.contains("[RESTORE SELECTED BACKUP]"));
+    assert!(UI.contains("ControlId::BackupCreate"));
+    assert!(UI.contains("CREATE BACKUP"));
+    assert!(UI.contains("VERIFY BACKUP"));
+    assert!(UI.contains("RESTORE SELECTED BACKUP"));
     assert!(UI.contains(r#"restore_confirmation == "RESTORE""#));
     assert!(UI.contains("!self.editor.dirty"));
     assert!(UI.contains("self.editor.pending_recovery.is_none()"));
-    assert!(UI.contains("reset_after_workspace_restore"));
+    assert!(UI.contains("self.browser = FileBrowserState::new"));
+    assert!(UI.contains("self.editor = EditorState::new"));
     assert!(UI.contains("persist_dirty_editor_recovery_for_backup"));
 
     assert!(SESSION.contains("Backup"));
