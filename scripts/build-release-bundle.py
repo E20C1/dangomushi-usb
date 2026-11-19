@@ -373,6 +373,11 @@ def main() -> None:
                 windows_launcher(), encoding="utf-8", newline=""
             )
             (staging / "START_DANGOMUSHI.cmd").chmod(0o644)
+            copy_payload(
+                root / "licenses/windows-terminal/LICENSE.txt",
+                staging / "licenses/windows-terminal/LICENSE.txt",
+                False,
+            )
 
         (staging / "START_HERE.txt").write_text(
             start_here(version, os_name), encoding="utf-8", newline="\n"
