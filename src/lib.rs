@@ -38,7 +38,3 @@ pub mod vault_unlock;
 pub mod workspace;
 pub mod workspace_backup;
 
-#[cfg(feature = "desktop")]
-pub mod native_ui;
-#[cfg(feature = "desktop")]
-pub mod native_ui_theme;
