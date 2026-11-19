@@ -44,7 +44,7 @@ fn builder_packages_only_reviewed_runtime_payloads() {
 #[test]
 fn windows_launcher_normalizes_root_before_passing_starting_directory() {
     assert!(BUILD_SCRIPT.contains(r#"for %%I in (\"%~dp0.\") do set \"DANGOMUSHI_ROOT=%%~fI\""#));
-    assert!(BUILD_SCRIPT.contains(r#"--startingDirectory \"%DANGOMUSHI_ROOT%\""#));
+    assert!(BUILD_SCRIPT.contains(r#"--startingDirectory . \"%DANGOMUSHI_APP%\""#));
     assert!(!BUILD_SCRIPT.contains(r#"--startingDirectory \"%~dp0\""#));
 }
 
