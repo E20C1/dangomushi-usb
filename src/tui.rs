@@ -1132,7 +1132,7 @@ impl App {
             }
             View::Mobile => {
                 push(ControlId::MobileRefreshNetwork, "REFRESH NETWORK SAFETY".to_string(), true);
-                push(ControlId::MobileToggleLan, if self.lan_access.is_enabled() { "DISABLE LAN CONTROL" } else { "ENABLE LAN CONTROL" }.to_string(), true);
+                push(ControlId::MobileToggleLan, if self.lan_access.is_enabled() { "DISABLE LAN CONTROL" } else { "ENABLE FOR THIS RUN" }.to_string(), true);
                 push(ControlId::PeerInitialize, "INITIALIZE PEER IDENTITY".to_string(), self.peer_identity.is_none() && workspace::summary(&self.workspace_root).initialized);
                 push(ControlId::PeerRefresh, "REFRESH PEER / TRUST".to_string(), true);
                 for (index, device) in self.trusted_devices.iter().enumerate() {
@@ -1147,7 +1147,7 @@ impl App {
                     push(ControlId::PermissionCancel, "CANCEL PERMISSION EDIT".to_string(), true);
                 }
                 if self.pending_revocation.is_some() {
-                    push(ControlId::RevocationConfirm, format!("TYPE REVOKE: {}", self.revocation_confirmation), true);
+                    push(ControlId::RevocationConfirm, format!("TYPE REVOKE TO CONFIRM: {}", self.revocation_confirmation), true);
                     push(ControlId::RevocationCommit, "CONFIRM REVOCATION".to_string(), self.revocation_confirmation.trim() == "REVOKE");
                     push(ControlId::RevocationCancel, "CANCEL REVOCATION".to_string(), true);
                 }
@@ -2429,9 +2429,9 @@ impl App {
                 text.push_str(&format!("\nPairing: PAIRED FOR THIS RUN\nDevice: {}\nFingerprint: {}", paired.device_name(), paired.fingerprint_hex()));
             }
         } else if let Some(invitation) = self.pairing_invitation.as_ref() {
-            text.push_str(&format!("\nPairing invitation active\nCode: {}", invitation.code().expose_secret()));
+            text.push_str(&format!("\nPAIRING CORE READY / TRANSPORT LOCKED\nPairing invitation active\nPAIRING CODE: {}", invitation.code().expose_secret()));
         } else {
-            text.push_str("\nPairing: IDLE OR AWAITING TRANSPORT PROOF");
+            text.push_str("\nPAIRING CORE READY / TRANSPORT LOCKED\nPairing: IDLE OR AWAITING TRANSPORT PROOF");
         }
         text
     }
@@ -2442,7 +2442,7 @@ impl App {
                 let documents = offline_docs::documents();
                 let document = documents.get(self.offline_doc_index);
                 format!(
-                    "UI: Ratatui / Crossterm\nFile browser: workspace-rooted / read-only\nEditor: UTF-8 / explicit save / recovery\nGateway: 127.0.0.1 only\n\nOffline docs: {} docs / {} bytes / {}\n\n{}\n\n{}",
+                    "UI: Ratatui / Crossterm\nFile browser: workspace-rooted / read-only\nEditor: UTF-8 / explicit save / recovery\nGateway: 127.0.0.1 only\n\nOFFLINE DOCUMENTATION\nEMBEDDED / VERIFIED INVENTORY\nRead-only content is compiled into this executable.\nOffline docs: {} docs / {} bytes / {}\n\n{}\n\n{}",
                     summary.document_count,
                     summary.total_bytes,
                     summary.sha256_hex(),
