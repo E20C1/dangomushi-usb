@@ -1,5 +1,5 @@
 const SOURCE: &str = include_str!("../src/document_search.rs");
-const UI: &str = include_str!("../src/native_ui.rs");
+const UI: &str = include_str!("../src/tui.rs");
 const REGISTRY: &str = include_str!("../src/tool_registry.rs");
 const SESSION: &str = include_str!("../src/session_state.rs");
 const ROADMAP: &str = include_str!("../docs/ROADMAP.md");
@@ -62,10 +62,10 @@ fn native_ui_dispatches_ready_search_without_session_payload_content() {
     assert!(entry.contains("status: ToolStatus::Ready"));
     assert!(UI.contains("ToolId::Search =>"));
     assert!(UI.contains("View::Search"));
-    assert!(UI.contains("fn search_view"));
-    assert!(UI.contains("[SEARCH DOCUMENTS]"));
-    assert!(UI.contains("[OPEN]"));
-    assert!(UI.contains("workspace:/data/documents"));
+    assert!(UI.contains("ControlId::SearchRun"));
+    assert!(UI.contains("SEARCH DOCUMENTS"));
+    assert!(UI.contains("ControlId::SearchResult"));
+    assert!(UI.contains("document_search::search_documents"));
 
     assert!(SESSION.contains("Search"));
     assert!(SESSION.contains("search"));
