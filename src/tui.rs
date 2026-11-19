@@ -1519,6 +1519,48 @@ impl App {
                     self.set_view(View::Compare);
                 }
             }
+            ControlId::FileImageOptimize | ControlId::ImageUseSelection => {
+                if let Some(path) = self.selected_file_path() {
+                    self.load_image_optimizer_source(path);
+                }
+            }
+            ControlId::ImageFormatPrevious => {
+                self.image_optimizer.settings.format =
+                    self.image_optimizer.settings.format.previous();
+                self.invalidate_image_optimizer_preview();
+            }
+            ControlId::ImageFormatNext => {
+                self.image_optimizer.settings.format =
+                    self.image_optimizer.settings.format.next();
+                self.invalidate_image_optimizer_preview();
+            }
+            ControlId::ImageQualityDown => {
+                self.image_optimizer.settings.quality =
+                    self.image_optimizer.settings.quality.saturating_sub(5).max(1);
+                self.invalidate_image_optimizer_preview();
+            }
+            ControlId::ImageQualityUp => {
+                self.image_optimizer.settings.quality =
+                    self.image_optimizer.settings.quality.saturating_add(5).min(100);
+                self.invalidate_image_optimizer_preview();
+            }
+            ControlId::ImageEffortPrevious => {
+                self.image_optimizer.settings.effort =
+                    self.image_optimizer.settings.effort.previous();
+                self.invalidate_image_optimizer_preview();
+            }
+            ControlId::ImageEffortNext => {
+                self.image_optimizer.settings.effort =
+                    self.image_optimizer.settings.effort.next();
+                self.invalidate_image_optimizer_preview();
+            }
+            ControlId::ImagePreview => self.request_image_optimizer_preview(),
+            ControlId::ImageSave => self.save_image_optimizer_candidate(),
+            ControlId::ImageClear => {
+                self.image_optimizer.clear();
+                self.image_preview.clear();
+                self.notice = "IMAGE OPTIMIZER CLEARED".to_string();
+            }
             ControlId::EditorEdit => self.begin_edit(EditTarget::Editor),
             ControlId::EditorSave => match self.editor.save(&self.workspace_root) {
                 Ok(()) => self.notice = "FILE SAVED".to_string(),
@@ -1915,6 +1957,130 @@ impl App {
             }
             Err(error) => {
                 self.notice = format!("CLIPBOARD FAILED: {error}");
+            }
+        }
+    }
+
+    fn poll_image_optimizer_worker(&mut self) {
+        let Some(completion) = self.image_optimizer_worker.poll_latest() else {
+            return;
+        };
+        if completion.generation != self.image_optimizer.generation {
+            return;
+        }
+
+        self.image_optimizer.active_generation = None;
+        match completion.result {
+            Ok(mut candidate) => {
+                let before = std::mem::replace(
+                    &mut candidate.before_preview,
+                    image::DynamicImage::new_rgba8(1, 1),
+                );
+                let after = std::mem::replace(
+                    &mut candidate.after_preview,
+                    image::DynamicImage::new_rgba8(1, 1),
+                );
+                let output_bytes = candidate.output_bytes_len();
+                let reduction = candidate.reduction_percent();
+                self.image_preview.replace_pair(before, after);
+                self.image_optimizer.candidate_generation = Some(completion.generation);
+                self.image_optimizer.candidate = Some(candidate);
+                self.image_optimizer.error = None;
+                self.notice = format!(
+                    "IMAGE PREVIEW READY / {} / {:+.1}%",
+                    format_bytes(output_bytes as u64),
+                    -reduction
+                );
+            }
+            Err(error) => {
+                self.image_optimizer.candidate_generation = None;
+                self.image_optimizer.candidate = None;
+                self.image_optimizer.error = Some(error.to_string());
+                self.image_preview.clear();
+                self.notice = format!("IMAGE PREVIEW FAILED: {error}");
+            }
+        }
+    }
+
+    fn load_image_optimizer_source(&mut self, path: PathBuf) {
+        match image_optimizer::probe_workspace_image(&self.workspace_root, &path) {
+            Ok(info) => {
+                let format = info.format.label();
+                let width = info.width;
+                let height = info.height;
+                self.image_optimizer.reset_for_source(path, info);
+                self.image_preview.clear();
+                self.set_view(View::ImageOptimizer);
+                self.notice = format!("IMAGE READY / {format} / {width}x{height}");
+            }
+            Err(error) => {
+                self.notice = format!("IMAGE LOAD FAILED: {error}");
+            }
+        }
+    }
+
+    fn invalidate_image_optimizer_preview(&mut self) {
+        self.image_optimizer.invalidate_preview();
+        self.image_preview.clear();
+        self.notice = "IMAGE SETTINGS CHANGED / PREVIEW REQUIRED".to_string();
+    }
+
+    fn request_image_optimizer_preview(&mut self) {
+        let Some(source_relative) = self.image_optimizer.source.clone() else {
+            self.notice = "SELECT AN IMAGE IN FILES".to_string();
+            return;
+        };
+        if !self.image_optimizer.preview_allowed() {
+            self.notice = "SELECTED OUTPUT FORMAT IS NOT VALID FOR THIS IMAGE".to_string();
+            return;
+        }
+
+        let generation = self.image_optimizer.generation;
+        let job = OptimizeJob {
+            generation,
+            workspace_root: self.workspace_root.clone(),
+            source_relative,
+            settings: self.image_optimizer.settings,
+        };
+        if self.image_optimizer_worker.submit(job).is_err() {
+            self.image_optimizer.active_generation = None;
+            self.image_optimizer.error = Some("optimizer worker is unavailable".to_string());
+            self.notice = "IMAGE PREVIEW FAILED: WORKER UNAVAILABLE".to_string();
+            return;
+        }
+
+        self.image_optimizer.active_generation = Some(generation);
+        self.image_optimizer.candidate_generation = None;
+        self.image_optimizer.candidate = None;
+        self.image_optimizer.error = None;
+        self.image_optimizer.exported = None;
+        self.image_preview.clear();
+        self.notice = "GENERATING IMAGE PREVIEW".to_string();
+    }
+
+    fn save_image_optimizer_candidate(&mut self) {
+        if !self.image_optimizer.has_current_candidate() {
+            self.notice = "GENERATE A CURRENT PREVIEW BEFORE SAVING".to_string();
+            return;
+        }
+
+        let result = self
+            .image_optimizer
+            .candidate
+            .as_ref()
+            .map(|candidate| image_optimizer::export_candidate(&self.workspace_root, candidate));
+        match result {
+            Some(Ok(summary)) => {
+                let display = file_browser::display_path(&summary.relative_path);
+                self.image_optimizer.exported = Some(summary);
+                self.notice = format!("IMAGE SAVED / {display}");
+            }
+            Some(Err(error)) => {
+                self.image_optimizer.error = Some(error.to_string());
+                self.notice = format!("IMAGE SAVE FAILED: {error}");
+            }
+            None => {
+                self.notice = "GENERATE A CURRENT PREVIEW BEFORE SAVING".to_string();
             }
         }
     }
