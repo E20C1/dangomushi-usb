@@ -186,6 +186,7 @@ impl SourceFingerprint {
     }
 }
 
+#[derive(Debug)]
 pub struct CandidateArtifact {
     pub source_relative: PathBuf,
     pub source_info: ImageInfo,
@@ -286,7 +287,6 @@ impl From<io::Error> for OptimizeError {
 
 struct DecodedSource {
     info: ImageInfo,
-    fingerprint: SourceFingerprint,
     image: DynamicImage,
     icc_profile: Option<Vec<u8>>,
 }
@@ -415,7 +415,7 @@ fn read_workspace_source(root: &Path, relative: &Path) -> Result<Vec<u8>, Optimi
         return Err(OptimizeError::InvalidPath);
     }
 
-    let mut file = File::open(canonical)?;
+    let file = File::open(canonical)?;
     let mut bytes = Vec::with_capacity(metadata.len() as usize);
     file.take(MAX_SOURCE_BYTES + 1).read_to_end(&mut bytes)?;
     if bytes.len() as u64 > MAX_SOURCE_BYTES {
@@ -519,7 +519,6 @@ fn decode_source(bytes: &[u8], fingerprint: SourceFingerprint) -> Result<Decoded
                 exif_present,
                 xmp_present,
             },
-            fingerprint,
             image,
             icc_profile,
         })
