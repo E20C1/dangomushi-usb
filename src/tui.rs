@@ -9,10 +9,9 @@ use crate::file_browser::{self, EntryKind, FileEntry};
 use crate::file_compare;
 use crate::hash_verify;
 use crate::image_optimizer::{
-    self, CandidateArtifact, Effort as ImageEffort, ExportSummary as ImageExportSummary,
-    ImageInfo, OptimizeSettings, OutputFormat,
+    self, CandidateArtifact, ExportSummary as ImageExportSummary, ImageInfo, OptimizeSettings,
 };
-use crate::image_optimizer::worker::{OptimizeCompletion, OptimizeJob, OptimizerWorker};
+use crate::image_optimizer::worker::{OptimizeJob, OptimizerWorker};
 use crate::internet_p2p_policy;
 use crate::lan_access_control::LanEnableControl;
 use crate::network_safety::{self, NetworkSafetyAssessment};
