@@ -2120,6 +2120,7 @@ impl App {
             ToolId::HashVerify => View::HashVerify,
             ToolId::TextJson => View::TextJson,
             ToolId::PasswordGenerator => View::PasswordGenerator,
+            ToolId::ImageOptimizer => View::ImageOptimizer,
             ToolId::Compare => View::Compare,
             ToolId::Search => View::Search,
             ToolId::Repositories => {
