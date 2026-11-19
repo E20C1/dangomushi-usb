@@ -2778,7 +2778,13 @@ impl App {
         let content_controls: Vec<(usize, &Control)> = controls
             .iter()
             .enumerate()
-            .filter(|(_, control)| control.zone == Zone::Content)
+            .filter(|(_, control)| {
+                control.zone == Zone::Content
+                    && !matches!(
+                        control.id,
+                        ControlId::ImageBefore | ControlId::ImageAfter
+                    )
+            })
             .collect();
         let max_rows = sections[1].height.saturating_sub(2) as usize;
         let focus_pos = content_controls
@@ -2822,7 +2828,32 @@ impl App {
             }
         }
 
-        self.image_preview.render_pair(frame, sections[2]);
+        let before_index = controls
+            .iter()
+            .position(|control| control.id == ControlId::ImageBefore);
+        let after_index = controls
+            .iter()
+            .position(|control| control.id == ControlId::ImageAfter);
+        let panes = self.image_preview.render_pair_focused(
+            frame,
+            sections[2],
+            before_index == Some(self.focus_index),
+            after_index == Some(self.focus_index),
+        );
+        if self.image_optimizer.has_current_candidate() {
+            if let Some(index) = before_index {
+                self.hits.push(HitTarget {
+                    rect: panes[0],
+                    control_index: index,
+                });
+            }
+            if let Some(index) = after_index {
+                self.hits.push(HitTarget {
+                    rect: panes[1],
+                    control_index: index,
+                });
+            }
+        }
 
         frame.render_widget(
             Paragraph::new(self.image_optimizer_detail_text())
@@ -2835,7 +2866,11 @@ impl App {
     fn render_footer(&self, frame: &mut Frame, area: Rect) {
         let editing = self.edit.as_ref().map(|edit| format!("EDIT {:?} / Esc done", edit.target));
         let text = editing.unwrap_or_else(|| {
-            "↑↓ focus  ← nav  →/Tab content  Enter activate/click  Esc home  F1-F7 views  q quit".to_string()
+            if cfg!(windows) {
+                "↑↓ focus  ←/→ nav/content  Enter activate  Shift+drag text select  Esc home  F1-F7 views  q quit".to_string()
+            } else {
+                "↑↓ focus  ← nav  →/Tab content  Enter activate/click  Esc home  F1-F7 views  q quit".to_string()
+            }
         });
         frame.render_widget(
             Paragraph::new(text).style(Style::default().fg(Color::DarkGray)),
@@ -2848,7 +2883,7 @@ impl App {
             View::Home => {
                 let summary = workspace::summary(&self.workspace_root);
                 format!(
-                    "Runtime: TUI\nWorkspace: {} ({}/{})\nNetwork: {}\n\nAll interactive controls use one Activate path for keyboard Enter and mouse click.",
+                    "Runtime: TUI\nWorkspace: {} ({}/{})\nNetwork: {}\n\nNormal controls share one Activate path for keyboard Enter and mouse click. Preview images use click-to-focus and Enter-to-open.",
                     if summary.initialized { "READY" } else { "NOT INITIALIZED" },
                     summary.present_dirs,
                     summary.total_dirs,
