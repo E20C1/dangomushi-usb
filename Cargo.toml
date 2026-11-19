@@ -21,6 +21,9 @@ ratatui = { version = "0.30.2", default-features = false, features = ["crossterm
 crossterm = "0.29.0"
 ratatui-image = { version = "11.1.0", default-features = false, features = ["crossterm"] }
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }
+oxipng = { version = "10.2.1", default-features = false, features = ["parallel"] }
+jpeg-encoder = { version = "0.7.1", default-features = false, features = ["std"] }
+webp-rust = "0.3.2"
 arboard = { version = "3.7.0", default-features = false, features = ["wayland-data-control"] }
 
 [target.'cfg(windows)'.dependencies]

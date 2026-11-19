@@ -8,6 +8,10 @@ use crate::document_search;
 use crate::file_browser::{self, EntryKind, FileEntry};
 use crate::file_compare;
 use crate::hash_verify;
+use crate::image_optimizer::{
+    self, CandidateArtifact, ExportSummary as ImageExportSummary, ImageInfo, OptimizeSettings,
+};
+use crate::image_optimizer::worker::{OptimizeJob, OptimizerWorker};
 use crate::internet_p2p_policy;
 use crate::lan_access_control::LanEnableControl;
 use crate::network_safety::{self, NetworkSafetyAssessment};
@@ -39,8 +43,10 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph, Wrap};
 use ratatui::{Frame, Terminal};
+use std::fs;
 use std::io::{self, stdout, Stdout};
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::{Duration, Instant};
 
 const AUTOSAVE_DELAY: Duration = Duration::from_secs(2);
@@ -110,6 +116,7 @@ enum View {
     Home,
     Tools,
     PasswordGenerator,
+    ImageOptimizer,
     Files,
     Editor,
     HashVerify,
@@ -139,6 +146,7 @@ impl View {
             Self::Home => "HOME",
             Self::Tools => "TOOLS",
             Self::PasswordGenerator => "PASSWORD",
+            Self::ImageOptimizer => "IMAGE OPTIMIZER",
             Self::Files => "FILES",
             Self::Editor => "EDITOR",
             Self::HashVerify => "HASH / VERIFY",
@@ -156,7 +164,7 @@ impl View {
     fn session_view(self) -> SessionView {
         match self {
             Self::Home => SessionView::Home,
-            Self::Tools | Self::PasswordGenerator => SessionView::Tools,
+            Self::Tools | Self::PasswordGenerator | Self::ImageOptimizer => SessionView::Tools,
             Self::Files => SessionView::Files,
             Self::Editor => SessionView::Editor,
             Self::HashVerify => SessionView::HashVerify,
@@ -208,6 +216,19 @@ enum ControlId {
     FileTextJson,
     FileCompareA,
     FileCompareB,
+    FileImageOptimize,
+    ImageUseSelection,
+    ImageFormatPrevious,
+    ImageFormatNext,
+    ImageQualityDown,
+    ImageQualityUp,
+    ImageEffortPrevious,
+    ImageEffortNext,
+    ImagePreview,
+    ImageSave,
+    ImageBefore,
+    ImageAfter,
+    ImageClear,
     EditorEdit,
     EditorSave,
     EditorDiscard,
@@ -366,7 +387,7 @@ impl FileBrowserState {
             }
             Err(error) => {
                 self.entries.clear();
-                self.error = Some(error.to_string());
+                self.error = Some(file_browser_error(root, &error));
             }
         }
     }
@@ -379,7 +400,7 @@ impl FileBrowserState {
                 self.selected = None;
                 self.error = None;
             }
-            Err(error) => self.error = Some(error.to_string()),
+            Err(error) => self.error = Some(file_browser_error(root, &error)),
         }
     }
 
@@ -573,6 +594,14 @@ impl EditorState {
         self.confirm_discard = false;
         self.recovery_status = "RELOADED FROM DISK".to_string();
         Ok(())
+    }
+}
+
+fn file_browser_error(root: &Path, error: &io::Error) -> String {
+    if !workspace::summary(root).initialized {
+        "WORKSPACE NOT INITIALIZED / Open WORKSPACE and choose INITIALIZE WORKSPACE.".to_string()
+    } else {
+        error.to_string()
     }
 }
 
@@ -781,6 +810,80 @@ impl PasswordState {
     }
 }
 
+struct ImageOptimizerUiState {
+    source: Option<PathBuf>,
+    info: Option<ImageInfo>,
+    settings: OptimizeSettings,
+    generation: u64,
+    active_generation: Option<u64>,
+    candidate_generation: Option<u64>,
+    candidate: Option<CandidateArtifact>,
+    error: Option<String>,
+    exported: Option<ImageExportSummary>,
+}
+
+impl ImageOptimizerUiState {
+    fn new() -> Self {
+        Self {
+            source: None,
+            info: None,
+            settings: OptimizeSettings::default(),
+            generation: 1,
+            active_generation: None,
+            candidate_generation: None,
+            candidate: None,
+            error: None,
+            exported: None,
+        }
+    }
+
+    fn reset_for_source(&mut self, source: PathBuf, info: ImageInfo) {
+        self.source = Some(source);
+        self.info = Some(info);
+        self.settings = OptimizeSettings::default();
+        self.invalidate_preview();
+    }
+
+    fn invalidate_preview(&mut self) {
+        self.generation = self.generation.wrapping_add(1).max(1);
+        self.active_generation = None;
+        self.candidate_generation = None;
+        self.candidate = None;
+        self.error = None;
+        self.exported = None;
+    }
+
+    fn has_current_candidate(&self) -> bool {
+        self.candidate.is_some() && self.candidate_generation == Some(self.generation)
+    }
+
+    fn preview_pending(&self) -> bool {
+        self.active_generation == Some(self.generation)
+    }
+
+    fn resolved_format(&self) -> Option<image_optimizer::ImageFormat> {
+        self.info
+            .as_ref()
+            .map(|info| self.settings.format.resolve(info.format))
+    }
+
+    fn preview_allowed(&self) -> bool {
+        let Some(info) = self.info.as_ref() else {
+            return false;
+        };
+        match self.settings.format.resolve(info.format) {
+            image_optimizer::ImageFormat::Jpeg if info.has_alpha => false,
+            image_optimizer::ImageFormat::Jpeg if info.width > u16::MAX as u32 || info.height > u16::MAX as u32 => false,
+            image_optimizer::ImageFormat::WebP if info.width > 16_383 || info.height > 16_383 => false,
+            _ => true,
+        }
+    }
+
+    fn clear(&mut self) {
+        *self = Self::new();
+    }
+}
+
 struct App {
     view: View,
     workspace_root: PathBuf,
@@ -793,6 +896,8 @@ struct App {
     repositories: RepositoryUiState,
     backup: BackupUiState,
     password: PasswordState,
+    image_optimizer: ImageOptimizerUiState,
+    image_optimizer_worker: OptimizerWorker,
     image_preview: ImagePreviewRuntime,
     secret_clipboard: Option<SecretClipboard<SystemClipboard>>,
     lan_access: LanEnableControl,
@@ -836,6 +941,8 @@ impl App {
             repositories: RepositoryUiState::new(&workspace_root),
             backup: BackupUiState::new(&workspace_root),
             password: PasswordState::new(),
+            image_optimizer: ImageOptimizerUiState::new(),
+            image_optimizer_worker: OptimizerWorker::new(),
             image_preview,
             secret_clipboard: SystemClipboard::new().ok().map(SecretClipboard::new),
             lan_access: LanEnableControl::default(),
@@ -880,6 +987,7 @@ impl App {
                 self.notice = "RECOVERY AUTOSAVED".to_string();
             }
             self.poll_secret_clipboard();
+            self.poll_image_optimizer_worker();
             self.image_preview.poll_workers();
             self.persist_session_if_changed();
 
@@ -1070,12 +1178,86 @@ impl App {
                     );
                 }
                 let selected = self.browser.selected_entry();
-                push(ControlId::FileOpen, "OPEN".to_string(), selected.is_some());
+                push(ControlId::FileOpen, "OPEN SELECTED".to_string(), selected.is_some());
                 let is_file = selected.is_some_and(|entry| entry.kind == EntryKind::File);
                 push(ControlId::FileHash, "HASH / VERIFY".to_string(), is_file);
                 push(ControlId::FileTextJson, "TEXT / JSON".to_string(), is_file);
                 push(ControlId::FileCompareA, "COMPARE AS A".to_string(), is_file);
                 push(ControlId::FileCompareB, "COMPARE AS B".to_string(), is_file);
+                push(ControlId::FileImageOptimize, "OPTIMIZE IMAGE".to_string(), is_file);
+            }
+            View::ImageOptimizer => {
+                let has_source = self.image_optimizer.source.is_some();
+                let resolved = self.image_optimizer.resolved_format();
+                let quality_enabled = !matches!(resolved, Some(image_optimizer::ImageFormat::Png));
+                push(
+                    ControlId::ImageUseSelection,
+                    "USE FILES SELECTION".to_string(),
+                    self.selected_file_path().is_some(),
+                );
+                push(
+                    ControlId::ImageFormatPrevious,
+                    format!("< FORMAT  {}", self.image_optimizer.settings.format.label()),
+                    has_source,
+                );
+                push(
+                    ControlId::ImageFormatNext,
+                    format!("FORMAT  {} >", self.image_optimizer.settings.format.label()),
+                    has_source,
+                );
+                push(
+                    ControlId::ImageQualityDown,
+                    format!("QUALITY - ({})", self.image_optimizer.settings.quality),
+                    has_source && quality_enabled && self.image_optimizer.settings.quality > 1,
+                );
+                push(
+                    ControlId::ImageQualityUp,
+                    format!("QUALITY + ({})", self.image_optimizer.settings.quality),
+                    has_source && quality_enabled && self.image_optimizer.settings.quality < 100,
+                );
+                push(
+                    ControlId::ImageEffortPrevious,
+                    format!("< EFFORT  {}", self.image_optimizer.settings.effort.label()),
+                    has_source,
+                );
+                push(
+                    ControlId::ImageEffortNext,
+                    format!("EFFORT  {} >", self.image_optimizer.settings.effort.label()),
+                    has_source,
+                );
+                push(
+                    ControlId::ImagePreview,
+                    if self.image_optimizer.preview_pending() {
+                        "GENERATING PREVIEW...".to_string()
+                    } else {
+                        "PREVIEW".to_string()
+                    },
+                    has_source
+                        && self.image_optimizer.preview_allowed()
+                        && !self.image_optimizer.preview_pending(),
+                );
+                push(
+                    ControlId::ImageSave,
+                    "SAVE TO DATA/EXPORTS".to_string(),
+                    self.image_optimizer.has_current_candidate()
+                        && !self.image_optimizer.preview_pending(),
+                );
+                let preview_ready = self.image_optimizer.has_current_candidate();
+                push(
+                    ControlId::ImageBefore,
+                    "BEFORE IMAGE".to_string(),
+                    preview_ready,
+                );
+                push(
+                    ControlId::ImageAfter,
+                    "AFTER IMAGE".to_string(),
+                    preview_ready,
+                );
+                push(
+                    ControlId::ImageClear,
+                    "CLEAR".to_string(),
+                    has_source || self.image_optimizer.candidate.is_some(),
+                );
             }
             View::Editor => {
                 let open = self.editor.path.is_some();
@@ -1210,10 +1392,35 @@ impl App {
             self.should_quit = true;
             return;
         }
+        let focused_image = if self.view == View::ImageOptimizer {
+            let controls = self.controls();
+            controls
+                .get(self.focus_index.min(controls.len().saturating_sub(1)))
+                .map(|control| control.id)
+        } else {
+            None
+        };
+
         match key.code {
             KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Up => self.move_focus(-1),
             KeyCode::Down => self.move_focus(1),
+            KeyCode::Left
+                if matches!(
+                    focused_image,
+                    Some(ControlId::ImageBefore | ControlId::ImageAfter)
+                ) =>
+            {
+                self.focus_control(ControlId::ImageBefore);
+            }
+            KeyCode::Right
+                if matches!(
+                    focused_image,
+                    Some(ControlId::ImageBefore | ControlId::ImageAfter)
+                ) =>
+            {
+                self.focus_control(ControlId::ImageAfter);
+            }
             KeyCode::Left => self.jump_zone(Zone::Navigation),
             KeyCode::Right | KeyCode::Tab => self.jump_zone(Zone::Content),
             KeyCode::Enter => self.activate_focused(),
@@ -1243,7 +1450,13 @@ impl App {
                     .copied()
                 {
                     self.focus_index = hit.control_index;
-                    self.activate_focused();
+                    let id = {
+                        let controls = self.controls();
+                        controls.get(hit.control_index).map(|control| control.id)
+                    };
+                    if !matches!(id, Some(ControlId::ImageBefore | ControlId::ImageAfter)) {
+                        self.activate_focused();
+                    }
                 }
             }
             MouseEventKind::ScrollUp => self.move_focus(-1),
@@ -1266,6 +1479,17 @@ impl App {
                 self.focus_index = index as usize;
                 break;
             }
+        }
+    }
+
+    fn focus_control(&mut self, id: ControlId) {
+        let controls = self.controls();
+        if let Some((index, _)) = controls
+            .iter()
+            .enumerate()
+            .find(|(_, control)| control.id == id && control.enabled)
+        {
+            self.focus_index = index;
         }
     }
 
@@ -1313,16 +1537,19 @@ impl App {
             }
             ControlId::FileRefresh => {
                 self.browser.refresh(&self.workspace_root);
-                self.notice = "FILES REFRESHED".to_string();
+                self.notice = self
+                    .browser
+                    .error
+                    .clone()
+                    .unwrap_or_else(|| "FILES REFRESHED".to_string());
             }
             ControlId::FileEntry(index) => {
                 if let Some(entry) = self.browser.entries.get(index).cloned() {
                     self.browser.selected = Some(entry.relative_path.clone());
-                    if entry.kind == EntryKind::Directory {
-                        self.browser.navigate(&self.workspace_root, entry.relative_path);
-                    } else if entry.kind == EntryKind::File {
-                        self.open_in_editor(entry.relative_path);
-                    }
+                    self.notice = format!(
+                        "SELECTED / {}",
+                        file_browser::display_path(&entry.relative_path)
+                    );
                 }
             }
             ControlId::FileOpen => self.open_selected(),
@@ -1358,6 +1585,50 @@ impl App {
                     self.compare.clear_result();
                     self.set_view(View::Compare);
                 }
+            }
+            ControlId::FileImageOptimize | ControlId::ImageUseSelection => {
+                if let Some(path) = self.selected_file_path() {
+                    self.load_image_optimizer_source(path);
+                }
+            }
+            ControlId::ImageFormatPrevious => {
+                self.image_optimizer.settings.format =
+                    self.image_optimizer.settings.format.previous();
+                self.invalidate_image_optimizer_preview();
+            }
+            ControlId::ImageFormatNext => {
+                self.image_optimizer.settings.format =
+                    self.image_optimizer.settings.format.next();
+                self.invalidate_image_optimizer_preview();
+            }
+            ControlId::ImageQualityDown => {
+                self.image_optimizer.settings.quality =
+                    self.image_optimizer.settings.quality.saturating_sub(5).max(1);
+                self.invalidate_image_optimizer_preview();
+            }
+            ControlId::ImageQualityUp => {
+                self.image_optimizer.settings.quality =
+                    self.image_optimizer.settings.quality.saturating_add(5).min(100);
+                self.invalidate_image_optimizer_preview();
+            }
+            ControlId::ImageEffortPrevious => {
+                self.image_optimizer.settings.effort =
+                    self.image_optimizer.settings.effort.previous();
+                self.invalidate_image_optimizer_preview();
+            }
+            ControlId::ImageEffortNext => {
+                self.image_optimizer.settings.effort =
+                    self.image_optimizer.settings.effort.next();
+                self.invalidate_image_optimizer_preview();
+            }
+            ControlId::ImagePreview => self.request_image_optimizer_preview(),
+            ControlId::ImageSave => self.save_image_optimizer_candidate(),
+            ControlId::ImageBefore => self.open_optimizer_image_external(true),
+            ControlId::ImageAfter => self.open_optimizer_image_external(false),
+            ControlId::ImageClear => {
+                self.image_optimizer.clear();
+                self.image_preview.clear();
+                self.notice = "IMAGE OPTIMIZER CLEARED".to_string();
             }
             ControlId::EditorEdit => self.begin_edit(EditTarget::Editor),
             ControlId::EditorSave => match self.editor.save(&self.workspace_root) {
@@ -1759,6 +2030,197 @@ impl App {
         }
     }
 
+    fn poll_image_optimizer_worker(&mut self) {
+        let Some(completion) = self.image_optimizer_worker.poll_latest() else {
+            return;
+        };
+        if completion.generation != self.image_optimizer.generation {
+            return;
+        }
+
+        self.image_optimizer.active_generation = None;
+        match completion.result {
+            Ok(mut candidate) => {
+                let before = std::mem::replace(
+                    &mut candidate.before_preview,
+                    image::DynamicImage::new_rgba8(1, 1),
+                );
+                let after = std::mem::replace(
+                    &mut candidate.after_preview,
+                    image::DynamicImage::new_rgba8(1, 1),
+                );
+                let output_bytes = candidate.output_bytes_len();
+                let reduction = candidate.reduction_percent();
+                self.image_preview.replace_pair(before, after);
+                self.image_optimizer.candidate_generation = Some(completion.generation);
+                self.image_optimizer.candidate = Some(candidate);
+                self.image_optimizer.error = None;
+                self.notice = format!(
+                    "IMAGE PREVIEW READY / {} / {:+.1}%",
+                    format_bytes(output_bytes as u64),
+                    -reduction
+                );
+            }
+            Err(error) => {
+                self.image_optimizer.candidate_generation = None;
+                self.image_optimizer.candidate = None;
+                self.image_optimizer.error = Some(error.to_string());
+                self.image_preview.clear();
+                self.notice = format!("IMAGE PREVIEW FAILED: {error}");
+            }
+        }
+    }
+
+    fn load_image_optimizer_source(&mut self, path: PathBuf) {
+        match image_optimizer::probe_workspace_image(&self.workspace_root, &path) {
+            Ok(info) => {
+                let format = info.format.label();
+                let width = info.width;
+                let height = info.height;
+                self.image_optimizer.reset_for_source(path, info);
+                self.image_preview.clear();
+                self.set_view(View::ImageOptimizer);
+                self.notice = format!("IMAGE READY / {format} / {width}x{height}");
+            }
+            Err(error) => {
+                self.notice = format!("IMAGE LOAD FAILED: {error}");
+            }
+        }
+    }
+
+    fn invalidate_image_optimizer_preview(&mut self) {
+        self.image_optimizer.invalidate_preview();
+        self.image_preview.clear();
+        self.notice = "IMAGE SETTINGS CHANGED / PREVIEW REQUIRED".to_string();
+    }
+
+    fn request_image_optimizer_preview(&mut self) {
+        let Some(source_relative) = self.image_optimizer.source.clone() else {
+            self.notice = "SELECT AN IMAGE IN FILES".to_string();
+            return;
+        };
+        if !self.image_optimizer.preview_allowed() {
+            self.notice = "SELECTED OUTPUT FORMAT IS NOT VALID FOR THIS IMAGE".to_string();
+            return;
+        }
+
+        let generation = self.image_optimizer.generation;
+        let job = OptimizeJob {
+            generation,
+            workspace_root: self.workspace_root.clone(),
+            source_relative,
+            settings: self.image_optimizer.settings,
+        };
+        if self.image_optimizer_worker.submit(job).is_err() {
+            self.image_optimizer.active_generation = None;
+            self.image_optimizer.error = Some("optimizer worker is unavailable".to_string());
+            self.notice = "IMAGE PREVIEW FAILED: WORKER UNAVAILABLE".to_string();
+            return;
+        }
+
+        self.image_optimizer.active_generation = Some(generation);
+        self.image_optimizer.candidate_generation = None;
+        self.image_optimizer.candidate = None;
+        self.image_optimizer.error = None;
+        self.image_optimizer.exported = None;
+        self.image_preview.clear();
+        self.notice = "GENERATING IMAGE PREVIEW".to_string();
+    }
+
+    fn open_optimizer_image_external(&mut self, before: bool) {
+        let path = if before {
+            let Some(source) = self.image_optimizer.source.as_ref() else {
+                self.notice = "NO BEFORE IMAGE AVAILABLE".to_string();
+                return;
+            };
+            match fs::canonicalize(self.workspace_root.join(source)) {
+                Ok(path) => path,
+                Err(error) => {
+                    self.notice = format!("OPEN BEFORE FAILED: {error}");
+                    return;
+                }
+            }
+        } else {
+            match self.materialize_after_preview() {
+                Ok(path) => path,
+                Err(error) => {
+                    self.notice = format!("OPEN AFTER FAILED: {error}");
+                    return;
+                }
+            }
+        };
+
+        match external_open_file(&path) {
+            Ok(()) => {
+                self.notice = if before {
+                    "BEFORE IMAGE OPENED EXTERNALLY"
+                } else {
+                    "AFTER IMAGE OPENED EXTERNALLY"
+                }
+                .to_string();
+            }
+            Err(error) => {
+                self.notice = format!("EXTERNAL IMAGE OPEN FAILED: {error}");
+            }
+        }
+    }
+
+    fn materialize_after_preview(&self) -> io::Result<PathBuf> {
+        if let Some(exported) = self.image_optimizer.exported.as_ref() {
+            let saved = self.workspace_root.join(&exported.relative_path);
+            if saved.is_file() {
+                return fs::canonicalize(saved);
+            }
+        }
+
+        let candidate = self
+            .image_optimizer
+            .candidate
+            .as_ref()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no current image preview"))?;
+
+        let preview_dir = self.workspace_root.join("state").join("image-preview");
+        fs::create_dir_all(&preview_dir)?;
+        let sha = candidate.output_sha256_hex();
+        let name = format!(
+            "after-{}.{}",
+            &sha[..16],
+            candidate.output_format.extension()
+        );
+        let path = preview_dir.join(name);
+        if !path.is_file() {
+            fs::write(&path, &candidate.output_bytes)?;
+        }
+        fs::canonicalize(path)
+    }
+
+    fn save_image_optimizer_candidate(&mut self) {
+        if !self.image_optimizer.has_current_candidate() {
+            self.notice = "GENERATE A CURRENT PREVIEW BEFORE SAVING".to_string();
+            return;
+        }
+
+        let result = self
+            .image_optimizer
+            .candidate
+            .as_ref()
+            .map(|candidate| image_optimizer::export_candidate(&self.workspace_root, candidate));
+        match result {
+            Some(Ok(summary)) => {
+                let display = file_browser::display_path(&summary.relative_path);
+                self.image_optimizer.exported = Some(summary);
+                self.notice = format!("IMAGE SAVED / {display}");
+            }
+            Some(Err(error)) => {
+                self.image_optimizer.error = Some(error.to_string());
+                self.notice = format!("IMAGE SAVE FAILED: {error}");
+            }
+            None => {
+                self.notice = "GENERATE A CURRENT PREVIEW BEFORE SAVING".to_string();
+            }
+        }
+    }
+
     fn selected_file_path(&self) -> Option<PathBuf> {
         self.browser
             .selected_entry()
@@ -1794,6 +2256,7 @@ impl App {
             ToolId::HashVerify => View::HashVerify,
             ToolId::TextJson => View::TextJson,
             ToolId::PasswordGenerator => View::PasswordGenerator,
+            ToolId::ImageOptimizer => View::ImageOptimizer,
             ToolId::Compare => View::Compare,
             ToolId::Search => View::Search,
             ToolId::Repositories => {
@@ -2224,6 +2687,11 @@ impl App {
     }
 
     fn render_content(&mut self, frame: &mut Frame, area: Rect, controls: &[Control]) {
+        if self.view == View::ImageOptimizer {
+            self.render_image_optimizer(frame, area, controls);
+            return;
+        }
+
         let sections = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Length(2), Constraint::Percentage(55), Constraint::Percentage(45)])
@@ -2292,10 +2760,121 @@ impl App {
         );
     }
 
+    fn render_image_optimizer(&mut self, frame: &mut Frame, area: Rect, controls: &[Control]) {
+        let sections = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(2),
+                Constraint::Length(10),
+                Constraint::Min(6),
+                Constraint::Length(6),
+            ])
+            .split(area);
+
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                " IMAGE OPTIMIZER ",
+                Style::default().add_modifier(Modifier::BOLD),
+            ))),
+            sections[0],
+        );
+
+        let content_controls: Vec<(usize, &Control)> = controls
+            .iter()
+            .enumerate()
+            .filter(|(_, control)| {
+                control.zone == Zone::Content
+                    && !matches!(
+                        control.id,
+                        ControlId::ImageBefore | ControlId::ImageAfter
+                    )
+            })
+            .collect();
+        let max_rows = sections[1].height.saturating_sub(2) as usize;
+        let focus_pos = content_controls
+            .iter()
+            .position(|(index, _)| *index == self.focus_index)
+            .unwrap_or(0);
+        let start = focus_pos.saturating_sub(max_rows.saturating_sub(1));
+        let visible = content_controls.iter().skip(start).take(max_rows);
+
+        let mut items = Vec::new();
+        let mut visible_indexes = Vec::new();
+        for (index, control) in visible {
+            let focused = *index == self.focus_index;
+            let prefix = if focused { "> " } else { "  " };
+            let style = if !control.enabled {
+                Style::default().fg(Color::DarkGray)
+            } else if focused {
+                Style::default().fg(Color::Black).bg(Color::White)
+            } else {
+                Style::default()
+            };
+            items.push(ListItem::new(format!("{prefix}{}", control.label)).style(style));
+            visible_indexes.push(*index);
+        }
+        frame.render_widget(
+            List::new(items).block(Block::default().title(" CONTROLS ").borders(Borders::ALL)),
+            sections[1],
+        );
+        for (row, index) in visible_indexes.into_iter().enumerate() {
+            let y = sections[1].y.saturating_add(1 + row as u16);
+            if y < sections[1].bottom().saturating_sub(1) {
+                self.hits.push(HitTarget {
+                    rect: Rect::new(
+                        sections[1].x + 1,
+                        y,
+                        sections[1].width.saturating_sub(2),
+                        1,
+                    ),
+                    control_index: index,
+                });
+            }
+        }
+
+        let before_index = controls
+            .iter()
+            .position(|control| control.id == ControlId::ImageBefore);
+        let after_index = controls
+            .iter()
+            .position(|control| control.id == ControlId::ImageAfter);
+        let panes = self.image_preview.render_pair_focused(
+            frame,
+            sections[2],
+            before_index == Some(self.focus_index),
+            after_index == Some(self.focus_index),
+        );
+        if self.image_optimizer.has_current_candidate() {
+            if let Some(index) = before_index {
+                self.hits.push(HitTarget {
+                    rect: panes[0],
+                    control_index: index,
+                });
+            }
+            if let Some(index) = after_index {
+                self.hits.push(HitTarget {
+                    rect: panes[1],
+                    control_index: index,
+                });
+            }
+        }
+
+        frame.render_widget(
+            Paragraph::new(self.image_optimizer_detail_text())
+                .block(Block::default().title(" RESULT ").borders(Borders::ALL))
+                .wrap(Wrap { trim: false }),
+            sections[3],
+        );
+    }
+
     fn render_footer(&self, frame: &mut Frame, area: Rect) {
         let editing = self.edit.as_ref().map(|edit| format!("EDIT {:?} / Esc done", edit.target));
         let text = editing.unwrap_or_else(|| {
-            "↑↓ focus  ← nav  →/Tab content  Enter activate/click  Esc home  F1-F7 views  q quit".to_string()
+            if cfg!(windows) {
+                "↑↓ focus  ←/→ nav/content  Enter activate  Shift+drag text select  Esc home  F1-F7 views  q quit".to_string()
+            } else {
+                "↑↓ focus  ← nav  →/Tab content  Enter activate/click  Esc home  F1-F7 views  q quit".to_string()
+            }
         });
         frame.render_widget(
             Paragraph::new(text).style(Style::default().fg(Color::DarkGray)),
@@ -2308,7 +2887,7 @@ impl App {
             View::Home => {
                 let summary = workspace::summary(&self.workspace_root);
                 format!(
-                    "Runtime: TUI\nWorkspace: {} ({}/{})\nNetwork: {}\n\nAll interactive controls use one Activate path for keyboard Enter and mouse click.",
+                    "Runtime: TUI\nWorkspace: {} ({}/{})\nNetwork: {}\n\nNormal controls share one Activate path for keyboard Enter and mouse click. Preview images use click-to-focus and Enter-to-open.",
                     if summary.initialized { "READY" } else { "NOT INITIALIZED" },
                     summary.present_dirs,
                     summary.total_dirs,
@@ -2324,6 +2903,7 @@ impl App {
                     self.password.error.as_deref().unwrap_or("")
                 )
             }
+            View::ImageOptimizer => self.image_optimizer_detail_text(),
             View::Files => {
                 let selected = self.browser.selected_entry().map(|entry| {
                     format!("{} / {} / {} bytes", file_browser::display_path(&entry.relative_path), entry.kind.label(), entry.size_bytes)
@@ -2424,6 +3004,82 @@ impl App {
         }
     }
 
+    fn image_optimizer_detail_text(&self) -> String {
+        let Some(info) = self.image_optimizer.info.as_ref() else {
+            return format!(
+                "Select an image in FILES, then choose OPTIMIZE IMAGE.\nSupported: JPEG / PNG / still WebP\nPreview protocol: {}",
+                self.image_preview.protocol_label()
+            );
+        };
+
+        let source = self
+            .image_optimizer
+            .source
+            .as_deref()
+            .map(file_browser::display_path)
+            .unwrap_or_else(|| "(none)".to_string());
+        let resolved = self.image_optimizer.settings.format.resolve(info.format);
+        let state = if self.image_optimizer.preview_pending() {
+            "GENERATING"
+        } else if self.image_optimizer.has_current_candidate() {
+            "READY TO SAVE"
+        } else {
+            "PREVIEW REQUIRED"
+        };
+
+        let mut lines = vec![
+            format!(
+                "{} / {} / {}x{} / {:.2} MP / {}",
+                source,
+                info.format.label(),
+                info.width,
+                info.height,
+                info.megapixels(),
+                format_bytes(info.source_bytes)
+            ),
+            format!(
+                "Output: {} / Q{} / {} / metadata PRIVACY / {}",
+                resolved.label(),
+                self.image_optimizer.settings.quality,
+                self.image_optimizer.settings.effort.label(),
+                state
+            ),
+        ];
+
+        if resolved == image_optimizer::ImageFormat::Jpeg && info.has_alpha {
+            lines.push("JPEG BLOCKED: source has alpha; choose PNG or WebP.".to_string());
+        } else if resolved == image_optimizer::ImageFormat::WebP
+            && (info.width > 16_383 || info.height > 16_383)
+        {
+            lines.push("WEBP BLOCKED: dimension exceeds 16,383 pixels.".to_string());
+        } else if let Some(candidate) = self.image_optimizer.candidate.as_ref() {
+            let delta = -candidate.reduction_percent();
+            lines.push(format!(
+                "{} -> {} ({:+.1}%) / SHA-256 {}",
+                format_bytes(info.source_bytes),
+                format_bytes(candidate.output_bytes_len() as u64),
+                delta,
+                &candidate.output_sha256_hex()[..12]
+            ));
+            if !candidate.color_profile_preserved {
+                lines.push("COLOR PROFILE WILL NOT BE PRESERVED IN WEBP OUTPUT.".to_string());
+            } else if candidate.private_metadata_stripped {
+                lines.push("ICC preserved where supported; EXIF/XMP private metadata stripped.".to_string());
+            }
+        }
+
+        if let Some(exported) = self.image_optimizer.exported.as_ref() {
+            lines.push(format!(
+                "Saved: {}",
+                file_browser::display_path(&exported.relative_path)
+            ));
+        }
+        if let Some(error) = self.image_optimizer.error.as_ref() {
+            lines.push(format!("Error: {error}"));
+        }
+        lines.join("\n")
+    }
+
     fn mobile_detail(&self) -> String {
         let exposure = network_safety::evaluate(&self.lan_access, self.network_safety);
         let mut text = format!(
@@ -2481,6 +3137,32 @@ impl App {
 
 fn mark(value: bool) -> char {
     if value { 'x' } else { ' ' }
+}
+
+fn external_open_file(path: &Path) -> io::Result<()> {
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("explorer.exe").arg(path).spawn()?;
+        return Ok(());
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open").arg(path).spawn()?;
+        return Ok(());
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        Command::new("xdg-open").arg(path).spawn()?;
+        return Ok(());
+    }
+
+    #[allow(unreachable_code)]
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "external file opening is unsupported on this platform",
+    ))
 }
 
 fn contains(rect: Rect, x: u16, y: u16) -> bool {
