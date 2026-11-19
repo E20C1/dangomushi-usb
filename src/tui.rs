@@ -80,8 +80,15 @@ impl TerminalGuard {
         }
 
         let backend = CrosstermBackend::new(out);
-        let terminal = Terminal::new(backend)?;
-        Ok((Self { terminal }, image_preview))
+        match Terminal::new(backend) {
+            Ok(terminal) => Ok((Self { terminal }, image_preview)),
+            Err(error) => {
+                let mut cleanup = stdout();
+                let _ = execute!(cleanup, DisableMouseCapture, LeaveAlternateScreen, Show);
+                let _ = disable_raw_mode();
+                Err(error)
+            }
+        }
     }
 }
 
