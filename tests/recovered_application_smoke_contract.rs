@@ -1,5 +1,4 @@
 const CORE: &str = include_str!("../src/offline_reconstruction.rs");
-const DESKTOP: &str = include_str!("../src/bin/dangomushi-desktop.rs");
 const MAIN: &str = include_str!("../src/main.rs");
 const CI: &str = include_str!("../.github/workflows/ci.yml");
 const SMOKE_SCRIPT: &str = include_str!("../scripts/verify-smoke-entrypoints.py");
@@ -31,28 +30,19 @@ fn smoke_requires_verified_staging_and_integrity_recorded_rebuild_artifacts() {
 }
 
 #[test]
-fn smoke_executes_only_fixed_cli_and_non_gui_desktop_entrypoints() {
+fn smoke_executes_only_fixed_single_application_entrypoints() {
     for required in [
         r#"&["version"]"#,
         r#"&["--recovery-smoke-check"]"#,
         "dangomushi {app_version}",
-        "dangomushi-desktop {app_version} recovery-smoke-ok",
+        "dangomushi {app_version} recovery-smoke-ok",
     ] {
         assert!(CORE.contains(required), "missing fixed smoke behavior: {required}");
     }
 
-    assert!(DESKTOP.contains("--recovery-smoke-check"));
-    assert!(DESKTOP.contains("recovery-smoke-ok"));
-    let smoke_index = DESKTOP
-        .find("--recovery-smoke-check")
-        .expect("desktop smoke flag");
-    let ui_index = DESKTOP
-        .find("dangomushi::native_ui::run()")
-        .expect("normal native UI launch");
-    assert!(
-        smoke_index < ui_index,
-        "desktop smoke must return before normal GUI initialization"
-    );
+    assert!(MAIN.contains("--recovery-smoke-check"));
+    assert!(MAIN.contains("recovery-smoke-ok"));
+    assert!(MAIN.contains("tui::run()"));
 
     for forbidden in ["--command", "--args", "--program", "--workspace"] {
         assert!(
@@ -133,7 +123,7 @@ fn cli_and_ci_expose_only_the_bounded_smoke_flow() {
     ));
 
     for required in [
-        "dangomushi-desktop",
+        "application = release",
         "--recovery-smoke-check",
         "timeout=15",
         "TemporaryDirectory",
