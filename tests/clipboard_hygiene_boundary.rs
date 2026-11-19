@@ -47,13 +47,14 @@ fn clipboard_core_remains_outside_generic_persistence() {
 }
 
 #[test]
-fn real_os_clipboard_is_desktop_feature_gated() {
+fn real_os_clipboard_is_ui_independent() {
     assert!(LIB.contains("pub mod clipboard_hygiene;"));
-    assert!(CARGO.contains(r#"desktop = ["dep:eframe", "dep:arboard"]"#));
+    assert!(!CARGO.contains("eframe"));
+    assert!(!CARGO.contains(r#"desktop = ["#));
     assert!(CARGO.contains(
-        r#"arboard = { version = "3.7.0", optional = true, default-features = false, features = ["wayland-data-control"] }"#
+        r#"arboard = { version = "3.7.0", default-features = false, features = ["wayland-data-control"] }"#
     ));
-    assert!(SOURCE.contains(r#"#[cfg(feature = "desktop")]"#));
+    assert!(!SOURCE.contains(r#"#[cfg(feature = "desktop")]"#));
     assert!(SOURCE.contains("pub struct SystemClipboard"));
 }
 
