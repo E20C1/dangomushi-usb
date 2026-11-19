@@ -138,3 +138,39 @@ jobs:
 
       - name: Exercise complete verified offline reconstruction
         run: cargo --config .cargo/vendor-config.toml test --frozen --test frozen_staged_rebuild_contract real_frozen_rebuild_from_verified_staging -- --ignored --exact --nocapture
+
+
+  android-storage-spike:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          targets: aarch64-linux-android
+
+      - name: Host-side storage contract regression
+        run: cargo test --manifest-path android-spike/Cargo.toml
+
+      - name: Install cargo-apk for A0 packaging
+        run: cargo install cargo-apk --version 0.10.0 --locked
+
+      - name: Select installed Android NDK
+        shell: bash
+        run: |
+          NDK_DIR="$(find "$ANDROID_SDK_ROOT/ndk" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          test -n "$NDK_DIR"
+          echo "ANDROID_NDK_HOME=$NDK_DIR" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$NDK_DIR" >> "$GITHUB_ENV"
+
+      - name: Build ARM64 Android storage-contract APK
+        working-directory: android-spike
+        run: cargo apk build
+
+      - name: Upload Android storage-contract APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-storage-spike
+          path: android-spike/target/debug/apk/dangomushi-android-storage-spike.apk
+          archive: false

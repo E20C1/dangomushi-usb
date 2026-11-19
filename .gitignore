@@ -11,3 +11,5 @@ vendor/
 vendor.pending/
 build/vendor-source-config.txt
 dangomushi-recovery-snapshot/
+
+android-spike/target/
