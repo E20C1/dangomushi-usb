@@ -73,7 +73,7 @@ fn optimizer_fails_closed_on_destructive_or_unbounded_inputs() {
         "InvalidPath",
         "create_new(true)",
         "detect_animation",
-        "path resolves",
+        "canonical.starts_with",
     ] {
         assert!(CORE.contains(required), "missing optimizer safety boundary: {required}");
     }
