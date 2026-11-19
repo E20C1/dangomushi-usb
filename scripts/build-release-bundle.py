@@ -208,7 +208,7 @@ def windows_launcher() -> str:
         "set \"DANGOMUSHI_APP=%DANGOMUSHI_ROOT%\\app\\Dangomushi.exe\"\r\n"
         "set \"DANGOMUSHI_WT=%DANGOMUSHI_ROOT%\\runtime\\windows-terminal\\wt.exe\"\r\n"
         "if exist \"%DANGOMUSHI_WT%\" (\r\n"
-        "  \"%DANGOMUSHI_WT%\" -w -1 new-tab --startingDirectory \"%DANGOMUSHI_ROOT%\" \"%DANGOMUSHI_APP%\"\r\n"
+        "  \"%DANGOMUSHI_WT%\" -w -1 new-tab --startingDirectory . \"%DANGOMUSHI_APP%\"\r\n"
         "  if not errorlevel 1 exit /b 0\r\n"
         ")\r\n"
         "\"%DANGOMUSHI_APP%\"\r\n"
