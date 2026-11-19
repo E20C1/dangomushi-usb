@@ -166,4 +166,4 @@ jobs:
 
       - name: Build ARM64 Android storage-contract APK
         working-directory: android-spike
-        run: cargo apk build --release
+        run: cargo apk build

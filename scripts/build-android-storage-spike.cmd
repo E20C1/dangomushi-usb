@@ -43,7 +43,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-cargo apk build --release
+cargo apk build
 if errorlevel 1 (
   popd
   exit /b 1
@@ -52,5 +52,5 @@ popd
 
 echo.
 echo [OK] Android storage-contract spike built.
-echo      Inspect android-spike\target\release\apk for the APK.
+echo      Inspect android-spike\target\debug\apk for the APK.
 exit /b 0

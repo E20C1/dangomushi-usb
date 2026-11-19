@@ -14,7 +14,7 @@ The APK uses Android NativeActivity plus eframe/egui and calls Android StorageMa
 - Android SDK and NDK
 - cargo-apk 0.10.0 for this spike packaging path
 
-cargo-apk is temporary A0 packaging infrastructure only. Production Android packaging remains a later implementation decision.
+cargo-apk is temporary A0 packaging infrastructure only. The A0 APK is debug-signed so the spike does not introduce or require a production release signing key. Production Android packaging and signing remain later implementation decisions.
 
 ## Build
 
