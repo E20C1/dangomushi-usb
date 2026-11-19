@@ -32,7 +32,5 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: dangomushi-pr37-windows
-          path: |
-            dist/dangomushi-0.5.37-windows-x86_64.zip
-            dist/dangomushi-0.5.37-windows-x86_64.zip.sha256
+          path: dist/dangomushi-0.5.37-windows-x86_64.zip
           archive: false
