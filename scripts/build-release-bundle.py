@@ -22,9 +22,17 @@ RUNTIME_MANIFEST_MAX_BYTES = 4 * 1024 * 1024
 WINDOWS_TERMINAL_KIND = "dangomushi-windows-terminal-runtime"
 WINDOWS_TERMINAL_FORMAT = 1
 WINDOWS_TERMINAL_VERSION = "1.25.3131.0"
-WINDOWS_TERMINAL_SHA256 = {
-    "x86_64": "273d6f1502eca1b5bd95c43f5d4d7ec72cc503df340102f8659717e5bead3437",
-    "aarch64": "b7e1d2a414e6368affd098d91a4cba441dcacd3ab634a6f39c8e6f5490deef89",
+WINDOWS_TERMINAL_ASSETS = {
+    "x86_64": {
+        "name": "Microsoft.WindowsTerminal_1.25.3131.0_x64.zip",
+        "bytes": 12126938,
+        "sha256": "273d6f1502eca1b5bd95c43f5d4d7ec72cc503df340102f8659717e5bead3437",
+    },
+    "aarch64": {
+        "name": "Microsoft.WindowsTerminal_1.25.3131.0_arm64.zip",
+        "bytes": 12243850,
+        "sha256": "b7e1d2a414e6368affd098d91a4cba441dcacd3ab634a6f39c8e6f5490deef89",
+    },
 }
 
 
@@ -122,7 +130,9 @@ def validate_windows_terminal_runtime(runtime: Path, arch: str) -> list[dict]:
         or manifest["format"] != WINDOWS_TERMINAL_FORMAT
         or manifest["version"] != WINDOWS_TERMINAL_VERSION
         or manifest["architecture"] != arch
-        or manifest["asset_sha256"] != WINDOWS_TERMINAL_SHA256[arch]
+        or manifest["asset_name"] != WINDOWS_TERMINAL_ASSETS[arch]["name"]
+        or manifest["asset_bytes"] != WINDOWS_TERMINAL_ASSETS[arch]["bytes"]
+        or manifest["asset_sha256"] != WINDOWS_TERMINAL_ASSETS[arch]["sha256"]
     ):
         fail("Windows Terminal runtime identity does not match the pinned baseline")
 
@@ -233,23 +243,6 @@ def start_here(version: str, os_name: str) -> str:
         "This bundle is not code-signed or notarized by this task; operating-system trust\n"
         "prompts may therefore appear. SHA-256 proves file equality, not publisher identity.\n"
     )
-
-def macos_plist(version: str) -> str:
-    return f"""<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>CFBundleDisplayName</key><string>DANGOMUSHI</string>
-  <key>CFBundleExecutable</key><string>Dangomushi</string>
-  <key>CFBundleIdentifier</key><string>io.github.e20c1.dangomushi</string>
-  <key>CFBundleName</key><string>DANGOMUSHI</string>
-  <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>{version}</string>
-  <key>CFBundleVersion</key><string>{version}</string>
-  <key>NSHighResolutionCapable</key><true/>
-</dict>
-</plist>
-"""
 
 def collect_records(bundle_root: Path, executable_paths: set[str]) -> list[dict]:
     records = []
