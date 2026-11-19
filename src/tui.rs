@@ -1537,7 +1537,11 @@ impl App {
             }
             ControlId::FileRefresh => {
                 self.browser.refresh(&self.workspace_root);
-                self.notice = "FILES REFRESHED".to_string();
+                self.notice = self
+                    .browser
+                    .error
+                    .clone()
+                    .unwrap_or_else(|| "FILES REFRESHED".to_string());
             }
             ControlId::FileEntry(index) => {
                 if let Some(entry) = self.browser.entries.get(index).cloned() {
