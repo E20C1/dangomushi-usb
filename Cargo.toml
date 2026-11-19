@@ -21,6 +21,8 @@ hmac = "0.13.0"
 ed25519-dalek = "3.0.0"
 hkdf = "0.13.0"
 x25519-dalek = { version = "3.0.0", features = ["getrandom"] }
+ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
+crossterm = "0.29.0"
 eframe = { version = "0.37.0", optional = true, default-features = false, features = ["default_fonts", "glow", "wayland", "x11"] }
 arboard = { version = "3.7.0", optional = true, default-features = false, features = ["wayland-data-control"] }
 
