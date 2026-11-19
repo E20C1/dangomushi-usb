@@ -16,9 +16,17 @@ MAX_PAYLOAD_BYTES = 256 * 1024 * 1024
 WINDOWS_TERMINAL_KIND = "dangomushi-windows-terminal-runtime"
 WINDOWS_TERMINAL_FORMAT = 1
 WINDOWS_TERMINAL_VERSION = "1.25.3131.0"
-WINDOWS_TERMINAL_SHA256 = {
-    "x86_64": "273d6f1502eca1b5bd95c43f5d4d7ec72cc503df340102f8659717e5bead3437",
-    "aarch64": "b7e1d2a414e6368affd098d91a4cba441dcacd3ab634a6f39c8e6f5490deef89",
+WINDOWS_TERMINAL_ASSETS = {
+    "x86_64": {
+        "name": "Microsoft.WindowsTerminal_1.25.3131.0_x64.zip",
+        "bytes": 12126938,
+        "sha256": "273d6f1502eca1b5bd95c43f5d4d7ec72cc503df340102f8659717e5bead3437",
+    },
+    "aarch64": {
+        "name": "Microsoft.WindowsTerminal_1.25.3131.0_arm64.zip",
+        "bytes": 12243850,
+        "sha256": "b7e1d2a414e6368affd098d91a4cba441dcacd3ab634a6f39c8e6f5490deef89",
+    },
 }
 
 def fail(message: str) -> None:
@@ -141,7 +149,9 @@ def verify_windows_terminal_runtime(
         or manifest["format"] != WINDOWS_TERMINAL_FORMAT
         or manifest["version"] != WINDOWS_TERMINAL_VERSION
         or manifest["architecture"] != arch
-        or manifest["asset_sha256"] != WINDOWS_TERMINAL_SHA256[arch]
+        or manifest["asset_name"] != WINDOWS_TERMINAL_ASSETS[arch]["name"]
+        or manifest["asset_bytes"] != WINDOWS_TERMINAL_ASSETS[arch]["bytes"]
+        or manifest["asset_sha256"] != WINDOWS_TERMINAL_ASSETS[arch]["sha256"]
     ):
         fail("Windows Terminal runtime identity does not match the pinned baseline")
 
