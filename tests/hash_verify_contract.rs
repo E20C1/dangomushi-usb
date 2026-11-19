@@ -1,5 +1,5 @@
 const SOURCE: &str = include_str!("../src/hash_verify.rs");
-const UI: &str = include_str!("../src/native_ui.rs");
+const UI: &str = include_str!("../src/tui.rs");
 const REGISTRY: &str = include_str!("../src/tool_registry.rs");
 const SESSION: &str = include_str!("../src/session_state.rs");
 const ROADMAP: &str = include_str!("../docs/ROADMAP.md");
@@ -55,10 +55,10 @@ fn native_ui_dispatches_ready_hash_verify_without_persisting_tool_inputs() {
     assert!(hash_entry.contains("status: ToolStatus::Ready"));
     assert!(UI.contains("ToolId::HashVerify =>"));
     assert!(UI.contains("View::HashVerify"));
-    assert!(UI.contains("fn hash_verify_view"));
-    assert!(UI.contains("[USE FILES SELECTION]"));
-    assert!(UI.contains("[CALCULATE SHA-256]"));
-    assert!(UI.contains("[VERIFY]"));
+    assert!(UI.contains("ControlId::HashCalculate"));
+    assert!(UI.contains("USE FILES SELECTION"));
+    assert!(UI.contains("CALCULATE SHA-256"));
+    assert!(UI.contains("ControlId::HashVerify"));
 
     assert!(SESSION.contains("HashVerify"));
     assert!(SESSION.contains("hash-verify"));
