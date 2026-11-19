@@ -50,7 +50,6 @@ fn pinned_windows_terminal_runtime_is_verified_before_packaging() {
         "WindowsTerminal.exe",
         "wt.exe",
         "NOTICE.html",
-        "licenses/windows-terminal/LICENSE.txt",
         "unsafe Windows Terminal archive path",
         "Windows Terminal asset SHA-256 mismatch",
     ] {
@@ -58,6 +57,8 @@ fn pinned_windows_terminal_runtime_is_verified_before_packaging() {
     }
     assert!(BUILD_SCRIPT.contains("validate_windows_terminal_runtime"));
     assert!(VERIFY_SCRIPT.contains("verify_windows_terminal_runtime"));
+    assert!(BUILD_SCRIPT.contains("licenses/windows-terminal/LICENSE.txt"));
+    assert!(VERIFY_SCRIPT.contains("licenses/windows-terminal/LICENSE.txt"));
     assert!(CI.contains("Fetch pinned Windows Terminal portable runtime"));
 }
 
