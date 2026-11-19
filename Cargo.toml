@@ -19,6 +19,8 @@ hkdf = "0.13.0"
 x25519-dalek = { version = "3.0.0", features = ["getrandom"] }
 ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
 crossterm = "0.29.0"
+ratatui-image = { version = "11.1.0", default-features = false, features = ["crossterm"] }
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }
 arboard = { version = "3.7.0", default-features = false, features = ["wayland-data-control"] }
 
 [target.'cfg(windows)'.dependencies]
