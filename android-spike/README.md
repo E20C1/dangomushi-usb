@@ -28,6 +28,8 @@ Unix:
 
 The scripts intentionally do not install toolchains or mutate the Android SDK. They fail if required external build prerequisites are absent.
 
+A0 pins the direct Android-facing crate versions in Cargo.toml, but it intentionally does not claim a frozen transitive Android dependency graph or a portable Android toolchain. cargo-apk 0.10.0 does not expose Cargo's --locked flag on its build command. Frozen and verified Android build inputs belong to the later Portable Android Build Environment work, not to this storage-contract spike.
+
 ## Device procedure
 
 1. Install the generated APK.

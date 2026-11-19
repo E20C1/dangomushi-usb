@@ -37,13 +37,13 @@ if errorlevel 1 (
 )
 
 pushd android-spike
-cargo test --locked
+cargo test
 if errorlevel 1 (
   popd
   exit /b 1
 )
 
-cargo apk build --release --locked
+cargo apk build --release
 if errorlevel 1 (
   popd
   exit /b 1

@@ -150,10 +150,8 @@ jobs:
         with:
           targets: aarch64-linux-android
 
-      - name: Host-side storage contract regression and lock normalization
-        run: |
-          cargo test --manifest-path android-spike/Cargo.toml
-          git diff -- android-spike/Cargo.lock
+      - name: Host-side storage contract regression
+        run: cargo test --manifest-path android-spike/Cargo.toml
 
       - name: Install cargo-apk for A0 packaging
         run: cargo install cargo-apk --version 0.10.0 --locked
@@ -168,4 +166,4 @@ jobs:
 
       - name: Build ARM64 Android storage-contract APK
         working-directory: android-spike
-        run: cargo apk build --release --locked
+        run: cargo apk build --release

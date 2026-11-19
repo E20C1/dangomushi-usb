@@ -34,8 +34,8 @@ rustup target list --installed | grep -qx "aarch64-linux-android" || {
 
 (
   cd android-spike
-  cargo test --locked
-  cargo apk build --release --locked
+  cargo test
+  cargo apk build --release
 )
 
 echo "[OK] Android storage-contract spike built."
