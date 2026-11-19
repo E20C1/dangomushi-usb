@@ -10,9 +10,16 @@ from pathlib import Path, PurePosixPath
 
 KIND = "dangomushi-portable-release"
 FORMAT = 2
-MAX_ARCHIVE_FILES = 16
-MAX_MANIFEST_BYTES = 64 * 1024
+MAX_ARCHIVE_FILES = 2048
+MAX_MANIFEST_BYTES = 4 * 1024 * 1024
 MAX_PAYLOAD_BYTES = 256 * 1024 * 1024
+WINDOWS_TERMINAL_KIND = "dangomushi-windows-terminal-runtime"
+WINDOWS_TERMINAL_FORMAT = 1
+WINDOWS_TERMINAL_VERSION = "1.25.3131.0"
+WINDOWS_TERMINAL_SHA256 = {
+    "x86_64": "273d6f1502eca1b5bd95c43f5d4d7ec72cc503df340102f8659717e5bead3437",
+    "aarch64": "b7e1d2a414e6368affd098d91a4cba441dcacd3ab634a6f39c8e6f5490deef89",
+}
 
 def fail(message: str) -> None:
     raise SystemExit(f"[ERROR] {message}")
@@ -94,7 +101,9 @@ def expected_payload(os_name: str) -> dict[str, bool]:
     if os_name == "windows":
         return {
             "app/Dangomushi.exe": True,
+            "START_DANGOMUSHI.cmd": False,
             "START_HERE.txt": False,
+            "runtime/windows-terminal/RUNTIME-MANIFEST.json": False,
         }
     if os_name in {"linux", "macos"}:
         return {
@@ -102,6 +111,79 @@ def expected_payload(os_name: str) -> dict[str, bool]:
             "START_HERE.txt": False,
         }
     fail(f"unsupported manifest OS: {os_name}")
+
+def verify_windows_terminal_runtime(
+    view: ArchiveView,
+    root: str,
+    record_map: dict[str, dict],
+    arch: str,
+) -> None:
+    prefix = "runtime/windows-terminal/"
+    manifest_relative = f"{prefix}RUNTIME-MANIFEST.json"
+    manifest_name = f"{root}/{manifest_relative}"
+    with view.open(manifest_name) as handle:
+        data = handle.read(MAX_MANIFEST_BYTES + 1)
+    if len(data) > MAX_MANIFEST_BYTES:
+        fail("Windows Terminal runtime manifest exceeds size bound")
+    try:
+        manifest = json.loads(data.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        fail("Windows Terminal runtime manifest is invalid")
+
+    expected_keys = {
+        "kind", "format", "version", "architecture",
+        "asset_name", "asset_bytes", "asset_sha256", "files",
+    }
+    if not isinstance(manifest, dict) or set(manifest) != expected_keys:
+        fail("Windows Terminal runtime manifest fields are not canonical")
+    if (
+        manifest["kind"] != WINDOWS_TERMINAL_KIND
+        or manifest["format"] != WINDOWS_TERMINAL_FORMAT
+        or manifest["version"] != WINDOWS_TERMINAL_VERSION
+        or manifest["architecture"] != arch
+        or manifest["asset_sha256"] != WINDOWS_TERMINAL_SHA256[arch]
+    ):
+        fail("Windows Terminal runtime identity does not match the pinned baseline")
+
+    records = manifest["files"]
+    if not isinstance(records, list) or not records or len(records) > MAX_ARCHIVE_FILES:
+        fail("Windows Terminal runtime file count is invalid")
+    runtime_map = {}
+    for record in records:
+        if not isinstance(record, dict) or set(record) != {"path", "bytes", "sha256"}:
+            fail("Windows Terminal runtime file record is invalid")
+        path = record["path"]
+        if not isinstance(path, str) or not valid_archive_path(path):
+            fail("Windows Terminal runtime contains an unsafe path")
+        if path == "RUNTIME-MANIFEST.json" or path in runtime_map:
+            fail("Windows Terminal runtime contains a duplicate or reserved path")
+        if not isinstance(record["bytes"], int) or record["bytes"] < 0 or record["bytes"] > MAX_PAYLOAD_BYTES:
+            fail("Windows Terminal runtime file length is invalid")
+        if not isinstance(record["sha256"], str) or not re.fullmatch(r"[0-9a-f]{64}", record["sha256"]):
+            fail("Windows Terminal runtime file digest is invalid")
+        runtime_map[path] = record
+
+    actual_runtime = {
+        path[len(prefix):]
+        for path in record_map
+        if path.startswith(prefix) and path != manifest_relative
+    }
+    if actual_runtime != set(runtime_map):
+        fail("Windows Terminal release payload does not match its runtime manifest")
+
+    for required in [".portable", "WindowsTerminal.exe", "wt.exe", "NOTICE.html"]:
+        if required not in runtime_map:
+            fail(f"Windows Terminal runtime is missing {required}")
+
+    for relative, runtime_record in runtime_map.items():
+        release_record = record_map[f"{prefix}{relative}"]
+        if (
+            release_record["bytes"] != runtime_record["bytes"]
+            or release_record["sha256"] != runtime_record["sha256"]
+            or release_record["executable"] != relative.lower().endswith(".exe")
+        ):
+            fail(f"Windows Terminal runtime record mismatch: {relative}")
+
 
 def check_sidecar(archive: Path, checksum: Path) -> None:
     if checksum.is_symlink() or not checksum.is_file():
@@ -196,7 +278,19 @@ def verify(archive: Path, checksum: Path) -> None:
 
         if paths != sorted(paths):
             fail("release manifest records must be sorted")
-        if set(record_map) != set(required):
+        if manifest["os"] == "windows":
+            if not set(required).issubset(record_map):
+                fail("Windows release payload is missing required files")
+            allowed_non_runtime = set(required) - {"runtime/windows-terminal/RUNTIME-MANIFEST.json"}
+            unexpected = {
+                path for path in record_map
+                if path not in allowed_non_runtime
+                and not path.startswith("runtime/windows-terminal/")
+            }
+            if unexpected:
+                fail("Windows release payload contains unexpected non-runtime files")
+            verify_windows_terminal_runtime(view, root, record_map, manifest["arch"])
+        elif set(record_map) != set(required):
             fail("release payload does not match the reviewed OS layout")
 
         archive_payload = {
@@ -207,16 +301,17 @@ def verify(archive: Path, checksum: Path) -> None:
         if archive_payload != set(record_map):
             fail("archive contains missing or unexpected payload files")
 
-        for path, should_execute in required.items():
-            record = record_map[path]
-            if record["executable"] != should_execute:
+        for path, expected_executable in required.items():
+            if record_map[path]["executable"] != expected_executable:
                 fail("release executable metadata mismatch")
+
+        for path, record in record_map.items():
             archive_name = f"{root}/{path}"
             with view.open(archive_name) as handle:
                 size, digest = sha256_stream(handle)
             if size != record["bytes"] or digest != record["sha256"]:
                 fail(f"release payload integrity mismatch: {path}")
-            if should_execute and (view.mode(archive_name) & 0o111) == 0:
+            if record["executable"] and (view.mode(archive_name) & 0o111) == 0:
                 fail(f"release executable permission missing: {path}")
 
         print(f"[OK] {archive.name}")
