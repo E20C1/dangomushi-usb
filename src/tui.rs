@@ -2427,7 +2427,7 @@ impl App {
     fn mobile_detail(&self) -> String {
         let exposure = network_safety::evaluate(&self.lan_access, self.network_safety);
         let mut text = format!(
-            "LAN: {}\nNETWORK SAFETY: {} / {} / {}\nLAN EXPOSURE: {}\n\nLAN intent remains process-local and resets OFF on every launch.\nEnabling this control does not create a LAN listener. MOBILE LISTENER STILL LOCKED.\nDIRECT PEER LAN READY / EXPLICIT ONE-SHOT\nENCRYPTED TRANSFER CORE READY\nRECEIVED FILE INTEGRITY READY\nInternet P2P threat review is complete: {}\nReconnection uses a fresh Ed25519 challenge; No persistent bearer token is created.\n\nTrusted devices: {}\nTrusted peers: {}\n",
+            "LAN: {}\nNETWORK SAFETY: {} / {} / {}\nLAN EXPOSURE: {}\n\nLAN intent remains process-local and resets OFF on every launch.\nEnabling this control does not create a LAN listener. MOBILE LISTENER STILL LOCKED.\nDIRECT PEER LAN READY / EXPLICIT ONE-SHOT\nENCRYPTED TRANSFER CORE READY\nRECEIVED FILE INTEGRITY READY\nInternet P2P threat review is complete: {}\nFRESH KEY PROOF / NO FIXED TTL\nReconnection uses a fresh Ed25519 challenge; No persistent bearer token is created.\nDEVICE PERMISSIONS remain DEFAULT DENY until explicitly saved. Revocation is durable and key rotation is required before the same physical device can be paired again.\nPERSISTENT TRUSTED DEVICES live under workspace:/identity and require TRUST DEVICE PERSISTENTLY.\nM4 PEER IDENTITY / LOCAL IDENTITY READY / TRANSPORT LOCKED\n\nTrusted devices: {}\nTRUSTED PEER(S): {}\n",
             if self.lan_access.is_enabled() { "ON (run-local)" } else { "OFF" },
             self.network_safety.environment().label(),
             self.network_safety.source().label(),
