@@ -216,16 +216,10 @@ fn run_recovery(args: Vec<String>) -> Result<(), String> {
             println!("os: {}", summary.os);
             println!("arch: {}", summary.arch);
             println!(
-                "cli: {} | {} bytes | {}",
-                summary.cli.relative_path,
-                summary.cli.bytes,
-                summary.cli.sha256_hex()
-            );
-            println!(
-                "desktop: {} | {} bytes | {}",
-                summary.desktop.relative_path,
-                summary.desktop.bytes,
-                summary.desktop.sha256_hex()
+                "application: {} | {} bytes | {}",
+                summary.application.relative_path,
+                summary.application.bytes,
+                summary.application.sha256_hex()
             );
             Ok(())
         }
@@ -246,16 +240,10 @@ fn run_recovery(args: Vec<String>) -> Result<(), String> {
             println!("os: {}", summary.os);
             println!("arch: {}", summary.arch);
             println!(
-                "cli: {} | {} bytes | {}",
-                summary.cli.relative_path,
-                summary.cli.bytes,
-                summary.cli.sha256_hex()
-            );
-            println!(
-                "desktop: {} | {} bytes | {}",
-                summary.desktop.relative_path,
-                summary.desktop.bytes,
-                summary.desktop.sha256_hex()
+                "application: {} | {} bytes | {}",
+                summary.application.relative_path,
+                summary.application.bytes,
+                summary.application.sha256_hex()
             );
             Ok(())
         }
@@ -302,16 +290,10 @@ fn run_recovery(args: Vec<String>) -> Result<(), String> {
             println!("os: {}", summary.os);
             println!("arch: {}", summary.arch);
             println!(
-                "cli: {} | {} bytes | {}",
-                summary.cli.relative_path,
-                summary.cli.bytes,
-                summary.cli.sha256_hex()
-            );
-            println!(
-                "desktop: {} | {} bytes | {}",
-                summary.desktop.relative_path,
-                summary.desktop.bytes,
-                summary.desktop.sha256_hex()
+                "application: {} | {} bytes | {}",
+                summary.application.relative_path,
+                summary.application.bytes,
+                summary.application.sha256_hex()
             );
             println!("workspace_backup_files: {}", summary.workspace_backup.files);
             println!(
@@ -709,7 +691,7 @@ fn parse_reconstruction_verify_options(
 }
 
 fn recovery_help_text() -> String {
-    "Usage:\n  dangomushi recovery snapshot create --backup backups/<NAME>.dgmwbk --destination <PATH> [--source <SOURCE-ROOT>] [--workspace <WORKSPACE-ROOT>]\n  dangomushi recovery snapshot verify --snapshot <PATH>\n  dangomushi recovery snapshot stage --snapshot <PATH> --destination <PATH> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n  dangomushi recovery snapshot rebuild --staging <PATH> --destination <PATH> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n  dangomushi recovery snapshot smoke --staging <PATH> --rebuild <PATH>\n  dangomushi recovery snapshot restore-workspace --staging <PATH> --rebuild <PATH> --destination <FRESH-WORKSPACE> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n  dangomushi recovery snapshot verify-reconstruction --staging <PATH> --rebuild <PATH> --restored-workspace <FRESH-WORKSPACE>\n\nDefaults for create:\n  source: .\n  workspace: ./workspace\n\nCreate requires a generated vendor/ directory and a verified Generic Workspace Backup. Verify is read-only. Stage verifies before materializing authenticated payload. Rebuild verifies the staged snapshot before creating a separate target directory, uses only the pinned Cargo toolchain plus staged vendor config with --frozen, and does not execute rebuilt binaries or restore Workspace data. Smoke re-verifies staging and rebuild integrity, then executes only the fixed CLI version and non-GUI desktop recovery-smoke entrypoints inside a temporary rebuild-local sandbox. Restore-workspace reruns the smoke gate, accepts only the embedded Generic Workspace Backup, and creates a new Workspace destination; it never overwrites or merges an existing Workspace. Verify-reconstruction reuses the smoke gate, re-verifies staged/rebuild evidence, compares every managed Workspace entry byte-for-byte with the authenticated Generic Backup, and requires the fresh-only non-managed layout. Supply --source and/or --workspace when live roots exist so reconstruction outputs are rejected inside them.".to_string()
+    "Usage:\n  dangomushi recovery snapshot create --backup backups/<NAME>.dgmwbk --destination <PATH> [--source <SOURCE-ROOT>] [--workspace <WORKSPACE-ROOT>]\n  dangomushi recovery snapshot verify --snapshot <PATH>\n  dangomushi recovery snapshot stage --snapshot <PATH> --destination <PATH> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n  dangomushi recovery snapshot rebuild --staging <PATH> --destination <PATH> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n  dangomushi recovery snapshot smoke --staging <PATH> --rebuild <PATH>\n  dangomushi recovery snapshot restore-workspace --staging <PATH> --rebuild <PATH> --destination <FRESH-WORKSPACE> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n  dangomushi recovery snapshot verify-reconstruction --staging <PATH> --rebuild <PATH> --restored-workspace <FRESH-WORKSPACE>\n\nDefaults for create:\n  source: .\n  workspace: ./workspace\n\nCreate requires a generated vendor/ directory and a verified Generic Workspace Backup. Verify is read-only. Stage verifies before materializing authenticated payload. Rebuild verifies the staged snapshot before creating a separate target directory, uses only the pinned Cargo toolchain plus staged vendor config with --frozen, and does not execute rebuilt binaries or restore Workspace data. Smoke re-verifies staging and rebuild integrity, then executes only the fixed version and recovery-smoke entrypoints of the single rebuilt application inside a temporary rebuild-local sandbox. Restore-workspace reruns the smoke gate, accepts only the embedded Generic Workspace Backup, and creates a new Workspace destination; it never overwrites or merges an existing Workspace. Verify-reconstruction reuses the smoke gate, re-verifies staged/rebuild evidence, compares every managed Workspace entry byte-for-byte with the authenticated Generic Backup, and requires the fresh-only non-managed layout. Supply --source and/or --workspace when live roots exist so reconstruction outputs are rejected inside them.".to_string()
 }
 
 fn run_docs(args: Vec<String>) -> Result<(), String> {
