@@ -9,7 +9,7 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 KIND = "dangomushi-portable-release"
-FORMAT = 1
+FORMAT = 2
 MAX_ARCHIVE_FILES = 16
 MAX_MANIFEST_BYTES = 64 * 1024
 MAX_PAYLOAD_BYTES = 256 * 1024 * 1024
@@ -94,20 +94,11 @@ def expected_payload(os_name: str) -> dict[str, bool]:
     if os_name == "windows":
         return {
             "app/Dangomushi.exe": True,
-            "app/dangomushi-cli.exe": True,
             "START_HERE.txt": False,
         }
-    if os_name == "linux":
+    if os_name in {"linux", "macos"}:
         return {
             "app/Dangomushi": True,
-            "app/dangomushi-cli": True,
-            "START_HERE.txt": False,
-        }
-    if os_name == "macos":
-        return {
-            "app/Dangomushi.app/Contents/MacOS/Dangomushi": True,
-            "app/Dangomushi.app/Contents/Info.plist": False,
-            "app/dangomushi-cli": True,
             "START_HERE.txt": False,
         }
     fail(f"unsupported manifest OS: {os_name}")
