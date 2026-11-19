@@ -447,53 +447,52 @@ fn probe_bytes(bytes: &[u8]) -> Result<ImageInfo, OptimizeError> {
 
 fn probe_bytes_inner(bytes: &[u8]) -> Result<ImageInfo, OptimizeError> {
     if bytes.len() as u64 > MAX_SOURCE_BYTES {
-            return Err(OptimizeError::SourceTooLarge {
-                bytes: bytes.len() as u64,
-                max: MAX_SOURCE_BYTES,
-            });
-        }
-    
-        let reader = ImageReader::new(Cursor::new(bytes))
-            .with_guessed_format()
-            .map_err(|error| OptimizeError::Decode(error.to_string()))?;
-        let format = map_image_format(reader.format())?;
-        let animated = detect_animation(format, bytes);
-        if animated {
-            return Err(OptimizeError::AnimatedUnsupported);
-        }
-    
-        let mut decoder = reader
-            .into_decoder()
-            .map_err(|error| OptimizeError::Decode(error.to_string()))?;
-        let (mut width, mut height) = decoder.dimensions();
-        let orientation = decoder.orientation().unwrap_or(Orientation::NoTransforms);
-        if matches!(
-            orientation,
-            Orientation::Rotate90
-                | Orientation::Rotate270
-                | Orientation::Rotate90FlipH
-                | Orientation::Rotate270FlipH
-        ) {
-            std::mem::swap(&mut width, &mut height);
-        }
-        validate_dimensions(width, height)?;
-        let has_alpha = decoder.color_type().has_alpha();
-        let icc_present = decoder.icc_profile().ok().flatten().is_some();
-        let exif_present = decoder.exif_metadata().ok().flatten().is_some();
-        let xmp_present = decoder.xmp_metadata().ok().flatten().is_some();
-    
-        Ok(ImageInfo {
-            format,
-            width,
-            height,
-            source_bytes: bytes.len() as u64,
-            has_alpha,
-            animated: false,
-            icc_present,
-            exif_present,
-            xmp_present,
-        })
+        return Err(OptimizeError::SourceTooLarge {
+            bytes: bytes.len() as u64,
+            max: MAX_SOURCE_BYTES,
+        });
     }
+
+    let reader = ImageReader::new(Cursor::new(bytes))
+        .with_guessed_format()
+        .map_err(|error| OptimizeError::Decode(error.to_string()))?;
+    let format = map_image_format(reader.format())?;
+    if detect_animation(format, bytes) {
+        return Err(OptimizeError::AnimatedUnsupported);
+    }
+
+    let mut decoder = reader
+        .into_decoder()
+        .map_err(|error| OptimizeError::Decode(error.to_string()))?;
+    let (mut width, mut height) = decoder.dimensions();
+    let orientation = decoder.orientation().unwrap_or(Orientation::NoTransforms);
+    if matches!(
+        orientation,
+        Orientation::Rotate90
+            | Orientation::Rotate270
+            | Orientation::Rotate90FlipH
+            | Orientation::Rotate270FlipH
+    ) {
+        std::mem::swap(&mut width, &mut height);
+    }
+    validate_dimensions(width, height)?;
+
+    let has_alpha = decoder.color_type().has_alpha();
+    let icc_present = decoder.icc_profile().ok().flatten().is_some();
+    let exif_present = decoder.exif_metadata().ok().flatten().is_some();
+    let xmp_present = decoder.xmp_metadata().ok().flatten().is_some();
+
+    Ok(ImageInfo {
+        format,
+        width,
+        height,
+        source_bytes: bytes.len() as u64,
+        has_alpha,
+        animated: false,
+        icc_present,
+        exif_present,
+        xmp_present,
+    })
 }
 
 fn decode_source(bytes: &[u8], fingerprint: SourceFingerprint) -> Result<DecodedSource, OptimizeError> {
