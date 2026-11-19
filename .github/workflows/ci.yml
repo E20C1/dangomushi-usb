@@ -32,6 +32,10 @@ jobs:
       - name: Verify recovered smoke entrypoints
         run: python scripts/verify-smoke-entrypoints.py
 
+      - name: Fetch pinned Windows Terminal portable runtime
+        if: runner.os == 'Windows'
+        run: python scripts/fetch-windows-terminal-runtime.py --arch x86_64
+
       - name: Build portable release bundle
         run: python scripts/build-release-bundle.py
 
