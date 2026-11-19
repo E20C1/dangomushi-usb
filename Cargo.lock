@@ -505,13 +505,16 @@ dependencies = [
  "arboard",
  "argon2",
  "chacha20poly1305",
+ "crc32fast",
  "ed25519-dalek",
  "eframe",
+ "flate2",
  "getrandom 0.4.3",
  "hkdf",
  "hmac",
  "serde_json",
  "sha2",
+ "smallpeg",
  "windows",
  "x25519-dalek",
  "zeroize",
@@ -2323,6 +2326,12 @@ checksum = "bdd58c3c93c3d278ca835519292445cb4b0d4dc59ccfdf7ceadaab3f8aeb4038"
 dependencies = [
  "version_check",
 ]
+
+[[package]]
+name = "smallpeg"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a2604773933114af3f62ea762c58d041429e8ee40ef6d8a848ddc7d5966ef01"
 
 [[package]]
 name = "smallvec"

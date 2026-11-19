@@ -49,7 +49,12 @@ fn clipboard_core_remains_outside_generic_persistence() {
 #[test]
 fn real_os_clipboard_is_desktop_feature_gated() {
     assert!(LIB.contains("pub mod clipboard_hygiene;"));
-    assert!(CARGO.contains(r#"desktop = ["dep:eframe", "dep:arboard"]"#));
+    let desktop_feature = CARGO
+        .lines()
+        .find(|line| line.starts_with("desktop = ["))
+        .expect("desktop feature");
+    assert!(desktop_feature.contains(r#""dep:eframe""#));
+    assert!(desktop_feature.contains(r#""dep:arboard""#));
     assert!(CARGO.contains(
         r#"arboard = { version = "3.7.0", optional = true, default-features = false, features = ["wayland-data-control"] }"#
     ));

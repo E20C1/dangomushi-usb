@@ -9,6 +9,9 @@ use crate::file_browser::{self, EntryKind, FileEntry};
 use crate::file_compare;
 use crate::hash_verify;
 use crate::internet_p2p_policy;
+use crate::image_compress::{
+    self, CompressionMode, CompressionOptions, CompressionResult, MetadataPolicy,
+};
 use crate::lan_access_control::LanEnableControl;
 use crate::network_safety::{self, NetworkEnvironment, NetworkSafetyAssessment};
 use crate::offline_docs;
@@ -29,6 +32,7 @@ use crate::workspace_backup;
 use eframe::egui;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::time::{Duration, Instant};
 
 const AUTOSAVE_DELAY: Duration = Duration::from_secs(2);
@@ -54,6 +58,7 @@ enum View {
     Home,
     Tools,
     PasswordGenerator,
+    ImageCompress,
     Files,
     Editor,
     HashVerify,
@@ -73,6 +78,7 @@ impl View {
             Self::Home => SessionView::Home,
             Self::Tools => SessionView::Tools,
             Self::PasswordGenerator => SessionView::Tools,
+            Self::ImageCompress => SessionView::Tools,
             Self::Files => SessionView::Files,
             Self::Editor => SessionView::Editor,
             Self::HashVerify => SessionView::HashVerify,
@@ -872,6 +878,112 @@ impl PasswordGeneratorUiState {
     }
 }
 
+struct ImageCompressUiState {
+    target: String,
+    mode: CompressionMode,
+    privacy_clean: bool,
+    jpeg_quality: u8,
+    png_effort: u32,
+    result: Option<CompressionResult>,
+    error: Option<String>,
+    receiver: Option<Receiver<Result<CompressionResult, image_compress::ImageCompressError>>>,
+}
+
+impl ImageCompressUiState {
+    fn new() -> Self {
+        Self {
+            target: String::new(),
+            mode: CompressionMode::SmartSafe,
+            privacy_clean: false,
+            jpeg_quality: 85,
+            png_effort: 6,
+            result: None,
+            error: None,
+            receiver: None,
+        }
+    }
+
+    fn set_target_path(&mut self, path: &Path) {
+        self.target = path.to_string_lossy().replace('\\', "/");
+        self.result = None;
+        self.error = None;
+    }
+
+    fn is_running(&self) -> bool {
+        self.receiver.is_some()
+    }
+
+    fn clear_result(&mut self) {
+        self.result = None;
+        self.error = None;
+    }
+
+    fn start(&mut self, workspace_root: &Path) -> Result<(), String> {
+        if self.is_running() {
+            return Err("compression is already running".to_string());
+        }
+        let trimmed = self.target.trim();
+        if trimmed.is_empty() {
+            return Err("choose a Workspace image first".to_string());
+        }
+
+        let target = PathBuf::from(trimmed);
+        let root = workspace_root.to_path_buf();
+        let options = CompressionOptions {
+            mode: self.mode,
+            metadata_policy: if self.privacy_clean {
+                MetadataPolicy::PrivacyClean
+            } else {
+                MetadataPolicy::Preserve
+            },
+            jpeg_quality: self.jpeg_quality,
+            png_effort: self.png_effort,
+        };
+        let (sender, receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = sender.send(image_compress::compress_workspace_file(
+                &root, &target, options,
+            ));
+        });
+        self.result = None;
+        self.error = None;
+        self.receiver = Some(receiver);
+        Ok(())
+    }
+
+    fn poll(&mut self) -> bool {
+        let Some(receiver) = self.receiver.as_ref() else {
+            return false;
+        };
+        let message = match receiver.try_recv() {
+            Ok(result) => Some(Ok(result)),
+            Err(TryRecvError::Disconnected) => Some(Err(
+                "compression worker stopped without returning a result".to_string(),
+            )),
+            Err(TryRecvError::Empty) => None,
+        };
+        let Some(message) = message else {
+            return false;
+        };
+        self.receiver = None;
+        match message {
+            Ok(Ok(result)) => {
+                self.result = Some(result);
+                self.error = None;
+            }
+            Ok(Err(error)) => {
+                self.result = None;
+                self.error = Some(error.to_string());
+            }
+            Err(error) => {
+                self.result = None;
+                self.error = Some(error);
+            }
+        }
+        true
+    }
+}
+
 struct NativeApp {
     view: View,
     workspace_root: PathBuf,
@@ -879,6 +991,7 @@ struct NativeApp {
     editor: EditorState,
     hash_verify: HashVerifyState,
     password_generator: PasswordGeneratorUiState,
+    image_compress: ImageCompressUiState,
     secret_clipboard: Option<SecretClipboard<SystemClipboard>>,
     lan_access: LanEnableControl,
     network_safety: NetworkSafetyAssessment,
@@ -924,6 +1037,7 @@ impl NativeApp {
             editor: EditorState::new(),
             hash_verify: HashVerifyState::new(),
             password_generator: PasswordGeneratorUiState::new(),
+            image_compress: ImageCompressUiState::new(),
             secret_clipboard: SystemClipboard::new().ok().map(SecretClipboard::new),
             lan_access: LanEnableControl::default(),
             network_safety: network_safety::assess_current_network(),
@@ -1360,6 +1474,10 @@ impl NativeApp {
                 self.view = View::PasswordGenerator;
                 self.notice = "PASSWORD GENERATOR READY".to_string();
             }
+            ToolId::ImageCompress => {
+                self.view = View::ImageCompress;
+                self.notice = "IMAGE COMPRESS READY".to_string();
+            }
             ToolId::Compare => {
                 self.view = View::Compare;
                 self.notice = "COMPARE READY".to_string();
@@ -1562,6 +1680,235 @@ impl NativeApp {
         if clear_requested {
             self.password_generator.clear_output();
             self.notice = "PASSWORD OUTPUT CLEARED".to_string();
+        }
+    }
+
+    fn image_compress_view(&mut self, ui: &mut egui::Ui) {
+        if self.image_compress.poll() {
+            if let Some(result) = self.image_compress.result.as_ref() {
+                self.notice = if result.has_output() {
+                    format!(
+                        "IMAGE COMPRESS DONE / {} -> {}",
+                        format_bytes(result.original_bytes),
+                        format_bytes(result.candidate_bytes)
+                    )
+                } else {
+                    "IMAGE COMPRESS: ALREADY OPTIMAL".to_string()
+                };
+            } else if let Some(error) = self.image_compress.error.as_ref() {
+                self.notice = format!("IMAGE COMPRESS FAILED: {error}");
+            }
+        }
+        if self.image_compress.is_running() {
+            ui.ctx().request_repaint_after(Duration::from_millis(100));
+        }
+
+        theme::section_title(ui, PixelIcon::Tools, "IMAGE COMPRESS");
+        ui.label(
+            egui::RichText::new(
+                "Optimize JPEG and PNG locally. Source files are read-only; new results are saved only under workspace/data/exports.",
+            )
+            .color(MUTED),
+        );
+        ui.add_space(10.0);
+
+        let running = self.image_compress.is_running();
+        let mut use_files_selection = false;
+        let mut start_requested = false;
+
+        theme::panel(ui, |ui| {
+            theme::small_label(ui, "SOURCE");
+            ui.horizontal_wrapped(|ui| {
+                let response = ui.add_enabled(
+                    !running,
+                    egui::TextEdit::singleline(&mut self.image_compress.target)
+                        .desired_width(520.0)
+                        .hint_text("data/documents/photo.jpg"),
+                );
+                if response.changed() {
+                    self.image_compress.clear_result();
+                }
+                if ui
+                    .add_enabled(!running, egui::Button::new("[USE FILES SELECTION]"))
+                    .clicked()
+                {
+                    use_files_selection = true;
+                }
+            });
+
+            ui.add_space(8.0);
+            theme::small_label(ui, "MODE");
+            ui.horizontal_wrapped(|ui| {
+                ui.add_enabled_ui(!running, |ui| {
+                    ui.radio_value(
+                        &mut self.image_compress.mode,
+                        CompressionMode::SmartSafe,
+                        "SMART SAFE / LOSSLESS",
+                    );
+                    ui.radio_value(
+                        &mut self.image_compress.mode,
+                        CompressionMode::Balanced,
+                        "BALANCED JPEG / LOSSY",
+                    );
+                });
+            });
+
+            ui.add_space(6.0);
+            ui.add_enabled_ui(!running, |ui| {
+                ui.checkbox(
+                    &mut self.image_compress.privacy_clean,
+                    "PRIVACY CLEAN / remove EXIF, XMP, text and similar metadata",
+                );
+            });
+
+            ui.add_space(6.0);
+            ui.horizontal_wrapped(|ui| {
+                ui.label(egui::RichText::new("JPEG QUALITY").monospace().color(MUTED));
+                ui.add_enabled(
+                    !running && self.image_compress.mode == CompressionMode::Balanced,
+                    egui::Slider::new(&mut self.image_compress.jpeg_quality, 1..=100),
+                );
+                ui.separator();
+                ui.label(egui::RichText::new("PNG EFFORT").monospace().color(MUTED));
+                ui.add_enabled(
+                    !running,
+                    egui::Slider::new(&mut self.image_compress.png_effort, 1..=9),
+                );
+            });
+
+            if self.image_compress.mode == CompressionMode::Balanced
+                && !self.image_compress.privacy_clean
+            {
+                ui.add_space(6.0);
+                ui.label(
+                    egui::RichText::new(
+                        "BALANCED JPEG requires PRIVACY CLEAN. ICC color profiles are retained and EXIF orientation is applied to pixels before re-encoding.",
+                    )
+                    .color(WARN),
+                );
+            }
+
+            ui.add_space(10.0);
+            if ui
+                .add_enabled(
+                    !running
+                        && !self.image_compress.target.trim().is_empty()
+                        && (self.image_compress.mode != CompressionMode::Balanced
+                            || self.image_compress.privacy_clean),
+                    egui::Button::new(if running {
+                        "[COMPRESSING...]"
+                    } else {
+                        "[OPTIMIZE]"
+                    }),
+                )
+                .clicked()
+            {
+                start_requested = true;
+            }
+        });
+
+        if use_files_selection {
+            let selected = self.browser.selected.clone();
+            let file_selected = selected.as_ref().is_some_and(|path| {
+                self.browser
+                    .entries
+                    .iter()
+                    .any(|entry| entry.relative_path == *path && entry.kind == EntryKind::File)
+            });
+            if file_selected {
+                if let Some(path) = selected.as_deref() {
+                    self.image_compress.set_target_path(path);
+                    self.notice = "IMAGE COMPRESS SOURCE SET".to_string();
+                }
+            } else {
+                self.notice = "IMAGE COMPRESS: SELECT A REGULAR FILE IN FILES".to_string();
+            }
+        }
+
+        if start_requested {
+            match self.image_compress.start(&self.workspace_root) {
+                Ok(()) => {
+                    self.notice = "IMAGE COMPRESS RUNNING".to_string();
+                    ui.ctx().request_repaint_after(Duration::from_millis(100));
+                }
+                Err(error) => {
+                    self.notice = format!("IMAGE COMPRESS FAILED: {error}");
+                }
+            }
+        }
+
+        if let Some(error) = self.image_compress.error.as_ref() {
+            ui.add_space(8.0);
+            theme::panel(ui, |ui| {
+                theme::status_badge(ui, "FAILED", BAD);
+                ui.label(egui::RichText::new(error).color(BAD).monospace());
+            });
+        }
+
+        let mut save_requested = false;
+        if let Some(result) = self.image_compress.result.as_ref() {
+            ui.add_space(8.0);
+            theme::panel(ui, |ui| {
+                theme::small_label(ui, "RESULT");
+                theme::key_value(ui, "FORMAT", result.format.label());
+                theme::key_value(
+                    ui,
+                    "DIMENSIONS",
+                    &format!("{} x {}", result.width, result.height),
+                );
+                theme::key_value(ui, "ORIGINAL", &format_bytes(result.original_bytes));
+                theme::key_value(ui, "RESULT", &format_bytes(result.candidate_bytes));
+                let delta = result.bytes_saved();
+                theme::key_value(
+                    ui,
+                    "DELTA",
+                    &if delta >= 0 {
+                        format!("-{}", format_bytes(delta as u64))
+                    } else {
+                        format!("+{}", format_bytes((-delta) as u64))
+                    },
+                );
+                theme::key_value(ui, "PIXELS", if result.lossless { "LOSSLESS" } else { "LOSSY" });
+                theme::key_value(
+                    ui,
+                    "METADATA",
+                    if result.metadata_cleaned {
+                        "PRIVACY CLEAN"
+                    } else {
+                        "PRESERVED"
+                    },
+                );
+                ui.add_space(8.0);
+
+                if result.has_output() {
+                    if ui.button("[SAVE TO EXPORTS]").clicked() {
+                        save_requested = true;
+                    }
+                } else {
+                    theme::status_badge(ui, "ALREADY OPTIMAL", OK);
+                    ui.label(
+                        egui::RichText::new(
+                            "No smaller safe result was produced, so no output file will be created.",
+                        )
+                        .color(MUTED),
+                    );
+                }
+            });
+        }
+
+        if save_requested {
+            if let Some(result) = self.image_compress.result.as_ref() {
+                match image_compress::save_result_to_exports(&self.workspace_root, result) {
+                    Ok(path) => {
+                        self.notice =
+                            format!("IMAGE EXPORTED: {}", file_browser::display_path(&path));
+                        self.browser.refresh(&self.workspace_root);
+                    }
+                    Err(error) => {
+                        self.notice = format!("IMAGE EXPORT FAILED: {error}");
+                    }
+                }
+            }
         }
     }
 
@@ -1791,6 +2138,7 @@ impl NativeApp {
         let mut text_json_selected: Option<PathBuf> = None;
         let mut compare_left_selected: Option<PathBuf> = None;
         let mut compare_right_selected: Option<PathBuf> = None;
+        let mut image_compress_selected: Option<PathBuf> = None;
 
         theme::panel(ui, |ui| {
             if let Some(selected) = &selected_path {
@@ -1821,6 +2169,9 @@ impl NativeApp {
                                 }
                                 if ui.button("COMPARE AS B").clicked() {
                                     compare_right_selected = Some(entry.relative_path.clone());
+                                }
+                                if ui.button("IMAGE COMPRESS").clicked() {
+                                    image_compress_selected = Some(entry.relative_path.clone());
                                 }
                             });
                         }
@@ -1875,6 +2226,11 @@ impl NativeApp {
             self.file_compare.set_right_path(&path);
             self.view = View::Compare;
             self.notice = "COMPARE B SET".to_string();
+        }
+        if let Some(path) = image_compress_selected {
+            self.image_compress.set_target_path(&path);
+            self.view = View::ImageCompress;
+            self.notice = "IMAGE COMPRESS SOURCE SET".to_string();
         }
     }
 
@@ -3992,6 +4348,7 @@ impl eframe::App for NativeApp {
                     View::Home => self.home(ui),
                     View::Tools => self.tools(ui),
                     View::PasswordGenerator => self.password_generator_view(ui),
+                    View::ImageCompress => self.image_compress_view(ui),
                     View::Files => self.files(ui),
                     View::Editor => self.editor(ui),
                     View::HashVerify => self.hash_verify_view(ui),
@@ -4030,6 +4387,7 @@ fn tool_icon(tool: ToolId) -> PixelIcon {
         ToolId::HashVerify => PixelIcon::Hash,
         ToolId::TextJson => PixelIcon::Editor,
         ToolId::PasswordGenerator => PixelIcon::Key,
+        ToolId::ImageCompress => PixelIcon::Tools,
         ToolId::Compare => PixelIcon::Compare,
         ToolId::Search => PixelIcon::Files,
         ToolId::Repositories => PixelIcon::Repository,
@@ -4250,6 +4608,11 @@ mod tests {
             View::PasswordGenerator.session_view(),
             SessionView::Tools
         );
+    }
+
+    #[test]
+    fn image_compress_view_maps_to_navigation_only_session_state() {
+        assert_eq!(View::ImageCompress.session_view(), SessionView::Tools);
     }
 
     #[test]

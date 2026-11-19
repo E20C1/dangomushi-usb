@@ -9,6 +9,8 @@ pub mod existing_credential_input;
 pub mod generated_credential_input;
 pub mod hash_verify;
 pub mod internet_p2p_policy;
+#[cfg(feature = "image-compress")]
+pub mod image_compress;
 pub mod lan_access_control;
 pub mod mobile_handoff;
 pub mod network_safety;
