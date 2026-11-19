@@ -1,0 +1,40 @@
+name: Image Optimizer lockfile generation
+
+on:
+  push:
+    branches:
+      - feat/image-optimizer
+    paths:
+      - Cargo.toml
+      - .github/workflows/image-optimizer-lockgen.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: image-optimizer-lockgen
+  cancel-in-progress: true
+
+jobs:
+  lockfile:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/image-optimizer
+      - uses: dtolnay/rust-toolchain@1.99.1
+      - name: Generate lockfile
+        run: cargo generate-lockfile
+      - name: Commit lockfile
+        shell: bash
+        run: |
+          if git diff --quiet -- Cargo.lock; then
+            echo "Cargo.lock already current"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.lock
+          git commit -m "build: refresh lockfile for image optimizer codecs"
+          git push origin HEAD:feat/image-optimizer
