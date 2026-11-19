@@ -1178,7 +1178,7 @@ impl App {
                     );
                 }
                 let selected = self.browser.selected_entry();
-                push(ControlId::FileOpen, "OPEN".to_string(), selected.is_some());
+                push(ControlId::FileOpen, "OPEN SELECTED".to_string(), selected.is_some());
                 let is_file = selected.is_some_and(|entry| entry.kind == EntryKind::File);
                 push(ControlId::FileHash, "HASH / VERIFY".to_string(), is_file);
                 push(ControlId::FileTextJson, "TEXT / JSON".to_string(), is_file);
