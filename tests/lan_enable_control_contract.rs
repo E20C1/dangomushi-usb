@@ -1,7 +1,7 @@
 use dangomushi::lan_access_control::{LanEnableControl, LanEnableState};
 
 const SOURCE: &str = include_str!("../src/lan_access_control.rs");
-const UI: &str = include_str!("../src/native_ui.rs");
+const UI: &str = include_str!("../src/tui.rs");
 const SESSION: &str = include_str!("../src/session_state.rs");
 const SERVER: &str = include_str!("../src/server.rs");
 const ROADMAP: &str = include_str!("../docs/ROADMAP.md");

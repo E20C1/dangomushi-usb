@@ -13,7 +13,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 pub const REBUILD_MARKER: &str = ".dangomushi-frozen-rebuild";
-pub const REBUILD_FORMAT_VERSION: u16 = 1;
+pub const REBUILD_FORMAT_VERSION: u16 = 2;
 pub const PINNED_RUST_TOOLCHAIN: &str = "1.99.1";
 pub const MAX_REBUILD_BINARY_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 pub const REBUILD_TIMEOUT: Duration = Duration::from_secs(30 * 60);
@@ -23,7 +23,7 @@ pub const MAX_REBUILD_MARKER_BYTES: u64 = 64 * 1024;
 
 const IO_BUFFER_BYTES: usize = 64 * 1024;
 const SMOKE_SANDBOX_DIR: &str = ".dangomushi-recovery-smoke";
-const REBUILD_MARKER_MAGIC: &str = "DANGOMUSHI_FROZEN_REBUILD_V1";
+const REBUILD_MARKER_MAGIC: &str = "DANGOMUSHI_FROZEN_REBUILD_V2";
 const REBUILD_MARKER_KIND: &str = "dangomushi-frozen-rebuild";
 const TOOLCHAIN_FILE: &str = "rust-toolchain.toml";
 const VENDOR_CONFIG_FILE: &str = ".cargo/vendor-config.toml";
@@ -50,8 +50,7 @@ pub struct FrozenRebuildSummary {
     pub toolchain: &'static str,
     pub os: &'static str,
     pub arch: &'static str,
-    pub cli: RebuiltArtifact,
-    pub desktop: RebuiltArtifact,
+    pub application: RebuiltArtifact,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -173,13 +172,6 @@ fn rebuild_into_new_directory(
         &cargo_home,
         &["--bin", "dangomushi"],
     )?;
-    run_cargo_build(
-        staged_root,
-        &target_dir,
-        &cargo_home,
-        &["--features", "desktop", "--bin", "dangomushi-desktop"],
-    )?;
-
     // Cargo/build scripts are allowed to execute for this task, but the
     // authenticated staged source is not allowed to mutate as a side effect.
     let after = recovery_snapshot::verify_snapshot(staged_root)
@@ -189,18 +181,12 @@ fn rebuild_into_new_directory(
     }
 
     let release_dir = target_dir.join("release");
-    let cli_name = executable_name("dangomushi");
-    let desktop_name = executable_name("dangomushi-desktop");
-    let cli_path = release_dir.join(&cli_name);
-    let desktop_path = release_dir.join(&desktop_name);
+    let application_name = executable_name("dangomushi");
+    let application_path = release_dir.join(&application_name);
 
-    let cli = hash_artifact(
-        &cli_path,
-        &format!("target/release/{cli_name}"),
-    )?;
-    let desktop = hash_artifact(
-        &desktop_path,
-        &format!("target/release/{desktop_name}"),
+    let application = hash_artifact(
+        &application_path,
+        &format!("target/release/{application_name}"),
     )?;
 
     // Cargo home is only a clean configuration/cache isolation surface for the
@@ -212,8 +198,7 @@ fn rebuild_into_new_directory(
         toolchain: PINNED_RUST_TOOLCHAIN,
         os: std::env::consts::OS,
         arch: std::env::consts::ARCH,
-        cli,
-        desktop,
+        application,
     };
 
     write_rebuild_marker(destination, &summary)?;
@@ -463,19 +448,16 @@ fn write_rebuild_marker(
     summary: &FrozenRebuildSummary,
 ) -> Result<(), FrozenRebuildError> {
     let marker = format!(
-        "DANGOMUSHI_FROZEN_REBUILD_V1\nkind=dangomushi-frozen-rebuild\nformat={}\nrunner_version={}\nsource_snapshot_sha256={}\ntoolchain={}\nos={}\narch={}\ncli={}|{}|{}\ndesktop={}|{}|{}\n",
+        "DANGOMUSHI_FROZEN_REBUILD_V2\nkind=dangomushi-frozen-rebuild\nformat={}\nrunner_version={}\nsource_snapshot_sha256={}\ntoolchain={}\nos={}\narch={}\napplication={}|{}|{}\n",
         REBUILD_FORMAT_VERSION,
         env!("CARGO_PKG_VERSION"),
         summary.source_snapshot.sha256_hex(),
         summary.toolchain,
         summary.os,
         summary.arch,
-        summary.cli.relative_path,
-        summary.cli.bytes,
-        summary.cli.sha256_hex(),
-        summary.desktop.relative_path,
-        summary.desktop.bytes,
-        summary.desktop.sha256_hex(),
+        summary.application.relative_path,
+        summary.application.bytes,
+        summary.application.sha256_hex(),
     );
 
     let marker_path = destination.join(REBUILD_MARKER);
@@ -498,8 +480,7 @@ pub struct RecoveredSmokeSummary {
     pub app_version: String,
     pub os: String,
     pub arch: String,
-    pub cli: RebuiltArtifact,
-    pub desktop: RebuiltArtifact,
+    pub application: RebuiltArtifact,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -563,8 +544,7 @@ struct ParsedRebuildMarker {
     toolchain: String,
     os: String,
     arch: String,
-    cli: RebuiltArtifact,
-    desktop: RebuiltArtifact,
+    application: RebuiltArtifact,
 }
 
 pub fn smoke_verify_rebuild(
@@ -613,17 +593,13 @@ pub fn smoke_verify_rebuild(
         return Err(RecoveredSmokeError::SourceSnapshotMismatch);
     }
 
-    let expected_cli_path = format!("target/release/{}", executable_name("dangomushi"));
-    let expected_desktop_path =
-        format!("target/release/{}", executable_name("dangomushi-desktop"));
-    if marker.cli.relative_path != expected_cli_path
-        || marker.desktop.relative_path != expected_desktop_path
-    {
+    let expected_application_path =
+        format!("target/release/{}", executable_name("dangomushi"));
+    if marker.application.relative_path != expected_application_path {
         return Err(RecoveredSmokeError::InvalidRebuildMarker);
     }
 
-    verify_recorded_artifact(&canonical_rebuild, &marker.cli)?;
-    verify_recorded_artifact(&canonical_rebuild, &marker.desktop)?;
+    verify_recorded_artifact(&canonical_rebuild, &marker.application)?;
     let app_version = staged_package_version(&canonical_staging)?;
 
     let sandbox = canonical_rebuild.join(SMOKE_SANDBOX_DIR);
@@ -641,29 +617,29 @@ pub fn smoke_verify_rebuild(
     })?;
 
     let smoke_result = (|| {
-        let cli_path = canonical_rebuild.join(&marker.cli.relative_path);
-        let desktop_path = canonical_rebuild.join(&marker.desktop.relative_path);
+        let application_path =
+            canonical_rebuild.join(&marker.application.relative_path);
 
-        let cli_stdout = run_smoke_command(
-            &cli_path,
+        let version_stdout = run_smoke_command(
+            &application_path,
             &["version"],
             &sandbox,
-            "cli",
+            "version",
         )?;
-        let expected_cli = format!("dangomushi {app_version}\n");
-        if normalize_newlines(&cli_stdout) != expected_cli {
+        let expected_version = format!("dangomushi {app_version}\n");
+        if normalize_newlines(&version_stdout) != expected_version {
             return Err(RecoveredSmokeError::UnexpectedOutput);
         }
 
-        let desktop_stdout = run_smoke_command(
-            &desktop_path,
+        let application_stdout = run_smoke_command(
+            &application_path,
             &["--recovery-smoke-check"],
             &sandbox,
-            "desktop",
+            "application",
         )?;
-        let expected_desktop =
-            format!("dangomushi-desktop {app_version} recovery-smoke-ok\n");
-        if normalize_newlines(&desktop_stdout) != expected_desktop {
+        let expected_application =
+            format!("dangomushi {app_version} recovery-smoke-ok\n");
+        if normalize_newlines(&application_stdout) != expected_application {
             return Err(RecoveredSmokeError::UnexpectedOutput);
         }
 
@@ -686,9 +662,7 @@ pub fn smoke_verify_rebuild(
         return Err(RecoveredSmokeError::RebuildChanged);
     }
 
-    verify_recorded_artifact(&canonical_rebuild, &marker.cli)
-        .map_err(|_| RecoveredSmokeError::RebuildChanged)?;
-    verify_recorded_artifact(&canonical_rebuild, &marker.desktop)
+    verify_recorded_artifact(&canonical_rebuild, &marker.application)
         .map_err(|_| RecoveredSmokeError::RebuildChanged)?;
 
     let after_staging = recovery_snapshot::verify_snapshot(&canonical_staging)
@@ -703,8 +677,7 @@ pub fn smoke_verify_rebuild(
         app_version,
         os: marker.os,
         arch: marker.arch,
-        cli: marker.cli,
-        desktop: marker.desktop,
+        application: marker.application,
     })
 }
 
@@ -844,8 +817,7 @@ pub struct ReconstructionVerificationSummary {
     pub app_version: String,
     pub os: String,
     pub arch: String,
-    pub cli: RebuiltArtifact,
-    pub desktop: RebuiltArtifact,
+    pub application: RebuiltArtifact,
     pub workspace_backup: WorkspaceBackupSummary,
 }
 
@@ -970,8 +942,7 @@ pub fn verify_reconstruction(
         app_version: smoke.app_version,
         os: smoke.os,
         arch: smoke.arch,
-        cli: smoke.cli,
-        desktop: smoke.desktop,
+        application: smoke.application,
         workspace_backup: matched_after,
     })
 }
@@ -1138,7 +1109,7 @@ fn parse_rebuild_marker(bytes: &[u8]) -> Result<ParsedRebuildMarker, RecoveredSm
         return Err(RecoveredSmokeError::InvalidRebuildMarker);
     }
     let lines: Vec<&str> = normalized.trim_end_matches('\n').split('\n').collect();
-    if lines.len() != 10
+    if lines.len() != 9
         || lines[0] != REBUILD_MARKER_MAGIC
         || lines[1] != format!("kind={REBUILD_MARKER_KIND}")
         || lines[2] != format!("format={REBUILD_FORMAT_VERSION}")
@@ -1152,8 +1123,7 @@ fn parse_rebuild_marker(bytes: &[u8]) -> Result<ParsedRebuildMarker, RecoveredSm
     let toolchain = parse_marker_string(lines[5], "toolchain=")?;
     let os = parse_marker_string(lines[6], "os=")?;
     let arch = parse_marker_string(lines[7], "arch=")?;
-    let cli = parse_artifact_record(lines[8], "cli=")?;
-    let desktop = parse_artifact_record(lines[9], "desktop=")?;
+    let application = parse_artifact_record(lines[8], "application=")?;
 
     Ok(ParsedRebuildMarker {
         runner_version,
@@ -1161,8 +1131,7 @@ fn parse_rebuild_marker(bytes: &[u8]) -> Result<ParsedRebuildMarker, RecoveredSm
         toolchain,
         os,
         arch,
-        cli,
-        desktop,
+        application,
     })
 }
 

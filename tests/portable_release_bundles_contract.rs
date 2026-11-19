@@ -1,5 +1,6 @@
 const BUILD_SCRIPT: &str = include_str!("../scripts/build-release-bundle.py");
 const VERIFY_SCRIPT: &str = include_str!("../scripts/verify-release-bundle.py");
+const TERMINAL_FETCH: &str = include_str!("../scripts/fetch-windows-terminal-runtime.py");
 const CI: &str = include_str!("../.github/workflows/ci.yml");
 const WORKSPACE: &str = include_str!("../src/workspace.rs");
 const ROADMAP: &str = include_str!("../docs/ROADMAP.md");
@@ -11,11 +12,11 @@ const README: &str = include_str!("../README.md");
 fn builder_packages_only_reviewed_runtime_payloads() {
     for required in [
         "app/Dangomushi.exe",
-        "app/dangomushi-cli.exe",
         "app/Dangomushi",
-        "app/dangomushi-cli",
-        "app/Dangomushi.app/Contents/MacOS/Dangomushi",
-        "app/Dangomushi.app/Contents/Info.plist",
+        "START_DANGOMUSHI.cmd",
+        "runtime/windows-terminal/",
+        "RUNTIME-MANIFEST.json",
+        "licenses/windows-terminal/LICENSE.txt",
         "START_HERE.txt",
         "RELEASE-MANIFEST.json",
         "workspace-sibling-of-app",
@@ -28,12 +29,44 @@ fn builder_packages_only_reviewed_runtime_payloads() {
         "workspace/state",
         "recovery/workspace.dgmwbk",
         "Secret Backup",
+        "dangomushi-cli",
+        "dangomushi-desktop",
+        "Dangomushi.app",
     ] {
         assert!(
             !BUILD_SCRIPT.contains(forbidden),
             "builder must not package durable/secret state: {forbidden}"
         );
     }
+}
+
+#[test]
+#[test]
+fn windows_launcher_normalizes_root_before_passing_starting_directory() {
+    assert!(BUILD_SCRIPT.contains(r#"for %%I in (\"%~dp0.\") do set \"DANGOMUSHI_ROOT=%%~fI\""#));
+    assert!(BUILD_SCRIPT.contains(r#"--startingDirectory . \"%DANGOMUSHI_APP%\""#));
+    assert!(!BUILD_SCRIPT.contains(r#"--startingDirectory \"%~dp0\""#));
+}
+
+fn pinned_windows_terminal_runtime_is_verified_before_packaging() {
+    for required in [
+        "1.25.3131.0",
+        "273d6f1502eca1b5bd95c43f5d4d7ec72cc503df340102f8659717e5bead3437",
+        "b7e1d2a414e6368affd098d91a4cba441dcacd3ab634a6f39c8e6f5490deef89",
+        ".portable",
+        "WindowsTerminal.exe",
+        "wt.exe",
+        "NOTICE.html",
+        "unsafe Windows Terminal archive path",
+        "Windows Terminal asset SHA-256 mismatch",
+    ] {
+        assert!(TERMINAL_FETCH.contains(required), "missing terminal runtime gate: {required}");
+    }
+    assert!(BUILD_SCRIPT.contains("validate_windows_terminal_runtime"));
+    assert!(VERIFY_SCRIPT.contains("verify_windows_terminal_runtime"));
+    assert!(BUILD_SCRIPT.contains("licenses/windows-terminal/LICENSE.txt"));
+    assert!(VERIFY_SCRIPT.contains("licenses/windows-terminal/LICENSE.txt"));
+    assert!(CI.contains("Fetch pinned Windows Terminal portable runtime"));
 }
 
 #[test]

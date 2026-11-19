@@ -6,10 +6,6 @@ rust-version = "1.95"
 description = "Portable, local-first workspace core"
 repository = "https://github.com/E20C1/dangomushi-usb"
 
-[features]
-default = []
-desktop = ["dep:eframe", "dep:arboard"]
-
 [dependencies]
 serde_json = "1.0.154"
 sha2 = { version = "0.11.1", default-features = false }
@@ -21,8 +17,11 @@ hmac = "0.13.0"
 ed25519-dalek = "3.0.0"
 hkdf = "0.13.0"
 x25519-dalek = { version = "3.0.0", features = ["getrandom"] }
-eframe = { version = "0.37.0", optional = true, default-features = false, features = ["default_fonts", "glow", "wayland", "x11"] }
-arboard = { version = "3.7.0", optional = true, default-features = false, features = ["wayland-data-control"] }
+ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
+crossterm = "0.29.0"
+ratatui-image = { version = "11.1.0", default-features = false, features = ["crossterm"] }
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }
+arboard = { version = "3.7.0", default-features = false, features = ["wayland-data-control"] }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62.2", default-features = false, features = ["Win32_Networking_NetworkListManager", "Win32_System_Com"] }
@@ -31,7 +30,3 @@ windows = { version = "0.62.2", default-features = false, features = ["Win32_Net
 name = "dangomushi"
 path = "src/main.rs"
 
-[[bin]]
-name = "dangomushi-desktop"
-path = "src/bin/dangomushi-desktop.rs"
-required-features = ["desktop"]

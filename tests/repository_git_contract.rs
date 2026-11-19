@@ -1,5 +1,5 @@
 const SOURCE: &str = include_str!("../src/repository_git.rs");
-const UI: &str = include_str!("../src/native_ui.rs");
+const UI: &str = include_str!("../src/tui.rs");
 const REGISTRY: &str = include_str!("../src/tool_registry.rs");
 const SESSION: &str = include_str!("../src/session_state.rs");
 const ROADMAP: &str = include_str!("../docs/ROADMAP.md");
@@ -126,12 +126,11 @@ fn native_ui_dispatches_ready_repositories_without_session_git_payload() {
     assert!(entry.contains("status: ToolStatus::Ready"));
     assert!(UI.contains("ToolId::Repositories =>"));
     assert!(UI.contains("View::Repositories"));
-    assert!(UI.contains("fn repositories_view"));
-    assert!(UI.contains("[STATUS]"));
-    assert!(UI.contains("[RECENT COMMITS]"));
-    assert!(UI.contains("[WORKTREE DIFF STAT]"));
-    assert!(UI.contains("[STAGED DIFF STAT]"));
-    assert!(UI.contains("No network, shell, arbitrary argv"));
+    assert!(UI.contains("ControlId::RepoStatus"));
+    assert!(UI.contains("RECENT COMMITS"));
+    assert!(UI.contains("WORKTREE DIFF STAT"));
+    assert!(UI.contains("STAGED DIFF STAT"));
+    assert!(UI.contains("repository_git::repository_status"));
 
     assert!(SESSION.contains("Repositories"));
     assert!(SESSION.contains(r#""repositories""#));

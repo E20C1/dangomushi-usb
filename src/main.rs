@@ -1,4 +1,4 @@
-use dangomushi::{offline_docs, offline_reconstruction, recovery_snapshot, server, workspace};
+use dangomushi::{offline_docs, offline_reconstruction, recovery_snapshot, server, tui, workspace};
 use std::env;
 use std::path::PathBuf;
 use std::process;
@@ -76,8 +76,19 @@ fn run() -> Result<(), String> {
     let command = args.next();
 
     match command.as_deref() {
-        None | Some("help") | Some("--help") | Some("-h") => {
+        None | Some("tui") => tui::run().map_err(|error| format!("TUI failed: {error}")),
+        Some("help") | Some("--help") | Some("-h") => {
             print_help();
+            Ok(())
+        }
+        Some("--recovery-smoke-check") => {
+            if args.next().is_some() {
+                return Err("--recovery-smoke-check accepts no additional arguments".to_string());
+            }
+            println!(
+                "dangomushi {} recovery-smoke-ok",
+                env!("CARGO_PKG_VERSION")
+            );
             Ok(())
         }
         Some("serve") => {
@@ -205,16 +216,10 @@ fn run_recovery(args: Vec<String>) -> Result<(), String> {
             println!("os: {}", summary.os);
             println!("arch: {}", summary.arch);
             println!(
-                "cli: {} | {} bytes | {}",
-                summary.cli.relative_path,
-                summary.cli.bytes,
-                summary.cli.sha256_hex()
-            );
-            println!(
-                "desktop: {} | {} bytes | {}",
-                summary.desktop.relative_path,
-                summary.desktop.bytes,
-                summary.desktop.sha256_hex()
+                "application: {} | {} bytes | {}",
+                summary.application.relative_path,
+                summary.application.bytes,
+                summary.application.sha256_hex()
             );
             Ok(())
         }
@@ -235,16 +240,10 @@ fn run_recovery(args: Vec<String>) -> Result<(), String> {
             println!("os: {}", summary.os);
             println!("arch: {}", summary.arch);
             println!(
-                "cli: {} | {} bytes | {}",
-                summary.cli.relative_path,
-                summary.cli.bytes,
-                summary.cli.sha256_hex()
-            );
-            println!(
-                "desktop: {} | {} bytes | {}",
-                summary.desktop.relative_path,
-                summary.desktop.bytes,
-                summary.desktop.sha256_hex()
+                "application: {} | {} bytes | {}",
+                summary.application.relative_path,
+                summary.application.bytes,
+                summary.application.sha256_hex()
             );
             Ok(())
         }
@@ -291,16 +290,10 @@ fn run_recovery(args: Vec<String>) -> Result<(), String> {
             println!("os: {}", summary.os);
             println!("arch: {}", summary.arch);
             println!(
-                "cli: {} | {} bytes | {}",
-                summary.cli.relative_path,
-                summary.cli.bytes,
-                summary.cli.sha256_hex()
-            );
-            println!(
-                "desktop: {} | {} bytes | {}",
-                summary.desktop.relative_path,
-                summary.desktop.bytes,
-                summary.desktop.sha256_hex()
+                "application: {} | {} bytes | {}",
+                summary.application.relative_path,
+                summary.application.bytes,
+                summary.application.sha256_hex()
             );
             println!("workspace_backup_files: {}", summary.workspace_backup.files);
             println!(
@@ -698,7 +691,7 @@ fn parse_reconstruction_verify_options(
 }
 
 fn recovery_help_text() -> String {
-    "Usage:\n  dangomushi recovery snapshot create --backup backups/<NAME>.dgmwbk --destination <PATH> [--source <SOURCE-ROOT>] [--workspace <WORKSPACE-ROOT>]\n  dangomushi recovery snapshot verify --snapshot <PATH>\n  dangomushi recovery snapshot stage --snapshot <PATH> --destination <PATH> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n  dangomushi recovery snapshot rebuild --staging <PATH> --destination <PATH> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n  dangomushi recovery snapshot smoke --staging <PATH> --rebuild <PATH>\n  dangomushi recovery snapshot restore-workspace --staging <PATH> --rebuild <PATH> --destination <FRESH-WORKSPACE> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n  dangomushi recovery snapshot verify-reconstruction --staging <PATH> --rebuild <PATH> --restored-workspace <FRESH-WORKSPACE>\n\nDefaults for create:\n  source: .\n  workspace: ./workspace\n\nCreate requires a generated vendor/ directory and a verified Generic Workspace Backup. Verify is read-only. Stage verifies before materializing authenticated payload. Rebuild verifies the staged snapshot before creating a separate target directory, uses only the pinned Cargo toolchain plus staged vendor config with --frozen, and does not execute rebuilt binaries or restore Workspace data. Smoke re-verifies staging and rebuild integrity, then executes only the fixed CLI version and non-GUI desktop recovery-smoke entrypoints inside a temporary rebuild-local sandbox. Restore-workspace reruns the smoke gate, accepts only the embedded Generic Workspace Backup, and creates a new Workspace destination; it never overwrites or merges an existing Workspace. Verify-reconstruction reuses the smoke gate, re-verifies staged/rebuild evidence, compares every managed Workspace entry byte-for-byte with the authenticated Generic Backup, and requires the fresh-only non-managed layout. Supply --source and/or --workspace when live roots exist so reconstruction outputs are rejected inside them.".to_string()
+    "Usage:\n  dangomushi recovery snapshot create --backup backups/<NAME>.dgmwbk --destination <PATH> [--source <SOURCE-ROOT>] [--workspace <WORKSPACE-ROOT>]\n  dangomushi recovery snapshot verify --snapshot <PATH>\n  dangomushi recovery snapshot stage --snapshot <PATH> --destination <PATH> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n  dangomushi recovery snapshot rebuild --staging <PATH> --destination <PATH> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n  dangomushi recovery snapshot smoke --staging <PATH> --rebuild <PATH>\n  dangomushi recovery snapshot restore-workspace --staging <PATH> --rebuild <PATH> --destination <FRESH-WORKSPACE> [--source <ACTIVE-SOURCE-ROOT>] [--workspace <LIVE-WORKSPACE-ROOT>]\n  dangomushi recovery snapshot verify-reconstruction --staging <PATH> --rebuild <PATH> --restored-workspace <FRESH-WORKSPACE>\n\nDefaults for create:\n  source: .\n  workspace: ./workspace\n\nCreate requires a generated vendor/ directory and a verified Generic Workspace Backup. Verify is read-only. Stage verifies before materializing authenticated payload. Rebuild verifies the staged snapshot before creating a separate target directory, uses only the pinned Cargo toolchain plus staged vendor config with --frozen, and does not execute rebuilt binaries or restore Workspace data. Smoke re-verifies staging and rebuild integrity, then executes only the fixed version and recovery-smoke entrypoints of the single rebuilt application inside a temporary rebuild-local sandbox. Restore-workspace reruns the smoke gate, accepts only the embedded Generic Workspace Backup, and creates a new Workspace destination; it never overwrites or merges an existing Workspace. Verify-reconstruction reuses the smoke gate, re-verifies staged/rebuild evidence, compares every managed Workspace entry byte-for-byte with the authenticated Generic Backup, and requires the fresh-only non-managed layout. Supply --source and/or --workspace when live roots exist so reconstruction outputs are rejected inside them.".to_string()
 }
 
 fn run_docs(args: Vec<String>) -> Result<(), String> {
@@ -828,7 +821,9 @@ fn print_help() {
 fn help_text() -> String {
     format!(
         "DANGOMUSHI {}\n\n\
-Usage:\n  dangomushi serve [--port PORT] [--workspace PATH]\n  \
+Usage:\n  dangomushi                         # launch TUI\n  \
+dangomushi tui                     # launch TUI explicitly\n  \
+dangomushi serve [--port PORT] [--workspace PATH]\n  \
 dangomushi init [PATH]\n  \
 dangomushi doctor [PATH]\n  \
 dangomushi docs list|show|export|verify ...\n  \
@@ -840,7 +835,7 @@ dangomushi recovery snapshot smoke --staging <PATH> --rebuild <PATH>\n  \
 dangomushi recovery snapshot restore-workspace --staging <PATH> --rebuild <PATH> --destination <FRESH-WORKSPACE> [--source PATH] [--workspace PATH]\n  \
 dangomushi recovery snapshot verify-reconstruction --staging <PATH> --rebuild <PATH> --restored-workspace <FRESH-WORKSPACE>\n  \
 dangomushi version\n\n\
-Desktop:\n  run the dangomushi-desktop binary built with --features desktop\n\n\
+Interactive UI:\n  the native Ratatui/Crossterm TUI is the application UI; no GUI runtime is required.\n\n\
 Defaults:\n  port: {DEFAULT_PORT}\n  workspace: ./{DEFAULT_WORKSPACE}\n\n\
 Security:\n  the web gateway binds to 127.0.0.1 only. Direct peer LAN is a separate library path gated by explicit run-local LAN intent, live trusted-network checks and trusted-peer cryptography; this serve command never exposes it.",
         env!("CARGO_PKG_VERSION")

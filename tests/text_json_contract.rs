@@ -1,5 +1,5 @@
 const SOURCE: &str = include_str!("../src/text_json.rs");
-const UI: &str = include_str!("../src/native_ui.rs");
+const UI: &str = include_str!("../src/tui.rs");
 const REGISTRY: &str = include_str!("../src/tool_registry.rs");
 const SESSION: &str = include_str!("../src/session_state.rs");
 const ROADMAP: &str = include_str!("../docs/ROADMAP.md");
@@ -59,13 +59,13 @@ fn native_ui_dispatches_ready_text_json_without_session_payload_content() {
     assert!(entry.contains("status: ToolStatus::Ready"));
     assert!(UI.contains("ToolId::TextJson =>"));
     assert!(UI.contains("View::TextJson"));
-    assert!(UI.contains("fn text_json_view"));
-    assert!(UI.contains("[NORMALIZE LF]"));
-    assert!(UI.contains("[CLEAN LINES]"));
-    assert!(UI.contains("[VALIDATE JSON]"));
-    assert!(UI.contains("[PRETTY JSON]"));
-    assert!(UI.contains("[COMPACT JSON]"));
-    assert!(UI.contains("[LOAD FILES SELECTION]"));
+    assert!(UI.contains("ControlId::TextNormalize"));
+    assert!(UI.contains("NORMALIZE LF"));
+    assert!(UI.contains("CLEAN LINES"));
+    assert!(UI.contains("VALIDATE JSON"));
+    assert!(UI.contains("PRETTY JSON"));
+    assert!(UI.contains("COMPACT JSON"));
+    assert!(UI.contains("LOAD FILES SELECTION"));
     assert!(UI.contains("Do not use this generic utility for passwords"));
 
     assert!(SESSION.contains("TextJson"));
