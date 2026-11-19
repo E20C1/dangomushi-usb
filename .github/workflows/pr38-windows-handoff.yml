@@ -1,0 +1,36 @@
+name: PR38 Windows Handoff
+
+on:
+  push:
+    branches:
+      - artifact/pr38-windows
+
+permissions:
+  contents: read
+
+jobs:
+  windows-bundle:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@1.99.1
+
+      - name: Build TUI application
+        run: cargo build --locked --release --bin dangomushi
+
+      - name: Fetch pinned Windows Terminal portable runtime
+        run: python scripts/fetch-windows-terminal-runtime.py --arch x86_64
+
+      - name: Build portable release bundle
+        run: python scripts/build-release-bundle.py
+
+      - name: Verify portable release bundle
+        run: python scripts/verify-release-bundle.py --directory dist
+
+      - name: Upload verified Windows bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: dangomushi-pr38-windows
+          path: dist/dangomushi-0.5.37-windows-x86_64.zip
+          archive: false
