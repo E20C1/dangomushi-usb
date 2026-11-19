@@ -16,6 +16,7 @@ fn builder_packages_only_reviewed_runtime_payloads() {
         "START_DANGOMUSHI.cmd",
         "runtime/windows-terminal/",
         "RUNTIME-MANIFEST.json",
+        "licenses/windows-terminal/LICENSE.txt",
         "START_HERE.txt",
         "RELEASE-MANIFEST.json",
         "workspace-sibling-of-app",
@@ -49,6 +50,7 @@ fn pinned_windows_terminal_runtime_is_verified_before_packaging() {
         "WindowsTerminal.exe",
         "wt.exe",
         "NOTICE.html",
+        "licenses/windows-terminal/LICENSE.txt",
         "unsafe Windows Terminal archive path",
         "Windows Terminal asset SHA-256 mismatch",
     ] {
