@@ -2325,7 +2325,7 @@ impl App {
                 format!("{}\n{}", result, self.hash.error.as_deref().unwrap_or(""))
             }
             View::TextJson => format!(
-                "Status: {}\nError: {}\n\nINPUT:\n{}\n\nOUTPUT:\n{}",
+                "Do not use this generic utility for passwords or Vault secrets.\nStatus: {}\nError: {}\n\nINPUT:\n{}\n\nOUTPUT:\n{}",
                 self.text_json.status.as_deref().unwrap_or("-"),
                 self.text_json.error.as_deref().unwrap_or("-"),
                 self.text_json.input,
@@ -2405,7 +2405,7 @@ impl App {
     fn mobile_detail(&self) -> String {
         let exposure = network_safety::evaluate(&self.lan_access, self.network_safety);
         let mut text = format!(
-            "LAN: {}\nNetwork: {} / {} / {}\nExposure: {}\n\nLAN intent remains process-local and resets OFF on every launch.\nEnabling this control does not create a LAN listener. MOBILE LISTENER STILL LOCKED.\nDIRECT PEER LAN READY / EXPLICIT ONE-SHOT\nENCRYPTED TRANSFER CORE READY\nRECEIVED FILE INTEGRITY READY\nInternet P2P threat review is complete: {}\nReconnection uses a fresh Ed25519 challenge; No persistent bearer token is created.\n\nTrusted devices: {}\nTrusted peers: {}\n",
+            "LAN: {}\nNETWORK SAFETY: {} / {} / {}\nLAN EXPOSURE: {}\n\nLAN intent remains process-local and resets OFF on every launch.\nEnabling this control does not create a LAN listener. MOBILE LISTENER STILL LOCKED.\nDIRECT PEER LAN READY / EXPLICIT ONE-SHOT\nENCRYPTED TRANSFER CORE READY\nRECEIVED FILE INTEGRITY READY\nInternet P2P threat review is complete: {}\nReconnection uses a fresh Ed25519 challenge; No persistent bearer token is created.\n\nTrusted devices: {}\nTrusted peers: {}\n",
             if self.lan_access.is_enabled() { "ON (run-local)" } else { "OFF" },
             self.network_safety.environment().label(),
             self.network_safety.source().label(),
