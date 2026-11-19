@@ -167,3 +167,10 @@ jobs:
       - name: Build ARM64 Android storage-contract APK
         working-directory: android-spike
         run: cargo apk build
+
+      - name: Upload Android storage-contract APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-storage-spike
+          path: android-spike/target/debug/apk/*.apk
+          archive: false
