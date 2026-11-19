@@ -11,11 +11,7 @@ const README: &str = include_str!("../README.md");
 fn builder_packages_only_reviewed_runtime_payloads() {
     for required in [
         "app/Dangomushi.exe",
-        "app/dangomushi-cli.exe",
         "app/Dangomushi",
-        "app/dangomushi-cli",
-        "app/Dangomushi.app/Contents/MacOS/Dangomushi",
-        "app/Dangomushi.app/Contents/Info.plist",
         "START_HERE.txt",
         "RELEASE-MANIFEST.json",
         "workspace-sibling-of-app",
@@ -28,6 +24,9 @@ fn builder_packages_only_reviewed_runtime_payloads() {
         "workspace/state",
         "recovery/workspace.dgmwbk",
         "Secret Backup",
+        "dangomushi-cli",
+        "dangomushi-desktop",
+        "Dangomushi.app",
     ] {
         assert!(
             !BUILD_SCRIPT.contains(forbidden),
