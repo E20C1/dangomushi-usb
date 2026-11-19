@@ -43,8 +43,10 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph, Wrap};
 use ratatui::{Frame, Terminal};
+use std::fs;
 use std::io::{self, stdout, Stdout};
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::{Duration, Instant};
 
 const AUTOSAVE_DELAY: Duration = Duration::from_secs(2);
@@ -383,7 +385,7 @@ impl FileBrowserState {
             }
             Err(error) => {
                 self.entries.clear();
-                self.error = Some(error.to_string());
+                self.error = Some(file_browser_error(root, &error));
             }
         }
     }
@@ -396,7 +398,7 @@ impl FileBrowserState {
                 self.selected = None;
                 self.error = None;
             }
-            Err(error) => self.error = Some(error.to_string()),
+            Err(error) => self.error = Some(file_browser_error(root, &error)),
         }
     }
 
@@ -590,6 +592,14 @@ impl EditorState {
         self.confirm_discard = false;
         self.recovery_status = "RELOADED FROM DISK".to_string();
         Ok(())
+    }
+}
+
+fn file_browser_error(root: &Path, error: &io::Error) -> String {
+    if !workspace::summary(root).initialized {
+        "WORKSPACE NOT INITIALIZED / Open WORKSPACE and choose INITIALIZE WORKSPACE.".to_string()
+    } else {
+        error.to_string()
     }
 }
 
@@ -1477,11 +1487,10 @@ impl App {
             ControlId::FileEntry(index) => {
                 if let Some(entry) = self.browser.entries.get(index).cloned() {
                     self.browser.selected = Some(entry.relative_path.clone());
-                    if entry.kind == EntryKind::Directory {
-                        self.browser.navigate(&self.workspace_root, entry.relative_path);
-                    } else if entry.kind == EntryKind::File {
-                        self.open_in_editor(entry.relative_path);
-                    }
+                    self.notice = format!(
+                        "SELECTED / {}",
+                        file_browser::display_path(&entry.relative_path)
+                    );
                 }
             }
             ControlId::FileOpen => self.open_selected(),
