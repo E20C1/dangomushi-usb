@@ -33,6 +33,7 @@ pub mod trusted_devices;
 pub mod trusted_peers;
 pub mod tool_registry;
 pub mod tui;
+pub mod tui_image;
 pub mod vault_storage;
 pub mod vault_unlock;
 pub mod workspace;
