@@ -112,6 +112,7 @@ def expected_payload(os_name: str) -> dict[str, bool]:
             "START_DANGOMUSHI.cmd": False,
             "START_HERE.txt": False,
             "runtime/windows-terminal/RUNTIME-MANIFEST.json": False,
+            "licenses/windows-terminal/LICENSE.txt": False,
         }
     if os_name in {"linux", "macos"}:
         return {
