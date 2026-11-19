@@ -1,4 +1,4 @@
-use dangomushi::{offline_docs, offline_reconstruction, recovery_snapshot, server, workspace};
+use dangomushi::{offline_docs, offline_reconstruction, recovery_snapshot, server, tui, workspace};
 use std::env;
 use std::path::PathBuf;
 use std::process;
@@ -76,8 +76,19 @@ fn run() -> Result<(), String> {
     let command = args.next();
 
     match command.as_deref() {
-        None | Some("help") | Some("--help") | Some("-h") => {
+        None | Some("tui") => tui::run().map_err(|error| format!("TUI failed: {error}")),
+        Some("help") | Some("--help") | Some("-h") => {
             print_help();
+            Ok(())
+        }
+        Some("--recovery-smoke-check") => {
+            if args.next().is_some() {
+                return Err("--recovery-smoke-check accepts no additional arguments".to_string());
+            }
+            println!(
+                "dangomushi {} recovery-smoke-ok",
+                env!("CARGO_PKG_VERSION")
+            );
             Ok(())
         }
         Some("serve") => {
@@ -828,7 +839,9 @@ fn print_help() {
 fn help_text() -> String {
     format!(
         "DANGOMUSHI {}\n\n\
-Usage:\n  dangomushi serve [--port PORT] [--workspace PATH]\n  \
+Usage:\n  dangomushi                         # launch TUI\n  \
+dangomushi tui                     # launch TUI explicitly\n  \
+dangomushi serve [--port PORT] [--workspace PATH]\n  \
 dangomushi init [PATH]\n  \
 dangomushi doctor [PATH]\n  \
 dangomushi docs list|show|export|verify ...\n  \
@@ -840,7 +853,7 @@ dangomushi recovery snapshot smoke --staging <PATH> --rebuild <PATH>\n  \
 dangomushi recovery snapshot restore-workspace --staging <PATH> --rebuild <PATH> --destination <FRESH-WORKSPACE> [--source PATH] [--workspace PATH]\n  \
 dangomushi recovery snapshot verify-reconstruction --staging <PATH> --rebuild <PATH> --restored-workspace <FRESH-WORKSPACE>\n  \
 dangomushi version\n\n\
-Desktop:\n  run the dangomushi-desktop binary built with --features desktop\n\n\
+Interactive UI:\n  the native Ratatui/Crossterm TUI is the application UI; no GUI runtime is required.\n\n\
 Defaults:\n  port: {DEFAULT_PORT}\n  workspace: ./{DEFAULT_WORKSPACE}\n\n\
 Security:\n  the web gateway binds to 127.0.0.1 only. Direct peer LAN is a separate library path gated by explicit run-local LAN intent, live trusted-network checks and trusted-peer cryptography; this serve command never exposes it.",
         env!("CARGO_PKG_VERSION")
