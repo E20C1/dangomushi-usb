@@ -6,7 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const SOURCE: &str = include_str!("../src/offline_docs.rs");
 const MAIN: &str = include_str!("../src/main.rs");
-const UI: &str = include_str!("../src/native_ui.rs");
+const UI: &str = include_str!("../src/tui.rs");
 const SESSION: &str = include_str!("../src/session_state.rs");
 const ROADMAP: &str = include_str!("../docs/ROADMAP.md");
 const ARCHITECTURE: &str = include_str!("../docs/ARCHITECTURE.md");
@@ -169,7 +169,7 @@ fn cli_and_native_system_view_expose_embedded_pack_without_remote_fetch() {
         "OFFLINE DOCUMENTATION",
         "EMBEDDED / VERIFIED INVENTORY",
         "offline_docs::documents()",
-        "offline-doc-selector",
+        "ControlId::SystemNextDoc",
         "Read-only content is compiled into this executable",
     ] {
         assert!(UI.contains(required), "missing native viewer evidence: {required}");
