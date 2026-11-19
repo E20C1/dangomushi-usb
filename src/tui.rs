@@ -10,7 +10,7 @@ use crate::file_compare;
 use crate::hash_verify;
 use crate::internet_p2p_policy;
 use crate::lan_access_control::LanEnableControl;
-use crate::network_safety::{self, NetworkEnvironment, NetworkSafetyAssessment};
+use crate::network_safety::{self, NetworkSafetyAssessment};
 use crate::offline_docs;
 use crate::password_generator::{self, GeneratedPassword, GeneratorConfig, MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH};
 use crate::peer_identity;
@@ -431,7 +431,7 @@ struct EditorState {
 }
 
 impl EditorState {
-    fn new(image_preview: ImagePreviewRuntime) -> Self {
+    fn new() -> Self {
         Self {
             path: None,
             buffer: String::new(),
@@ -816,7 +816,7 @@ struct App {
 }
 
 impl App {
-    fn new() -> Self {
+    fn new(image_preview: ImagePreviewRuntime) -> Self {
         let workspace_root = workspace::default_workspace_root();
         let mut app = Self {
             view: View::Home,
