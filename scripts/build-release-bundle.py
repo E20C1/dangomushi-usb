@@ -15,7 +15,7 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 KIND = "dangomushi-portable-release"
-FORMAT = 1
+FORMAT = 2
 MAX_BINARY_BYTES = 256 * 1024 * 1024
 
 def fail(message: str) -> None:
@@ -84,11 +84,9 @@ def copy_payload(source: Path, destination: Path, executable: bool) -> None:
 
 def start_here(version: str, os_name: str) -> str:
     if os_name == "windows":
-        launch = "Double-click app\\Dangomushi.exe\nCLI: app\\dangomushi-cli.exe"
-    elif os_name == "macos":
-        launch = "Open app/Dangomushi.app\nCLI: app/dangomushi-cli"
+        launch = "Double-click app\\Dangomushi.exe for the TUI\nCLI commands use the same app\\Dangomushi.exe"
     else:
-        launch = "Run app/Dangomushi\nCLI: app/dangomushi-cli"
+        launch = "Run app/Dangomushi for the TUI\nCLI commands use the same app/Dangomushi"
 
     return (
         f"DANGOMUSHI {version} PORTABLE RELEASE\n"
@@ -101,8 +99,8 @@ def start_here(version: str, os_name: str) -> str:
         "workspace/ directory beside app/. Initialize it explicitly on first use.\n\n"
         "OFFLINE DOCUMENTATION\n"
         "---------------------\n"
-        "Documentation is embedded in the binaries. Use the SYSTEM view or:\n"
-        "  dangomushi-cli docs list\n\n"
+        "Documentation is embedded in the application. Use the SYSTEM view or:\n"
+        "  app/Dangomushi docs list\n\n"
         "SECURITY / DISTRIBUTION\n"
         "-----------------------\n"
         "Verify the archive against its .sha256 sidecar before extraction.\n"
@@ -223,20 +221,12 @@ def main() -> None:
 
     if os_name == "windows":
         archive_name = f"{bundle_id}.zip"
-        cli_source = input_dir / "dangomushi.exe"
-        desktop_source = input_dir / "dangomushi-desktop.exe"
-        cli_relative = "app/dangomushi-cli.exe"
-        desktop_relative = "app/Dangomushi.exe"
+        application_source = input_dir / "dangomushi.exe"
+        application_relative = "app/Dangomushi.exe"
     else:
         archive_name = f"{bundle_id}.tar.gz"
-        cli_source = input_dir / "dangomushi"
-        desktop_source = input_dir / "dangomushi-desktop"
-        cli_relative = "app/dangomushi-cli"
-        desktop_relative = (
-            "app/Dangomushi.app/Contents/MacOS/Dangomushi"
-            if os_name == "macos"
-            else "app/Dangomushi"
-        )
+        application_source = input_dir / "dangomushi"
+        application_relative = "app/Dangomushi"
 
     archive_path = output_dir / archive_name
     checksum_path = output_dir / f"{archive_name}.sha256"
@@ -247,20 +237,13 @@ def main() -> None:
         staging = Path(temporary) / bundle_id
         staging.mkdir()
 
-        executable_paths = {desktop_relative, cli_relative}
-        copy_payload(desktop_source, staging / desktop_relative, True)
-        copy_payload(cli_source, staging / cli_relative, True)
+        executable_paths = {application_relative}
+        copy_payload(application_source, staging / application_relative, True)
 
         (staging / "START_HERE.txt").write_text(
             start_here(version, os_name), encoding="utf-8", newline="\n"
         )
         (staging / "START_HERE.txt").chmod(0o644)
-
-        if os_name == "macos":
-            plist = staging / "app/Dangomushi.app/Contents/Info.plist"
-            plist.parent.mkdir(parents=True, exist_ok=True)
-            plist.write_text(macos_plist(version), encoding="utf-8", newline="\n")
-            plist.chmod(0o644)
 
         records = collect_records(staging, executable_paths)
         write_manifest(staging, version, os_name, arch, bundle_id, records)
