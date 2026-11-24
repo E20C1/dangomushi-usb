@@ -239,12 +239,10 @@ impl<B> fmt::Debug for SecretClipboard<B> {
     }
 }
 
-#[cfg(feature = "desktop")]
 pub struct SystemClipboard {
     inner: arboard::Clipboard,
 }
 
-#[cfg(feature = "desktop")]
 impl SystemClipboard {
     pub fn new() -> Result<Self, ClipboardHygieneError> {
         arboard::Clipboard::new()
@@ -253,7 +251,6 @@ impl SystemClipboard {
     }
 }
 
-#[cfg(feature = "desktop")]
 impl ClipboardBackend for SystemClipboard {
     fn set_text(&mut self, text: &str) -> Result<(), ClipboardBackendError> {
         self.inner.set_text(text).map_err(|_| ClipboardBackendError)
@@ -272,7 +269,6 @@ impl ClipboardBackend for SystemClipboard {
     }
 }
 
-#[cfg(feature = "desktop")]
 impl fmt::Debug for SystemClipboard {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str("SystemClipboard")

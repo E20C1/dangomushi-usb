@@ -14,7 +14,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 const SOURCE: &str = include_str!("../src/device_revocation.rs");
 const TRUSTED: &str = include_str!("../src/trusted_devices.rs");
 const BACKUP: &str = include_str!("../src/workspace_backup.rs");
-const UI: &str = include_str!("../src/native_ui.rs");
+const UI: &str = include_str!("../src/tui.rs");
 const SESSION: &str = include_str!("../src/session_state.rs");
 const SERVER: &str = include_str!("../src/server.rs");
 const ROADMAP: &str = include_str!("../docs/ROADMAP.md");

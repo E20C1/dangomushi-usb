@@ -16,7 +16,7 @@ const SESSION_SOURCE: &str = include_str!("../src/session_state.rs");
 const ROADMAP: &str = include_str!("../docs/ROADMAP.md");
 const ARCHITECTURE: &str = include_str!("../docs/ARCHITECTURE.md");
 const DOC: &str = include_str!("../docs/RECEIVED_FILE_INTEGRITY.md");
-const UI: &str = include_str!("../src/native_ui.rs");
+const UI: &str = include_str!("../src/tui.rs");
 
 struct FixedRandom([u8; PEER_VERIFICATION_CHALLENGE_BYTES]);
 

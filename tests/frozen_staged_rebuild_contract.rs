@@ -32,7 +32,6 @@ fn frozen_rebuild_uses_verified_staging_pinned_vendor_and_external_target() {
         ".arg(\"--release\")",
         ".arg(\"--target-dir\")",
         "&[\"--bin\", \"dangomushi\"]",
-        "&[\"--features\", \"desktop\", \"--bin\", \"dangomushi-desktop\"]",
         "sanitize_cargo_environment",
         "CARGO_NET_OFFLINE",
         "recovery_snapshot::verify_snapshot(staged_root)",
@@ -72,8 +71,8 @@ fn rebuild_keeps_later_authority_out_of_scope() {
         );
     }
 
-    assert!(!rebuild.contains("Command::new(summary.cli"));
-    assert!(!rebuild.contains("Command::new(&summary.cli"));
+    assert!(!rebuild.contains("Command::new(summary.application"));
+    assert!(!rebuild.contains("Command::new(&summary.application"));
     assert!(!SESSION.contains("frozen_rebuild_path="));
     assert!(!SESSION.contains("frozen_rebuild_sha256="));
 }
@@ -184,10 +183,8 @@ fn real_frozen_rebuild_from_verified_staging() {
 
     assert_eq!(summary.source_snapshot, staged);
     assert_eq!(summary.toolchain, "1.99.1");
-    assert!(summary.cli.bytes > 0);
-    assert!(summary.desktop.bytes > 0);
-    assert!(rebuild.join(&summary.cli.relative_path).is_file());
-    assert!(rebuild.join(&summary.desktop.relative_path).is_file());
+    assert!(summary.application.bytes > 0);
+    assert!(rebuild.join(&summary.application.relative_path).is_file());
     assert!(rebuild
         .join(offline_reconstruction::REBUILD_MARKER)
         .is_file());
@@ -201,8 +198,7 @@ fn real_frozen_rebuild_from_verified_staging() {
         .expect("recovered application smoke verification");
     assert_eq!(smoke.source_snapshot, staged);
     assert_eq!(smoke.app_version, env!("CARGO_PKG_VERSION"));
-    assert_eq!(smoke.cli, summary.cli);
-    assert_eq!(smoke.desktop, summary.desktop);
+    assert_eq!(smoke.application, summary.application);
     assert!(!rebuild.join(".dangomushi-recovery-smoke").exists());
 
     let restored_workspace = parent.join("restored-workspace");
@@ -239,8 +235,7 @@ fn real_frozen_rebuild_from_verified_staging() {
     assert_eq!(verified.source_snapshot, staged);
     assert_eq!(verified.workspace_backup, staged.workspace_backup);
     assert_eq!(verified.app_version, env!("CARGO_PKG_VERSION"));
-    assert_eq!(verified.cli, summary.cli);
-    assert_eq!(verified.desktop, summary.desktop);
+    assert_eq!(verified.application, summary.application);
     assert!(!rebuild.join(".dangomushi-recovery-smoke").exists());
 
     fs::remove_dir_all(parent).expect("cleanup");

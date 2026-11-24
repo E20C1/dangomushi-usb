@@ -7,6 +7,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     strategy:
@@ -19,37 +23,18 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@1.99.1
 
-      - name: Install Linux desktop build dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libegl1-mesa-dev \
-            libgl1-mesa-dev \
-            libwayland-dev \
-            libx11-dev \
-            libx11-xcb-dev \
-            libxcb1-dev \
-            libxcb-render0-dev \
-            libxcb-shape0-dev \
-            libxcb-xfixes0-dev \
-            libxkbcommon-dev \
-            pkg-config
-
       - name: Core tests
         run: cargo test --locked
 
       - name: Core release build
         run: cargo build --locked --release --bin dangomushi
 
-      - name: Desktop library tests
-        run: cargo test --locked --features desktop --lib
-
-      - name: Native desktop release build
-        run: cargo build --locked --release --features desktop --bin dangomushi-desktop
-
       - name: Verify recovered smoke entrypoints
         run: python scripts/verify-smoke-entrypoints.py
+
+      - name: Fetch pinned Windows Terminal portable runtime
+        if: runner.os == 'Windows'
+        run: python scripts/fetch-windows-terminal-runtime.py --arch x86_64
 
       - name: Build portable release bundle
         run: python scripts/build-release-bundle.py
@@ -86,22 +71,6 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@1.99.1
 
-      - name: Install Linux desktop build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libegl1-mesa-dev \
-            libgl1-mesa-dev \
-            libwayland-dev \
-            libx11-dev \
-            libx11-xcb-dev \
-            libxcb1-dev \
-            libxcb-render0-dev \
-            libxcb-shape0-dev \
-            libxcb-xfixes0-dev \
-            libxkbcommon-dev \
-            pkg-config
-
       - name: Generate locked vendor snapshot
         run: sh scripts/vendor-dependencies.sh
 
@@ -116,22 +85,6 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@1.99.1
-
-      - name: Install Linux desktop build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libegl1-mesa-dev \
-            libgl1-mesa-dev \
-            libwayland-dev \
-            libx11-dev \
-            libx11-xcb-dev \
-            libxcb1-dev \
-            libxcb-render0-dev \
-            libxcb-shape0-dev \
-            libxcb-xfixes0-dev \
-            libxkbcommon-dev \
-            pkg-config
 
       - name: Generate locked vendor snapshot
         run: sh scripts/vendor-dependencies.sh

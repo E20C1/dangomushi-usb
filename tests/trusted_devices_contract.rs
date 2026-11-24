@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const SOURCE: &str = include_str!("../src/trusted_devices.rs");
-const UI: &str = include_str!("../src/native_ui.rs");
+const UI: &str = include_str!("../src/tui.rs");
 const SESSION: &str = include_str!("../src/session_state.rs");
 const SERVER: &str = include_str!("../src/server.rs");
 const BACKUP: &str = include_str!("../src/workspace_backup.rs");
@@ -161,7 +161,7 @@ fn native_ui_keeps_persistent_trust_explicit_and_hands_revocation_to_its_own_bou
     for required in [
         "PERSISTENT TRUSTED DEVICES",
         "TRUST DEVICE PERSISTENTLY",
-        "REFRESH TRUST STORE",
+        "REFRESH PEER / TRUST",
         "workspace:/identity",
         "REVOKE DEVICE",
         "trusted_devices::register_candidate",

@@ -70,17 +70,15 @@ fn vendor_generation_is_locked_versioned_and_non_overwriting() {
 }
 
 #[test]
-fn frozen_verification_covers_core_and_desktop_without_registry_fallback() {
+fn frozen_verification_covers_single_application_without_registry_fallback() {
     for script in [VERIFY_SH, VERIFY_CMD] {
         assert!(script.contains("--config"));
         assert!(script.contains("vendor-config.toml"));
         assert!(script.contains("metadata --frozen"));
         assert!(script.contains("test --frozen"));
         assert!(script.contains("build --frozen --release --bin dangomushi"));
-        assert!(script.contains("test --frozen --features desktop --lib"));
-        assert!(script.contains(
-            "build --frozen --release --features desktop --bin dangomushi-desktop"
-        ));
+        assert!(!script.contains("--features desktop"));
+        assert!(!script.contains("dangomushi-desktop"));
     }
 }
 
@@ -89,7 +87,6 @@ fn routine_update_and_ci_paths_refuse_lockfile_rewrites() {
     for required in [
         "cargo test --locked",
         "cargo build --locked --release --bin dangomushi",
-        "cargo build --locked --release --features desktop --bin dangomushi-desktop",
     ] {
         assert!(UPDATE_SH.contains(required), "Unix update missing: {required}");
         assert!(UPDATE_CMD.contains(required), "Windows update missing: {required}");
@@ -98,8 +95,6 @@ fn routine_update_and_ci_paths_refuse_lockfile_rewrites() {
     for required in [
         "cargo test --locked",
         "cargo build --locked --release --bin dangomushi",
-        "cargo test --locked --features desktop --lib",
-        "cargo build --locked --release --features desktop --bin dangomushi-desktop",
         "offline-vendor:",
         "sh scripts/vendor-dependencies.sh",
         "sh scripts/verify-vendored-dependencies.sh",
@@ -109,6 +104,9 @@ fn routine_update_and_ci_paths_refuse_lockfile_rewrites() {
 
     assert!(!UPDATE_SH.contains("cargo update"));
     assert!(!UPDATE_CMD.contains("cargo update"));
+    assert!(!UPDATE_SH.contains("dangomushi-desktop"));
+    assert!(!UPDATE_CMD.contains("dangomushi-desktop"));
+    assert!(!CI.contains("--features desktop"));
 }
 
 #[test]

@@ -15,8 +15,26 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 KIND = "dangomushi-portable-release"
-FORMAT = 1
+FORMAT = 2
 MAX_BINARY_BYTES = 256 * 1024 * 1024
+MAX_RUNTIME_FILES = 2048
+RUNTIME_MANIFEST_MAX_BYTES = 4 * 1024 * 1024
+WINDOWS_TERMINAL_KIND = "dangomushi-windows-terminal-runtime"
+WINDOWS_TERMINAL_FORMAT = 1
+WINDOWS_TERMINAL_VERSION = "1.25.3131.0"
+WINDOWS_TERMINAL_ASSETS = {
+    "x86_64": {
+        "name": "Microsoft.WindowsTerminal_1.25.3131.0_x64.zip",
+        "bytes": 12126938,
+        "sha256": "273d6f1502eca1b5bd95c43f5d4d7ec72cc503df340102f8659717e5bead3437",
+    },
+    "aarch64": {
+        "name": "Microsoft.WindowsTerminal_1.25.3131.0_arm64.zip",
+        "bytes": 12243850,
+        "sha256": "b7e1d2a414e6368affd098d91a4cba441dcacd3ab634a6f39c8e6f5490deef89",
+    },
+}
+
 
 def fail(message: str) -> None:
     raise SystemExit(f"[ERROR] {message}")
@@ -82,13 +100,130 @@ def copy_payload(source: Path, destination: Path, executable: bool) -> None:
     else:
         destination.chmod(0o644)
 
+def valid_relative_path(value: str) -> bool:
+    path = PurePosixPath(value)
+    return (
+        bool(value)
+        and not path.is_absolute()
+        and all(part not in {"", ".", ".."} for part in path.parts)
+    )
+
+
+def validate_windows_terminal_runtime(runtime: Path, arch: str) -> list[dict]:
+    manifest_path = runtime / "RUNTIME-MANIFEST.json"
+    require_regular(manifest_path)
+    if manifest_path.stat().st_size > RUNTIME_MANIFEST_MAX_BYTES:
+        fail("Windows Terminal runtime manifest exceeds size bound")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        fail("Windows Terminal runtime manifest is invalid")
+
+    expected_keys = {
+        "kind", "format", "version", "architecture",
+        "asset_name", "asset_bytes", "asset_sha256", "files",
+    }
+    if not isinstance(manifest, dict) or set(manifest) != expected_keys:
+        fail("Windows Terminal runtime manifest fields are not canonical")
+    if (
+        manifest["kind"] != WINDOWS_TERMINAL_KIND
+        or manifest["format"] != WINDOWS_TERMINAL_FORMAT
+        or manifest["version"] != WINDOWS_TERMINAL_VERSION
+        or manifest["architecture"] != arch
+        or manifest["asset_name"] != WINDOWS_TERMINAL_ASSETS[arch]["name"]
+        or manifest["asset_bytes"] != WINDOWS_TERMINAL_ASSETS[arch]["bytes"]
+        or manifest["asset_sha256"] != WINDOWS_TERMINAL_ASSETS[arch]["sha256"]
+    ):
+        fail("Windows Terminal runtime identity does not match the pinned baseline")
+
+    records = manifest["files"]
+    if not isinstance(records, list) or not records or len(records) > MAX_RUNTIME_FILES:
+        fail("Windows Terminal runtime manifest has invalid file count")
+    record_map = {}
+    for record in records:
+        if not isinstance(record, dict) or set(record) != {"path", "bytes", "sha256"}:
+            fail("Windows Terminal runtime file record is invalid")
+        path = record["path"]
+        if not isinstance(path, str) or not valid_relative_path(path):
+            fail("Windows Terminal runtime contains an unsafe path")
+        if path == "RUNTIME-MANIFEST.json" or path in record_map:
+            fail("Windows Terminal runtime contains a duplicate or reserved path")
+        if not isinstance(record["bytes"], int) or record["bytes"] < 0 or record["bytes"] > MAX_BINARY_BYTES:
+            fail("Windows Terminal runtime file length is invalid")
+        if not isinstance(record["sha256"], str) or not re.fullmatch(r"[0-9a-f]{64}", record["sha256"]):
+            fail("Windows Terminal runtime file digest is invalid")
+        record_map[path] = record
+
+    actual = {}
+    for path in runtime.rglob("*"):
+        if path.is_dir():
+            continue
+        if path.is_symlink() or not path.is_file():
+            fail(f"Windows Terminal runtime contains unsafe entry: {path}")
+        relative = path.relative_to(runtime).as_posix()
+        if relative == "RUNTIME-MANIFEST.json":
+            continue
+        actual[relative] = path
+
+    if set(actual) != set(record_map):
+        fail("Windows Terminal runtime file set does not match its manifest")
+    for relative, path in actual.items():
+        size, digest = sha256_file(path)
+        record = record_map[relative]
+        if size != record["bytes"] or digest != record["sha256"]:
+            fail(f"Windows Terminal runtime integrity mismatch: {relative}")
+
+    for required in [".portable", "WindowsTerminal.exe", "wt.exe", "NOTICE.html"]:
+        if required not in record_map:
+            fail(f"Windows Terminal runtime is missing {required}")
+    return records
+
+
+def copy_windows_terminal_runtime(source: Path, destination: Path, arch: str) -> set[str]:
+    records = validate_windows_terminal_runtime(source, arch)
+    executable_paths = set()
+    for record in records:
+        relative = record["path"]
+        src = source.joinpath(*PurePosixPath(relative).parts)
+        dst_relative = f"runtime/windows-terminal/{relative}"
+        executable = relative.lower().endswith(".exe")
+        copy_payload(src, destination / dst_relative, executable)
+        if executable:
+            executable_paths.add(dst_relative)
+
+    copy_payload(
+        source / "RUNTIME-MANIFEST.json",
+        destination / "runtime/windows-terminal/RUNTIME-MANIFEST.json",
+        False,
+    )
+    return executable_paths
+
+
+def windows_launcher() -> str:
+    return (
+        "@echo off\r\n"
+        "setlocal\r\n"
+        "for %%I in (\"%~dp0.\") do set \"DANGOMUSHI_ROOT=%%~fI\"\r\n"
+        "cd /d \"%DANGOMUSHI_ROOT%\"\r\n"
+        "set \"DANGOMUSHI_APP=%DANGOMUSHI_ROOT%\\app\\Dangomushi.exe\"\r\n"
+        "set \"DANGOMUSHI_WT=%DANGOMUSHI_ROOT%\\runtime\\windows-terminal\\wt.exe\"\r\n"
+        "if exist \"%DANGOMUSHI_WT%\" (\r\n"
+        "  \"%DANGOMUSHI_WT%\" -w -1 new-tab --startingDirectory . \"%DANGOMUSHI_APP%\"\r\n"
+        "  if not errorlevel 1 exit /b 0\r\n"
+        ")\r\n"
+        "\"%DANGOMUSHI_APP%\"\r\n"
+        "exit /b %errorlevel%\r\n"
+    )
+
+
 def start_here(version: str, os_name: str) -> str:
     if os_name == "windows":
-        launch = "Double-click app\\Dangomushi.exe\nCLI: app\\dangomushi-cli.exe"
-    elif os_name == "macos":
-        launch = "Open app/Dangomushi.app\nCLI: app/dangomushi-cli"
+        launch = (
+            "Double-click START_DANGOMUSHI.cmd for the verified portable terminal + TUI\n"
+            "Direct fallback / CLI: app\\Dangomushi.exe"
+        )
     else:
-        launch = "Run app/Dangomushi\nCLI: app/dangomushi-cli"
+        launch = "Run app/Dangomushi for the TUI\nCLI commands use the same app/Dangomushi"
 
     return (
         f"DANGOMUSHI {version} PORTABLE RELEASE\n"
@@ -101,31 +236,14 @@ def start_here(version: str, os_name: str) -> str:
         "workspace/ directory beside app/. Initialize it explicitly on first use.\n\n"
         "OFFLINE DOCUMENTATION\n"
         "---------------------\n"
-        "Documentation is embedded in the binaries. Use the SYSTEM view or:\n"
-        "  dangomushi-cli docs list\n\n"
+        "Documentation is embedded in the application. Use the SYSTEM view or:\n"
+        "  app/Dangomushi docs list\n\n"
         "SECURITY / DISTRIBUTION\n"
         "-----------------------\n"
         "Verify the archive against its .sha256 sidecar before extraction.\n"
         "This bundle is not code-signed or notarized by this task; operating-system trust\n"
         "prompts may therefore appear. SHA-256 proves file equality, not publisher identity.\n"
     )
-
-def macos_plist(version: str) -> str:
-    return f"""<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>CFBundleDisplayName</key><string>DANGOMUSHI</string>
-  <key>CFBundleExecutable</key><string>Dangomushi</string>
-  <key>CFBundleIdentifier</key><string>io.github.e20c1.dangomushi</string>
-  <key>CFBundleName</key><string>DANGOMUSHI</string>
-  <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>{version}</string>
-  <key>CFBundleVersion</key><string>{version}</string>
-  <key>NSHighResolutionCapable</key><true/>
-</dict>
-</plist>
-"""
 
 def collect_records(bundle_root: Path, executable_paths: set[str]) -> list[dict]:
     records = []
@@ -210,6 +328,7 @@ def main() -> None:
     parser.add_argument("--root", default=".")
     parser.add_argument("--input-dir", default="target/release")
     parser.add_argument("--output-dir", default="dist")
+    parser.add_argument("--windows-terminal-runtime")
     args = parser.parse_args()
 
     root = Path(args.root).resolve()
@@ -223,20 +342,12 @@ def main() -> None:
 
     if os_name == "windows":
         archive_name = f"{bundle_id}.zip"
-        cli_source = input_dir / "dangomushi.exe"
-        desktop_source = input_dir / "dangomushi-desktop.exe"
-        cli_relative = "app/dangomushi-cli.exe"
-        desktop_relative = "app/Dangomushi.exe"
+        application_source = input_dir / "dangomushi.exe"
+        application_relative = "app/Dangomushi.exe"
     else:
         archive_name = f"{bundle_id}.tar.gz"
-        cli_source = input_dir / "dangomushi"
-        desktop_source = input_dir / "dangomushi-desktop"
-        cli_relative = "app/dangomushi-cli"
-        desktop_relative = (
-            "app/Dangomushi.app/Contents/MacOS/Dangomushi"
-            if os_name == "macos"
-            else "app/Dangomushi"
-        )
+        application_source = input_dir / "dangomushi"
+        application_relative = "app/Dangomushi"
 
     archive_path = output_dir / archive_name
     checksum_path = output_dir / f"{archive_name}.sha256"
@@ -247,20 +358,32 @@ def main() -> None:
         staging = Path(temporary) / bundle_id
         staging.mkdir()
 
-        executable_paths = {desktop_relative, cli_relative}
-        copy_payload(desktop_source, staging / desktop_relative, True)
-        copy_payload(cli_source, staging / cli_relative, True)
+        executable_paths = {application_relative}
+        copy_payload(application_source, staging / application_relative, True)
+
+        if os_name == "windows":
+            runtime = (
+                Path(args.windows_terminal_runtime).resolve()
+                if args.windows_terminal_runtime
+                else root / "runtime-cache" / "windows-terminal" / WINDOWS_TERMINAL_VERSION / arch
+            )
+            executable_paths.update(
+                copy_windows_terminal_runtime(runtime, staging, arch)
+            )
+            (staging / "START_DANGOMUSHI.cmd").write_text(
+                windows_launcher(), encoding="utf-8", newline=""
+            )
+            (staging / "START_DANGOMUSHI.cmd").chmod(0o644)
+            copy_payload(
+                root / "licenses/windows-terminal/LICENSE.txt",
+                staging / "licenses/windows-terminal/LICENSE.txt",
+                False,
+            )
 
         (staging / "START_HERE.txt").write_text(
             start_here(version, os_name), encoding="utf-8", newline="\n"
         )
         (staging / "START_HERE.txt").chmod(0o644)
-
-        if os_name == "macos":
-            plist = staging / "app/Dangomushi.app/Contents/Info.plist"
-            plist.parent.mkdir(parents=True, exist_ok=True)
-            plist.write_text(macos_plist(version), encoding="utf-8", newline="\n")
-            plist.chmod(0o644)
 
         records = collect_records(staging, executable_paths)
         write_manifest(staging, version, os_name, arch, bundle_id, records)

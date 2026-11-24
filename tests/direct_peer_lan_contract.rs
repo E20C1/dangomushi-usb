@@ -13,7 +13,7 @@ const SESSION: &str = include_str!("../src/session_state.rs");
 const ROADMAP: &str = include_str!("../docs/ROADMAP.md");
 const ARCHITECTURE: &str = include_str!("../docs/ARCHITECTURE.md");
 const DOC: &str = include_str!("../docs/DIRECT_LAN_PEER_PATH.md");
-const UI: &str = include_str!("../src/native_ui.rs");
+const UI: &str = include_str!("../src/tui.rs");
 const CLI: &str = include_str!("../src/main.rs");
 
 fn enabled_lan() -> LanEnableControl {

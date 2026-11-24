@@ -1,5 +1,5 @@
 const SOURCE: &str = include_str!("../src/file_compare.rs");
-const UI: &str = include_str!("../src/native_ui.rs");
+const UI: &str = include_str!("../src/tui.rs");
 const REGISTRY: &str = include_str!("../src/tool_registry.rs");
 const SESSION: &str = include_str!("../src/session_state.rs");
 const ROADMAP: &str = include_str!("../docs/ROADMAP.md");
@@ -58,10 +58,10 @@ fn native_ui_dispatches_ready_compare_without_session_payload_content() {
     assert!(entry.contains("status: ToolStatus::Ready"));
     assert!(UI.contains("ToolId::Compare =>"));
     assert!(UI.contains("View::Compare"));
-    assert!(UI.contains("fn compare_view"));
-    assert!(UI.contains("[COMPARE FILES]"));
-    assert!(UI.contains("[USE FILES SELECTION AS A]"));
-    assert!(UI.contains("[USE FILES SELECTION AS B]"));
+    assert!(UI.contains("ControlId::CompareRun"));
+    assert!(UI.contains("COMPARE FILES"));
+    assert!(UI.contains("USE FILES SELECTION AS A"));
+    assert!(UI.contains("USE FILES SELECTION AS B"));
     assert!(UI.contains("COMPARE AS A"));
     assert!(UI.contains("COMPARE AS B"));
 

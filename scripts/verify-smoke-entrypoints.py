@@ -17,12 +17,10 @@ version = match.group(1)
 
 suffix = ".exe" if os.name == "nt" else ""
 release = ROOT / "target" / "release"
-cli = release / f"dangomushi{suffix}"
-desktop = release / f"dangomushi-desktop{suffix}"
+application = release / f"dangomushi{suffix}"
 
-for path in (cli, desktop):
-    if not path.is_file():
-        raise SystemExit(f"missing rebuilt smoke entrypoint: {path}")
+if not application.is_file():
+    raise SystemExit(f"missing rebuilt smoke entrypoint: {application}")
 
 def sanitized_environment(sandbox: Path) -> dict[str, str]:
     env = {key: value for key, value in os.environ.items() if not key.startswith("DANGOMUSHI_")}
@@ -66,11 +64,11 @@ def run(path: Path, args: list[str], expected: str, sandbox: Path) -> None:
 
 with tempfile.TemporaryDirectory(prefix="dangomushi-ci-smoke-") as tmp:
     sandbox = Path(tmp)
-    run(cli, ["version"], f"dangomushi {version}\n", sandbox)
+    run(application, ["version"], f"dangomushi {version}\n", sandbox)
     run(
-        desktop,
+        application,
         ["--recovery-smoke-check"],
-        f"dangomushi-desktop {version} recovery-smoke-ok\n",
+        f"dangomushi {version} recovery-smoke-ok\n",
         sandbox,
     )
 
