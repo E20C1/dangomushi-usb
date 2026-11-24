@@ -1,5 +1,6 @@
 use image::DynamicImage;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 use ratatui_image::picker::{Picker, ProtocolType};
@@ -110,6 +111,16 @@ impl ImagePreviewRuntime {
     }
 
     pub fn render_pair(&mut self, frame: &mut Frame, area: Rect) {
+        let _ = self.render_pair_focused(frame, area, false, false);
+    }
+
+    pub fn render_pair_focused(
+        &mut self,
+        frame: &mut Frame,
+        area: Rect,
+        before_focused: bool,
+        after_focused: bool,
+    ) -> [Rect; 2] {
         self.poll_workers();
 
         let panes = if area.width >= 80 {
@@ -124,12 +135,33 @@ impl ImagePreviewRuntime {
                 .split(area)
         };
 
-        self.render_slot(frame, panes[0], " BEFORE ", true);
-        self.render_slot(frame, panes[1], " AFTER ", false);
+        self.render_slot(frame, panes[0], " BEFORE ", true, before_focused);
+        self.render_slot(frame, panes[1], " AFTER ", false, after_focused);
+        [panes[0], panes[1]]
     }
 
-    fn render_slot(&mut self, frame: &mut Frame, area: Rect, title: &str, before: bool) {
-        let block = Block::default().title(title).borders(Borders::ALL);
+    fn render_slot(
+        &mut self,
+        frame: &mut Frame,
+        area: Rect,
+        title: &str,
+        before: bool,
+        focused: bool,
+    ) {
+        let block = Block::default()
+            .title(if focused {
+                format!("{title}[ ENTER: OPEN ] ")
+            } else {
+                title.to_string()
+            })
+            .borders(Borders::ALL)
+            .border_style(if focused {
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+            });
         let inner = block.inner(area);
         frame.render_widget(block, area);
 

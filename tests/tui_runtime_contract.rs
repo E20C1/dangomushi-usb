@@ -19,7 +19,7 @@ fn tui_is_the_only_interactive_native_ui() {
 }
 
 #[test]
-fn keyboard_enter_and_mouse_click_share_the_same_activation_path() {
+fn keyboard_enter_and_mouse_click_share_activation_except_preview_focus() {
     let enter = TUI
         .find("KeyCode::Enter => self.activate_focused()")
         .expect("Enter must activate the focused control");
@@ -34,6 +34,9 @@ fn keyboard_enter_and_mouse_click_share_the_same_activation_path() {
     assert!(enter < mouse_activate);
     assert!(TUI.contains("ControlId::Nav"));
     assert!(TUI.contains("fn activate(&mut self, id: ControlId)"));
+    assert!(TUI.contains(
+        "if !matches!(id, Some(ControlId::ImageBefore | ControlId::ImageAfter))"
+    ));
 }
 
 #[test]
@@ -106,4 +109,51 @@ fn password_clipboard_hygiene_survives_gui_removal() {
     assert!(TUI.contains("ClipboardPolicy::default()"));
     assert!(TUI.contains("ClipboardPoll::PreservedExternalContent"));
     assert!(TUI.contains("COPY / AUTO-CLEAR 30s"));
+}
+
+#[test]
+fn files_click_selects_without_implicitly_opening() {
+    let start = TUI
+        .find("ControlId::FileEntry(index) =>")
+        .expect("file entry activation");
+    let end = TUI[start..]
+        .find("ControlId::FileOpen =>")
+        .map(|offset| start + offset)
+        .expect("explicit file open activation");
+    let branch = &TUI[start..end];
+
+    assert!(branch.contains("self.browser.selected = Some"));
+    assert!(branch.contains("SELECTED /"));
+    assert!(!branch.contains("open_in_editor"));
+    assert!(!branch.contains("browser.navigate"));
+    assert!(TUI.contains("ControlId::FileOpen => self.open_selected()"));
+}
+
+#[test]
+fn missing_workspace_is_reported_as_an_actionable_state() {
+    assert!(TUI.contains(
+        "WORKSPACE NOT INITIALIZED / Open WORKSPACE and choose INITIALIZE WORKSPACE."
+    ));
+    assert!(TUI.contains("file_browser_error(root, &error)"));
+}
+
+#[test]
+fn image_panes_are_focus_only_on_click_and_enter_opens_externally() {
+    for required in [
+        "ControlId::ImageBefore",
+        "ControlId::ImageAfter",
+        "render_pair_focused",
+        "open_optimizer_image_external(true)",
+        "open_optimizer_image_external(false)",
+        "materialize_after_preview",
+        "image-preview",
+        "Command::new(\"explorer.exe\")",
+        "Command::new(\"open\")",
+        "Command::new(\"xdg-open\")",
+    ] {
+        assert!(TUI.contains(required), "missing preview interaction contract: {required}");
+    }
+
+    assert!(IMAGE.contains("[ ENTER: OPEN ]"));
+    assert!(TUI.contains("Shift+drag text select"));
 }

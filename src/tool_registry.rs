@@ -5,6 +5,7 @@ pub enum ToolId {
     HashVerify,
     TextJson,
     PasswordGenerator,
+    ImageOptimizer,
     Compare,
     Search,
     Repositories,
@@ -101,6 +102,14 @@ const TOOLS: &[ToolDefinition] = &[
         status: ToolStatus::Ready,
     },
     ToolDefinition {
+        id: ToolId::ImageOptimizer,
+        key: "image-optimizer",
+        label: "IMAGE OPTIMIZER",
+        category: ToolCategory::Utility,
+        description: "Compress JPEG, PNG and still WebP images locally with before/after preview and explicit export.",
+        status: ToolStatus::Ready,
+    },
+    ToolDefinition {
         id: ToolId::Compare,
         key: "compare",
         label: "COMPARE",
@@ -184,6 +193,10 @@ mod tests {
             Some(ToolStatus::Ready)
         );
         assert_eq!(
+            by_key("image-optimizer").map(|tool| tool.status),
+            Some(ToolStatus::Ready)
+        );
+        assert_eq!(
             by_key("compare").map(|tool| tool.status),
             Some(ToolStatus::Ready)
         );
@@ -214,6 +227,10 @@ mod tests {
         assert_eq!(
             by_key("password-generator").map(|tool| tool.id),
             Some(ToolId::PasswordGenerator)
+        );
+        assert_eq!(
+            by_key("image-optimizer").map(|tool| tool.id),
+            Some(ToolId::ImageOptimizer)
         );
         assert_eq!(
             by_key("compare").map(|tool| tool.id),
